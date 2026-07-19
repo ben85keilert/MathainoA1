@@ -54,7 +54,7 @@ jobs:
           pytest -q
 
       # Android-Gradle-Builds laufen am zuverlässigsten auf JDK 17
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
