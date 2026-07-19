@@ -109,7 +109,7 @@ jobs:
       # wird manuell in der Play Console hochgeladen.
       - name: Release mit APK + AAB anlegen
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             build/apk/*.apk
