@@ -26,6 +26,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # Zum Anlegen des GitHub-Releases braucht der Workflow-Token
+    # Schreibrecht auf den Repo-Inhalt (Default ist nur Lesen)
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v5
