@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+.idea/
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+
+# App-Daten von "flet run" im Projektordner (NICHT src/mathainoa1/storage!)
+/storage/
+
+# Screenshots und Kram
+/temp/
+
+# Lokale Inhalte (Urheberrecht): bleiben lokal, kommen nie ins Repo
+/private/
+*.pdf

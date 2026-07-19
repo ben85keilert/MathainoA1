@@ -1,0 +1,58 @@
+[project]
+name = "mathainoa1"
+version = "0.1.0"
+description = "Μαθαίνω — Griechisch A1: Lern-App für Griechisch (Vokabeln & Grammatik)"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+dependencies = [
+    "flet>=0.85,<0.86",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pdfplumber>=0.11",
+]
+
+# --- Packaging (flet build apk / macos / ...) ---
+[tool.flet]
+# lateinische Schreibweise: sicher für Build-/Dateinamen beim APK-Bau
+product = "Mathaino - Griechisch A1"
+org = "de.benkeilert"
+company = "Benjamin Ebert"
+
+# App-Icon: assets/icon.png (vollflächig) + assets/icon_android.png
+# (Adaptive-Vordergrund). Generiert mit tools/make_icon.py.
+[tool.flet.splash]
+# Splash-Hintergrund passend zum Icon-Blau
+color = "#1565C0"
+dark_color = "#0A3A82"
+
+[tool.flet.android]
+# Füllfarbe hinter dem Adaptive-Icon-Vordergrund (Motiv in der Safe Zone)
+adaptive_icon_background = "#1565C0"
+
+[tool.flet.app]
+# Das gesamte Projektverzeichnis wandert in die App — alles ausschließen,
+# was dort nichts zu suchen hat (lokale PDFs, venv, Tests, Screenshots).
+exclude = [
+    "private",
+    ".venv",
+    ".git",
+    ".github",
+    ".idea",
+    ".pytest_cache",
+    "tests",
+    "temp",
+    "*.pdf",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

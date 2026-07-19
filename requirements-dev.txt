@@ -1,0 +1,6 @@
+# Zusätzliche Abhängigkeiten für Entwicklung und Tests.
+# Installation: pip install -r requirements-dev.txt
+# (Alternativ: pip install -e ".[dev]" — nutzt dieselben Versionen aus pyproject.toml)
+-r requirements.txt
+pytest>=8.0
+pdfplumber>=0.11

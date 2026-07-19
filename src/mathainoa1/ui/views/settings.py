@@ -1,0 +1,148 @@
+"""Einstellungsmenü (Zahnrad): Ansicht (Theme, Akzentfarbe) und Abfrage.
+
+`apply_app_theme` wird beim App-Start und bei jeder Änderung aufgerufen und
+setzt Theme-Modus und Akzentfarbe der ganzen App.
+"""
+
+from __future__ import annotations
+
+import flet as ft
+
+from mathainoa1.storage.settings import (
+    AppSettings,
+    load_app_settings,
+    save_app_settings,
+)
+
+# Auswählbare Akzentfarben (Schlüssel wird in AppSettings.seed gespeichert)
+SEED_COLORS: dict[str, tuple[str, str]] = {
+    "blue": ("Blau", ft.Colors.BLUE),
+    "green": ("Grün", ft.Colors.GREEN),
+    "purple": ("Violett", ft.Colors.DEEP_PURPLE),
+    "amber": ("Amber", ft.Colors.AMBER),
+    "teal": ("Türkis", ft.Colors.TEAL),
+}
+
+_THEME_MODES = {
+    "light": ft.ThemeMode.LIGHT,
+    "dark": ft.ThemeMode.DARK,
+    "system": ft.ThemeMode.SYSTEM,
+}
+
+
+def apply_app_theme(page: ft.Page, s: AppSettings) -> None:
+    """Setzt Theme-Modus und Akzentfarbe der App gemäß den Einstellungen."""
+    page.theme_mode = _THEME_MODES.get(s.theme, ft.ThemeMode.SYSTEM)
+    seed = SEED_COLORS.get(s.seed, SEED_COLORS["blue"])[1]
+    page.theme = ft.Theme(color_scheme_seed=seed)
+    page.dark_theme = ft.Theme(color_scheme_seed=seed)
+
+
+def settings_view(nav) -> ft.Control:
+    page = nav.page
+    s = load_app_settings()
+
+    def apply_and_save():
+        apply_app_theme(page, s)
+        save_app_settings(s)
+        page.update()
+
+    # --- Ansicht: Theme ---
+    seg_theme = ft.SegmentedButton(
+        selected=[s.theme],
+        segments=[
+            ft.Segment(value="light", label=ft.Text("Hell"),
+                       icon=ft.Icons.LIGHT_MODE),
+            ft.Segment(value="dark", label=ft.Text("Dunkel"),
+                       icon=ft.Icons.DARK_MODE),
+            ft.Segment(value="system", label=ft.Text("System"),
+                       icon=ft.Icons.BRIGHTNESS_AUTO),
+        ],
+    )
+
+    def on_theme(e):
+        sel = seg_theme.selected
+        s.theme = next(iter(sel)) if isinstance(sel, (list, set, tuple)) else sel
+        apply_and_save()
+
+    seg_theme.on_change = on_theme
+
+    # --- Ansicht: Akzentfarbe ---
+    dd_color = ft.Dropdown(
+        label="Akzentfarbe", value=s.seed,
+        options=[ft.DropdownOption(key=k, text=label)
+                 for k, (label, _c) in SEED_COLORS.items()],
+    )
+
+    def on_color(e):
+        s.seed = dd_color.value or "blue"
+        apply_and_save()
+
+    dd_color.on_select = on_color  # Flet 0.85: Dropdowns feuern on_select
+
+    # --- Abfrage: Box-Reset bei strengen Fehlern ---
+    sw_accent = ft.Switch(
+        label="Akzentfehler setzt die Box zurück (auf Box 1)",
+        value=s.accent_resets_box)
+    sw_case = ft.Switch(
+        label="Groß-/Kleinfehler setzt die Box zurück (auf Box 1)",
+        value=s.case_resets_box)
+
+    def on_accent(e):
+        s.accent_resets_box = sw_accent.value
+        save_app_settings(s)
+
+    def on_case(e):
+        s.case_resets_box = sw_case.value
+        save_app_settings(s)
+
+    sw_accent.on_change = on_accent
+    sw_case.on_change = on_case
+
+    # --- Abfrage: Beschränkungen durch die Abfragemodi ---
+    sw_high = ft.Switch(
+        label="Box 4 und 5 nur über Deutsch → Griechisch",
+        value=s.high_boxes_need_production)
+    sw_top = ft.Switch(
+        label="Box 5 nur über Deutsch → Griechisch mit Schreiben",
+        value=s.top_box_needs_typing)
+
+    def on_high(e):
+        s.high_boxes_need_production = sw_high.value
+        save_app_settings(s)
+
+    def on_top(e):
+        s.top_box_needs_typing = sw_top.value
+        save_app_settings(s)
+
+    sw_high.on_change = on_high
+    sw_top.on_change = on_top
+
+    def _h(text: str) -> ft.Text:
+        return ft.Text(text, size=16, weight=ft.FontWeight.BOLD)
+
+    return ft.Column(
+        [
+            _h("Ansicht"),
+            ft.Text("Design", size=13),
+            seg_theme,
+            dd_color,
+            ft.Divider(),
+            _h("Abfrage"),
+            ft.Text("Greift nur, wenn beim Training „Akzentfehler tolerieren“ "
+                    "bzw. „Groß-/Kleinschreibung tolerieren“ ausgeschaltet ist. "
+                    "Aus = die Box bleibt bei so einem Fehler unverändert.",
+                    size=13, italic=True),
+            sw_accent,
+            sw_case,
+            ft.Divider(),
+            ft.Text("Beschränkung durch die Abfragemodi", size=13),
+            ft.Text("Steuert, wie hoch eine Karte je nach Abfrageart steigen "
+                    "kann. Beide aus = jede Abfrageart erreicht Box 5.",
+                    size=13, italic=True),
+            sw_high,
+            sw_top,
+        ],
+        spacing=12,
+        scroll=ft.ScrollMode.AUTO,
+    )
