@@ -1,0 +1,117 @@
+name: Release bauen (APK + AAB)
+
+# Baut nur bei einem Versions-Tag (z.B. "git tag v0.3.0 && git push --tags")
+# oder manuell — nicht bei jedem Push auf main.
+#
+# Google Play braucht ein AAB (App Bundle) mit einem versionCode, der bei
+# jedem Upload strikt steigen muss. Der versionCode wird deterministisch
+# aus der Version berechnet: major*10000 + minor*100 + patch
+# (v0.3.0 -> 300, v1.2.3 -> 10203) — solange die Version wächst, wächst
+# auch der versionCode. Der Tag muss zur Version in pyproject.toml passen.
+#
+# Signierung (für den Play-Upload nötig): läuft automatisch, wenn diese
+# Repository-Secrets gesetzt sind — sonst wird unsigniert (debug) gebaut:
+#   ANDROID_KEYSTORE_BASE64   Keystore-Datei, base64-kodiert
+#                             (base64 -w0 upload.keystore)
+#   ANDROID_KEYSTORE_PASSWORD Keystore-Passwort
+#   ANDROID_KEY_PASSWORD      Schlüssel-Passwort
+#   ANDROID_KEY_ALIAS         Schlüssel-Alias (z.B. "upload")
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Version prüfen und versionCode berechnen
+        id: ver
+        run: |
+          PYVER=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAGVER="${GITHUB_REF_NAME#v}"
+            if [ "$TAGVER" != "$PYVER" ]; then
+              echo "::error::Tag v$TAGVER passt nicht zu pyproject-Version $PYVER"
+              exit 1
+            fi
+          fi
+          IFS=. read -r MA MI PA <<< "$PYVER"
+          BUILD_NUMBER=$((MA*10000 + MI*100 + PA))
+          echo "version=$PYVER" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Version $PYVER -> versionCode $BUILD_NUMBER"
+
+      - name: Tests laufen lassen
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pytest -q
+
+      # Android-Gradle-Builds laufen am zuverlässigsten auf JDK 17
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Muss zu flet passen: flet.version.flutter_version
+          flutter-version: "3.41.7"
+          channel: stable
+          cache: true
+
+      - name: Flet-CLI installieren
+        run: pip install "flet-cli==0.85.3"
+
+      - name: Signierung konfigurieren (nur wenn Secrets gesetzt)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.keystore"
+          {
+            echo "FLET_ANDROID_SIGNING_KEY_STORE=$RUNNER_TEMP/upload.keystore"
+            echo "FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+            echo "FLET_ANDROID_SIGNING_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}"
+            echo "FLET_ANDROID_SIGNING_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}"
+          } >> "$GITHUB_ENV"
+
+      - name: AAB bauen (Google Play)
+        run: >
+          flet build aab --verbose
+          --build-version "${{ steps.ver.outputs.version }}"
+          --build-number "${{ steps.ver.outputs.build_number }}"
+
+      - name: APK bauen (Sideload/GitHub-Release)
+        run: >
+          flet build apk --verbose
+          --build-version "${{ steps.ver.outputs.version }}"
+          --build-number "${{ steps.ver.outputs.build_number }}"
+
+      - name: Artefakte hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: mathainoa1-${{ steps.ver.outputs.version }}
+          path: |
+            build/apk/*.apk
+            build/aab/*.aab
+          if-no-files-found: error
+          retention-days: 90
+
+      # Bei einem Tag landen APK + AAB zusätzlich in einem GitHub-Release —
+      # die APK ist dort am Handy mit einem Klick installierbar, das AAB
+      # wird manuell in der Play Console hochgeladen.
+      - name: Release mit APK + AAB anlegen
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/apk/*.apk
+            build/aab/*.aab
+          generate_release_notes: true

@@ -1,0 +1,142 @@
+"""Headless-Smoke-Tests: bauen alle UI-Views ohne echtes Flet-Fenster.
+
+Fängt Konstruktions- und Vorschau-Abstürze ab (z.B. IndexError in der
+Verben-Vorschau), ohne die volle App zu starten. Es wird nur geprüft, dass
+der Aufbau der Controls fehlerfrei durchläuft — keine Interaktion.
+"""
+
+from types import SimpleNamespace
+
+import pytest
+
+from mathainoa1.models import VocabCard, VocabList
+from mathainoa1.storage.content import ContentStore
+from mathainoa1.storage.progress import ProgressStore
+from mathainoa1.ui.views import grammar, help as help_view_mod, manager, reference, stats, trainer
+
+
+def _fake_nav():
+    page = SimpleNamespace(
+        update=lambda: None, run_task=lambda f: None, services=[],
+        show_dialog=lambda d: None, pop_dialog=lambda: None, width=420,
+        views=[SimpleNamespace(can_pop=True, on_confirm_pop=None)],
+    )
+    nav = SimpleNamespace(
+        page=page, stack=[("x", None)], go=lambda t, c: None,
+        back=lambda e=None: None, _show=lambda: None, store=None,
+    )
+    return nav
+
+
+@pytest.fixture
+def store_with_edge_cases(tmp_path):
+    """Liste mit Grenzfällen: unveränderlich (plural '-'), custom-Verb,
+    Eigenname, regelmäßiges Verb/Adjektiv."""
+    store = ContentStore(tmp_path / "book", tmp_path / "user")
+    store.load_all()
+    cards = [
+        VocabCard(front="το μετρό", back="Metro", article="το", plural="-",
+                  word_type="Nomen"),
+        VocabCard(front="η Αθήνα", back="Athen", article="η", plural="-",
+                  word_type="Nomen"),
+        VocabCard(front="κάνει", back="macht", word_type="Verb",
+                  forms={"1sg": "κάνω"}),  # custom-Verb ohne 2pl
+        VocabCard(front="γράφω", back="schreiben", word_type="Verb",
+                  stem2="γράψ-"),
+        VocabCard(front="μικρός", back="klein", word_type="Adjektiv"),
+    ]
+    vlist = VocabList(name="Grenzfälle", cards=cards)
+    store.save_user_list(vlist)
+    return store, vlist
+
+
+def test_reference_chapters_build():
+    for _title, _icon, builder in reference.CHAPTERS:
+        builder()
+
+
+def test_main_views_build(store_with_edge_cases, tmp_path):
+    store, vlist = store_with_edge_cases
+    nav = _fake_nav()
+    nav.store = store
+    progress = ProgressStore(tmp_path / "p.db")
+    try:
+        help_view_mod.help_view(nav, store)
+        stats.stats_view(nav, store, progress)
+        stats.list_words_view(nav, vlist, progress.all())
+        trainer.setup_view(nav, store, progress)
+        grammar.setup_view(nav, store, progress)
+        grammar.conjugation_setup_view(nav, store, progress)
+        manager.manager_view(nav, store, progress)
+        manager.list_view(nav, store, vlist)
+        manager.selection_editor(nav, store, None, lambda s: None, progress)
+    finally:
+        progress.close()
+
+
+def test_verb_preview_sample_no_crash(store_with_edge_cases):
+    """Der Vorschau-Pfad selbst (nicht nur der View-Aufbau): jede Verbform
+    liefert einen String, auch das custom-Verb ohne 2. Person Plural."""
+    from mathainoa1.logic import conjugation as conj
+    store, vlist = store_with_edge_cases
+    for _c, v in conj.conjugatable_verbs(vlist.cards):
+        assert isinstance(grammar._verb_sample(v), str)
+
+
+def test_search_view_builds_and_lists_hits(store_with_edge_cases):
+    """Wortsuche baut fehlerfrei und rendert bei einem Query Ergebniszeilen."""
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    nav.store = store
+    view = manager.search_view(nav, store)
+    # TextField ist das erste Control; Query setzen und refresh auslösen
+    tf = view.controls[0]
+    results = view.controls[1]
+    tf.value = "μετρό"
+    tf.on_change(None)
+    assert len(results.controls) >= 1
+
+
+def test_search_hit_edits_in_place(store_with_edge_cases):
+    """Klick auf ein Suchergebnis öffnet den Editor als Dialog über der Suche —
+    ohne Fensterwechsel (kein nav.go)."""
+    store, _vlist = store_with_edge_cases
+    dialogs = []
+    nav = _fake_nav()
+    nav.store = store
+    nav.page.show_dialog = lambda d: dialogs.append(d)
+    navigated = []
+    nav.go = lambda t, c: navigated.append(t)
+    view = manager.search_view(nav, store)
+    results = view.controls[1]
+    view.controls[0].value = "μετρό"
+    view.controls[0].on_change(None)
+    results.controls[0].on_click(None)  # ersten Treffer anklicken
+    assert dialogs and not navigated  # Dialog geöffnet, nicht navigiert
+
+
+def test_card_editor_dialog_builds(store_with_edge_cases):
+    """Der extrahierte Karten-Editor baut ohne Fehler."""
+    store, vlist = store_with_edge_cases
+    nav = _fake_nav()
+    dialogs = []
+    nav.page.show_dialog = lambda d: dialogs.append(d)
+    manager.card_editor_dialog(nav.page, store, vlist, vlist.cards[0])
+    manager.card_editor_dialog(nav.page, store, vlist, None)  # neue Karte
+    assert len(dialogs) == 2
+
+
+def test_settings_view_builds_and_applies_theme(tmp_path, monkeypatch):
+    """Einstellungs-View baut; apply_app_theme setzt den Theme-Modus.
+    Env auf tmp umbiegen, damit keine echten Settings geschrieben werden."""
+    import flet as ft
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.storage.settings import AppSettings
+    from mathainoa1.ui.views.settings import apply_app_theme, settings_view
+
+    nav = _fake_nav()
+    view = settings_view(nav)
+    assert view is not None
+    apply_app_theme(nav.page, AppSettings(theme="dark", seed="green"))
+    assert nav.page.theme_mode == ft.ThemeMode.DARK
+    assert nav.page.theme is not None
