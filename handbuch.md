@@ -85,9 +85,7 @@ und dann importiert:
    Wortliste (pro Zeile Karten-ID + griechisches Wort) mit einem Klick
    in die Zwischenablage. Über die beiden Checkboxen lässt sich auch
    nur die Liste oder nur der Prompt kopieren — praktisch für eine
-   Korrekturrunde. (Alternativ liefert **„Export Text (Audio/TTS)“**
-   dieselbe Wortliste als Datei; der Audio-Prompt steht auch in der
-   App-Hilfe.)
+   Korrekturrunde. (Der Audio-Prompt steht auch in der App-Hilfe.)
 2. Beim Chatbot einfügen — er erzeugt pro Zeile eine MP3, benannt exakt
    nach der Karten-ID (`<id>.mp3`), und liefert alles als eine ZIP.
 3. Die ZIP über **„Audio importieren“** in der Vokabelverwaltung
