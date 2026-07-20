@@ -6,6 +6,7 @@ Eigene Listen werden mit Namen angelegt (manuell oder per Import).
 
 from __future__ import annotations
 
+import zipfile
 from pathlib import Path
 
 import flet as ft
@@ -24,6 +25,7 @@ from mathainoa1.models import (
 from mathainoa1.storage import content
 from mathainoa1.storage.content import ContentStore
 from mathainoa1.storage.progress import ProgressStore
+from mathainoa1.ui.audio import audio_store
 from mathainoa1.ui.views.trainer import edit_notes_dialog
 from mathainoa1.ui.views.wordlist import (
     box_chip_controls,
@@ -93,6 +95,8 @@ def manager_view(nav, store: ContentStore,
                                   on_click=import_file),
                 ft.OutlinedButton("Als Text importieren", icon=ft.Icons.CONTENT_PASTE,
                                   on_click=import_text_dialog),
+                ft.OutlinedButton("Audio importieren", icon=ft.Icons.AUDIO_FILE,
+                                  on_click=import_audio_zip),
             ], spacing=8, wrap=True),
         ]
         if store.selections:
@@ -165,11 +169,23 @@ def manager_view(nav, store: ContentStore,
                                  on_click=lambda e, l=vlist: export_list(l, "json")),
                 ft.PopupMenuItem(content="Export CSV", icon=ft.Icons.DOWNLOAD,
                                  on_click=lambda e, l=vlist: export_list(l, "csv")),
+                ft.PopupMenuItem(content="Export Text (Audio/TTS)",
+                                 icon=ft.Icons.RECORD_VOICE_OVER,
+                                 on_click=lambda e, l=vlist: export_list(l, "txt")),
                 ft.PopupMenuItem(content="Löschen", icon=ft.Icons.DELETE,
                                  on_click=lambda e, l=vlist: delete_dialog(l)),
             ])
         else:
-            trailing = ft.Icon(ft.Icons.LOCK_OUTLINE, tooltip="Buchliste (nicht editierbar)")
+            # Buchlisten: nicht editierbar, aber der TTS-Export ist auch für
+            # sie sinnvoll (Audio wird über Karten-IDs zugeordnet)
+            trailing = ft.Row([
+                ft.Icon(ft.Icons.LOCK_OUTLINE, tooltip="Buchliste (nicht editierbar)"),
+                ft.PopupMenuButton(items=[
+                    ft.PopupMenuItem(content="Export Text (Audio/TTS)",
+                                     icon=ft.Icons.RECORD_VOICE_OVER,
+                                     on_click=lambda e, l=vlist: export_list(l, "txt")),
+                ]),
+            ], tight=True, spacing=0)
         return ft.Card(
             content=ft.ListTile(
                 leading=ft.Icon(ft.Icons.LIST_ALT),
@@ -287,13 +303,65 @@ def manager_view(nav, store: ContentStore,
         refresh()
 
     async def export_list(vlist: VocabList, fmt: str):
-        text = content.export_json(vlist) if fmt == "json" else content.export_csv(vlist)
+        if fmt == "json":
+            text = content.export_json(vlist)
+        elif fmt == "txt":
+            text = content.export_tts_text(vlist)
+        else:
+            text = content.export_csv(vlist)
         await picker.save_file(
             dialog_title="Liste exportieren",
             file_name=f"{vlist.name}.{fmt}",
             allowed_extensions=[fmt],
             src_bytes=text.encode("utf-8"),
         )
+
+    async def import_audio_zip(e):
+        """ZIP mit "<karten-id>.mp3"-Dateien einlesen (siehe storage/audio.py).
+
+        Matcht global gegen alle Listen — so funktioniert eine gemischte
+        ZIP genauso wie Audio für Buchlisten.
+        """
+        files = await picker.pick_files(
+            dialog_title="Audio-ZIP importieren",
+            allowed_extensions=["zip"], with_data=True,
+        )
+        if not files:
+            return
+        f = files[0]
+        data = f.bytes_data if hasattr(f, "bytes_data") else None
+        if data is None and f.path:
+            data = Path(f.path).read_bytes()
+        if data is None:
+            return
+        try:
+            report = audio_store().import_zip(data, set(store.cards_by_id()))
+        except zipfile.BadZipFile:
+            page.show_dialog(ft.AlertDialog(
+                title=ft.Text("Audio-Import"),
+                content=ft.Text("Das ist keine gültige ZIP-Datei."),
+                actions=[ft.TextButton("OK",
+                                       on_click=lambda e: page.pop_dialog())],
+            ))
+            return
+        lines: list[ft.Control] = [
+            ft.Text(f"{len(report.imported)} Audio-Dateien übernommen."),
+        ]
+        if report.unmatched:
+            lines.append(ft.Text(
+                "Ohne passende Karte übersprungen:\n"
+                + ", ".join(report.unmatched), size=13))
+        if report.skipped:
+            lines.append(ft.Text(
+                f"{len(report.skipped)} Dateien ohne Audio-Endung ignoriert.",
+                size=13))
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text("Audio-Import"),
+            content=ft.Column(lines, tight=True, width=420,
+                              scroll=ft.ScrollMode.AUTO),
+            actions=[ft.TextButton("OK", on_click=lambda e: page.pop_dialog())],
+        ))
+        refresh()
 
     refresh()
     # Rundes Such-Symbol unten links (unten rechts kollidiert mit den

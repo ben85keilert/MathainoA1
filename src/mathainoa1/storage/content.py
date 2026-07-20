@@ -351,6 +351,17 @@ def export_json(vlist: VocabList) -> str:
     return json.dumps(vlist.to_dict(), ensure_ascii=False, indent=2)
 
 
+def export_tts_text(vlist: VocabList) -> str:
+    """Eine Zeile pro Karte: "<id>TAB<griechische Vorderseite>".
+
+    Für die externe Audio-Erzeugung (Chatbot/TTS): pro Zeile eine Datei
+    "<id>.mp3" erzeugen und alle zusammen als ZIP wieder importieren
+    (AudioStore.import_zip). Bewusst card.front ohne with_plural() —
+    der Plural-Zusatz ("-ες") soll nicht mitgesprochen werden.
+    """
+    return "".join(f"{c.id}\t{c.front}\n" for c in vlist.cards)
+
+
 def import_json(text: str) -> VocabList:
     vlist = VocabList.from_dict(json.loads(text))
     vlist.editable = True

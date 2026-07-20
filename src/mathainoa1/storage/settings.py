@@ -60,6 +60,11 @@ def user_vocab_dir() -> Path:
     return app_data_dir() / "vocab"
 
 
+def audio_dir() -> Path:
+    """Wort-Audiodateien, flach nach Karten-ID benannt (storage/audio.py)."""
+    return app_data_dir() / "audio"
+
+
 def book_vocab_dir() -> Path:
     """Mitgelieferte Buchlisten: Assets der gepackten App oder Repo-Ordner."""
     assets = os.environ.get("FLET_ASSETS_DIR")

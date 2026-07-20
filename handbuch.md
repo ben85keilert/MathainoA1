@@ -74,6 +74,33 @@ auf, z.B. `gen_pl=γυναικών; 2sg=πας`. In der App-Hilfe (?-Symbol) ste
 ein fertiger Chatbot-Prompt, der aus einer Liste griechischer Wörter
 (als Foto oder Text) die Import-CSV erzeugt.
 
+## Audio (Aussprache)
+
+Jede Karte kann eine Audiodatei mit der Aussprache haben. Die Dateien
+werden außerhalb der App erzeugt (z.B. per Chatbot mit Sprachausgabe)
+und dann importiert:
+
+1. In der Vokabelverwaltung im Listenmenü (⋮) **„Export Text
+   (Audio/TTS)“** wählen. Die Datei enthält pro Zeile die Karten-ID und
+   das griechische Wort, getrennt durch einen Tabulator.
+2. Diese Datei an einen Chatbot geben (fertiger **Audio-Prompt** in der
+   App-Hilfe) — er erzeugt pro Zeile eine MP3, benannt exakt nach der
+   Karten-ID (`<id>.mp3`), und liefert alles als eine ZIP.
+3. Die ZIP über **„Audio importieren“** in der Vokabelverwaltung
+   einlesen. Die Zuordnung läuft automatisch über die IDs — das
+   funktioniert auch für Buchlisten und für ZIPs, die Wörter mehrerer
+   Listen mischen. Nicht zuordenbare Dateien meldet der Import.
+
+Danach zeigt jede Karte mit Audio in den Listenansichten ein
+Lautsprecher-Symbol: **kurz antippen** spielt normal, **lang drücken**
+langsam (zum Nachsprechen). Im Training erscheinen Lautsprecher- und
+Langsam-Symbol unter der Karte — aber erst, wenn die griechische Seite
+sichtbar ist, damit die Antwort nicht verraten wird.
+
+Unterstützte Formate: `.mp3`, `.m4a`, `.ogg`, `.wav`. Größenordnung:
+~100 Wörter ergeben etwa 1–1,5 MB. Erneutes Importieren ersetzt
+vorhandene Dateien mit derselben ID.
+
 ## Wie kommt die Statistik zustande?
 
 ### Das Boxen-System (Leitner)

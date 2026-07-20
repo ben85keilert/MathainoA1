@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 license = { file = "LICENSE" }
 dependencies = [
     "flet>=0.85,<0.86",
+    "flet-audio>=0.85,<0.86",
 ]
 
 [project.optional-dependencies]
