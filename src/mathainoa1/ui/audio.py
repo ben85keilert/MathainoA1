@@ -42,13 +42,23 @@ def tts_cache() -> TtsCache:
     return _cache
 
 
-def _player(page: ft.Page):
-    """Den gemeinsamen Audio-Service finden oder anlegen —
-    dasselbe Muster wie beim FilePicker in manager_view."""
-    for s in page.services:
-        if isinstance(s, fa.Audio):
-            return s
-    p = fa.Audio(release_mode=fa.ReleaseMode.STOP)
+def _install_autoplay(page: ft.Page, uri: str, rate: float):
+    """Frisches Audio-Control mit src+autoplay einhängen und altes entfernen.
+
+    Workaround für den flet-audio-Regressionsbug ab 0.82 (flet-Issue #6265):
+    ein separater `await player.play()` auf ein bestehendes Control lädt die
+    Quelle nie ("on_loaded" feuert nicht) und läuft in den 30-s-Timeout
+    "Future not completed" — reproduzierbar auf Desktop UND Android. Ein neu
+    erzeugtes Audio mit `src`/`playback_rate` schon im Konstruktor plus
+    `autoplay=True` spielt beim Einhängen selbst ab, ohne den kaputten
+    play()-Aufruf. Laut flet-Doku wird autoplay auf Desktop und Mobile
+    unterstützt (nur Web-Chrome/Edge nicht). Weil autoplay nur beim Anlegen
+    auslöst, wird pro Wiedergabe ein neues Control gesetzt und das alte
+    entfernt (sonst sammeln sie sich an)."""
+    for s in [s for s in page.services if isinstance(s, fa.Audio)]:
+        page.services.remove(s)
+    p = fa.Audio(src=uri, playback_rate=rate, autoplay=True,
+                 release_mode=fa.ReleaseMode.RELEASE)
     page.services.append(p)
     page.update()
     return p
@@ -85,13 +95,14 @@ def play_text(page: ft.Page, text: str, slow: bool = False,
                 return
             finally:
                 _fetching.discard(spoken)
-        player = _player(page)
-        # Bytes statt Dateipfad: funktioniert unabhängig davon, ob die
-        # Plattform app_data_dir()-Pfade als Audioquelle akzeptiert
-        player.src = cache.path_for(spoken).read_bytes()
-        player.playback_rate = SLOW_RATE if slow else 1.0
-        page.update()
-        await player.play()
+        # file://-URL (nicht rohe Bytes, nicht nackter Pfad): das
+        # audioplayers-Plugin reicht den src-String direkt an GStreamers
+        # playbin (uri=...) weiter, das eine gültige URI *mit Schema*
+        # verlangt. as_uri() liefert "file:///..." — gültig auf Desktop
+        # und Android. Wiedergabe per autoplay statt play(), siehe
+        # _install_autoplay().
+        uri = cache.path_for(spoken).as_uri()
+        _install_autoplay(page, uri, SLOW_RATE if slow else 1.0)
 
     page.run_task(run)
 
