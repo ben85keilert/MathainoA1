@@ -80,12 +80,16 @@ Jede Karte kann eine Audiodatei mit der Aussprache haben. Die Dateien
 werden außerhalb der App erzeugt (z.B. per Chatbot mit Sprachausgabe)
 und dann importiert:
 
-1. In der Vokabelverwaltung im Listenmenü (⋮) **„Export Text
-   (Audio/TTS)“** wählen. Die Datei enthält pro Zeile die Karten-ID und
-   das griechische Wort, getrennt durch einen Tabulator.
-2. Diese Datei an einen Chatbot geben (fertiger **Audio-Prompt** in der
-   App-Hilfe) — er erzeugt pro Zeile eine MP3, benannt exakt nach der
-   Karten-ID (`<id>.mp3`), und liefert alles als eine ZIP.
+1. In der Vokabelverwaltung im Listenmenü (⋮) **„Audio erzeugen
+   (Chatbot)“** wählen: Das kopiert den fertigen Prompt und die
+   Wortliste (pro Zeile Karten-ID + griechisches Wort) mit einem Klick
+   in die Zwischenablage. Über die beiden Checkboxen lässt sich auch
+   nur die Liste oder nur der Prompt kopieren — praktisch für eine
+   Korrekturrunde. (Alternativ liefert **„Export Text (Audio/TTS)“**
+   dieselbe Wortliste als Datei; der Audio-Prompt steht auch in der
+   App-Hilfe.)
+2. Beim Chatbot einfügen — er erzeugt pro Zeile eine MP3, benannt exakt
+   nach der Karten-ID (`<id>.mp3`), und liefert alles als eine ZIP.
 3. Die ZIP über **„Audio importieren“** in der Vokabelverwaltung
    einlesen. Die Zuordnung läuft automatisch über die IDs — das
    funktioniert auch für Buchlisten und für ZIPs, die Wörter mehrerer
@@ -96,6 +100,13 @@ Lautsprecher-Symbol: **kurz antippen** spielt normal, **lang drücken**
 langsam (zum Nachsprechen). Im Training erscheinen Lautsprecher- und
 Langsam-Symbol unter der Karte — aber erst, wenn die griechische Seite
 sichtbar ist, damit die Antwort nicht verraten wird.
+
+**Auto-Play:** Im Vokabel- und im Verbtraining sitzt oben rechts ein
+Lautsprecher-Umschalter. Ist er an, wird das Audio automatisch
+abgespielt, sobald der griechische Text erscheint — bei Griechisch →
+Deutsch sofort mit der Frage, bei Deutsch → Griechisch mit dem
+Aufdecken der Lösung. Im Verbtraining wird die Grundform des Verbs
+vorgelesen (nur dafür gibt es Audio). Die Einstellung bleibt gespeichert.
 
 Unterstützte Formate: `.mp3`, `.m4a`, `.ogg`, `.wav`. Größenordnung:
 ~100 Wörter ergeben etwa 1–1,5 MB. Erneutes Importieren ersetzt

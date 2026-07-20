@@ -14,7 +14,12 @@ from mathainoa1.storage.settings import (
     load_default_settings,
     save_default_settings,
 )
-from mathainoa1.ui.audio import audio_store, play_card
+from mathainoa1.ui.audio import (
+    audio_store,
+    autoplay_button,
+    maybe_autoplay,
+    play_card,
+)
 
 ALL = "__all__"
 
@@ -449,6 +454,9 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
                 ft.FilledButton("Prüfen", icon=ft.Icons.CHECK, on_click=check),
             ]
         refresh_notes()
+        # GR->DE: das griechische Wort steht schon in der Frage
+        if session.prompt_side(card) == "gr":
+            maybe_autoplay(nav.page, card.id)
         if session.settings.mode == "typing":
             focus_answer()
 
@@ -456,6 +464,10 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         """Nach Antwort/Aufdecken: alle Notizen/Hinweise beider Seiten zeigen."""
         revealed["answered"] = True
         refresh_notes()
+        # DE->GR: die griechische Seite erscheint erst jetzt mit der Antwort
+        card = shown["card"]
+        if session.prompt_side(card) == "de":
+            maybe_autoplay(nav.page, card.id)
 
     def reveal(e):
         card = session.current
@@ -526,7 +538,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     show_card()
     return ft.Column(
         [
-            ft.Row([progress_label, round_label],
+            ft.Row([progress_label, round_label, autoplay_button(nav.page)],
                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             seg_mode,
             ft.Container(prompt, padding=ft.Padding.symmetric(vertical=20)),

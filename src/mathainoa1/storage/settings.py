@@ -28,6 +28,9 @@ class AppSettings:
     # Box 4+5 nur über D->G; Box 5 nur über getipptes D->G
     high_boxes_need_production: bool = True
     top_box_needs_typing: bool = True
+    # Wort-Audio automatisch abspielen, sobald im Training die
+    # griechische Seite sichtbar wird (Umschalter in den Trainings-Views)
+    autoplay_audio: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)

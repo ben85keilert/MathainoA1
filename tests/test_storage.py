@@ -301,7 +301,7 @@ def test_app_settings_roundtrip():
     from mathainoa1.storage.settings import AppSettings
     s = AppSettings(theme="dark", seed="green", accent_resets_box=True,
                     case_resets_box=True, high_boxes_need_production=False,
-                    top_box_needs_typing=False)
+                    top_box_needs_typing=False, autoplay_audio=True)
     assert AppSettings.from_dict(s.to_dict()) == s
     # unbekannte Keys werden ignoriert, Defaults greifen (Beschränkungen an)
     d = AppSettings.from_dict({"foo": 1})

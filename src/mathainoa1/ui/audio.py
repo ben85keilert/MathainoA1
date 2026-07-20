@@ -11,7 +11,11 @@ from __future__ import annotations
 import flet as ft
 
 from mathainoa1.storage.audio import AudioStore
-from mathainoa1.storage.settings import audio_dir
+from mathainoa1.storage.settings import (
+    audio_dir,
+    load_app_settings,
+    save_app_settings,
+)
 
 try:
     import flet_audio as fa
@@ -41,6 +45,50 @@ def _player(page: ft.Page):
     page.services.append(p)
     page.update()
     return p
+
+
+_autoplay: bool | None = None
+
+
+def autoplay_enabled() -> bool:
+    """Auto-Play-Einstellung, gecacht — nicht bei jeder Karte die JSON lesen."""
+    global _autoplay
+    if _autoplay is None:
+        _autoplay = load_app_settings().autoplay_audio
+    return _autoplay
+
+
+def set_autoplay(value: bool) -> None:
+    global _autoplay
+    _autoplay = value
+    s = load_app_settings()
+    s.autoplay_audio = value
+    save_app_settings(s)
+
+
+def autoplay_button(page: ft.Page) -> ft.IconButton:
+    """Umschalter „Griechisch automatisch vorlesen“ für die Trainings-Views."""
+    def apply_icon(btn: ft.IconButton):
+        on = autoplay_enabled()
+        btn.icon = ft.Icons.VOLUME_UP if on else ft.Icons.VOLUME_OFF
+        btn.icon_color = ft.Colors.PRIMARY if on else None
+        btn.tooltip = ("Automatisch vorlesen: an" if on
+                       else "Automatisch vorlesen: aus")
+
+    def toggle(e):
+        set_autoplay(not autoplay_enabled())
+        apply_icon(e.control)
+        page.update()
+
+    btn = ft.IconButton(on_click=toggle)
+    apply_icon(btn)
+    return btn
+
+
+def maybe_autoplay(page: ft.Page, card_id: str) -> None:
+    """Spielt das Karten-Audio ab, wenn Auto-Play an ist und Audio existiert."""
+    if autoplay_enabled() and audio_store().has_audio(card_id):
+        play_card(page, card_id)
 
 
 def play_card(page: ft.Page, card_id: str, slow: bool = False) -> None:
