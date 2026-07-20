@@ -63,9 +63,9 @@ def user_vocab_dir() -> Path:
     return app_data_dir() / "vocab"
 
 
-def audio_dir() -> Path:
-    """Wort-Audiodateien, flach nach Karten-ID benannt (storage/audio.py)."""
-    return app_data_dir() / "audio"
+def tts_cache_dir() -> Path:
+    """MP3-Cache der Sprachausgabe, nach Text-Hash benannt (storage/tts.py)."""
+    return app_data_dir() / "tts"
 
 
 def book_vocab_dir() -> Path:

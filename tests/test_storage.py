@@ -309,18 +309,8 @@ def test_app_settings_roundtrip():
     assert d.high_boxes_need_production and d.top_box_needs_typing
 
 
-def test_export_tts_text_format():
-    vlist = make_list()
-    text = content.export_tts_text(vlist)
-    lines = text.splitlines()
-    # eine Zeile pro Karte, kein Header: "<id>TAB<front>"
-    assert lines == [f"{c.id}\t{c.front}" for c in vlist.cards]
-    assert text.endswith("\n")
-    assert "το βιβλίο" in lines[0]  # front inkl. Artikel, ohne Plural-Zusatz
-
-
 def test_card_ids_survive_json_roundtrip():
-    # Die Audio-Zuordnung hängt an den Karten-IDs — sie müssen den
+    # Lernstand (progress.db) hängt an den Karten-IDs — sie müssen den
     # Export/Import-Rundweg unverändert überstehen
     vlist = make_list()
     loaded = content.import_json(content.export_json(vlist))

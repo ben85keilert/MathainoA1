@@ -76,39 +76,38 @@ ein fertiger Chatbot-Prompt, der aus einer Liste griechischer Wörter
 
 ## Audio (Aussprache)
 
-Jede Karte kann eine Audiodatei mit der Aussprache haben. Die Dateien
-werden außerhalb der App erzeugt (z.B. per Chatbot mit Sprachausgabe)
-und dann importiert:
+Die App spricht jedes griechische Wort selbst — über die
+Google-Sprachausgabe (gTTS). Es muss nichts eingerichtet oder
+importiert werden:
 
-1. In der Vokabelverwaltung im Listenmenü (⋮) **„Audio erzeugen
-   (Chatbot)“** wählen: Das kopiert den fertigen Prompt und die
-   Wortliste (pro Zeile Karten-ID + griechisches Wort) mit einem Klick
-   in die Zwischenablage. Über die beiden Checkboxen lässt sich auch
-   nur die Liste oder nur der Prompt kopieren — praktisch für eine
-   Korrekturrunde. (Der Audio-Prompt steht auch in der App-Hilfe.)
-2. Beim Chatbot einfügen — er erzeugt pro Zeile eine MP3, benannt exakt
-   nach der Karten-ID (`<id>.mp3`), und liefert alles als eine ZIP.
-3. Die ZIP über **„Audio importieren“** in der Vokabelverwaltung
-   einlesen. Die Zuordnung läuft automatisch über die IDs — das
-   funktioniert auch für Buchlisten und für ZIPs, die Wörter mehrerer
-   Listen mischen. Nicht zuordenbare Dateien meldet der Import.
+- **Lautsprecher-Symbol an jeder Karte** in den Listenansichten:
+  **kurz antippen** spielt normal, **lang drücken** langsam (zum
+  Nachsprechen). Im Vokabeltraining erscheinen Lautsprecher- und
+  Langsam-Symbol unter der Karte — aber erst, wenn die griechische
+  Seite sichtbar ist, damit die Antwort nicht verraten wird.
+- Beim **ersten Abspielen** eines Worts braucht es kurz Internet
+  (~1 Sekunde). Danach ist die Aufnahme lokal gespeichert und spielt
+  sofort — auch offline. Wird ein Wort geändert, entsteht beim nächsten
+  Abspielen automatisch neues Audio; veraltetes Audio kann es nicht
+  geben.
+- **„Audio vorbereiten“** im Listenmenü (⋮, auch bei Buchlisten) lädt
+  alle Wörter einer Liste auf einmal in den Speicher — praktisch vor
+  einer Reise, damit die ganze Liste offline anhörbar ist (~100 Wörter
+  in 1–2 Minuten, etwa 1–1,5 MB).
 
-Danach zeigt jede Karte mit Audio in den Listenansichten ein
-Lautsprecher-Symbol: **kurz antippen** spielt normal, **lang drücken**
-langsam (zum Nachsprechen). Im Training erscheinen Lautsprecher- und
-Langsam-Symbol unter der Karte — aber erst, wenn die griechische Seite
-sichtbar ist, damit die Antwort nicht verraten wird.
+**Auto-Play:** In allen drei Trainings sitzt oben rechts ein
+Lautsprecher-Umschalter. Ist er an, wird automatisch vorgelesen, sobald
+der griechische Text erscheint — im Vokabeltraining bei Griechisch →
+Deutsch sofort mit der Frage, bei Deutsch → Griechisch mit dem Aufdecken
+der Lösung. **Nomen- und Verbtraining sprechen die echte Lösungsform**
+(z.B. „θα γράψετε“ oder „τους μικρούς δρόμους“), zusätzlich gibt es dort
+ein Lautsprecher-Symbol neben der aufgedeckten Lösung. Die Einstellung
+bleibt gespeichert.
 
-**Auto-Play:** Im Vokabel- und im Verbtraining sitzt oben rechts ein
-Lautsprecher-Umschalter. Ist er an, wird das Audio automatisch
-abgespielt, sobald der griechische Text erscheint — bei Griechisch →
-Deutsch sofort mit der Frage, bei Deutsch → Griechisch mit dem
-Aufdecken der Lösung. Im Verbtraining wird die Grundform des Verbs
-vorgelesen (nur dafür gibt es Audio). Die Einstellung bleibt gespeichert.
-
-Unterstützte Formate: `.mp3`, `.m4a`, `.ogg`, `.wav`. Größenordnung:
-~100 Wörter ergeben etwa 1–1,5 MB. Erneutes Importieren ersetzt
-vorhandene Dateien mit derselben ID.
+Ist gerade kein Internet da, scheitert Auto-Play lautlos; manuelles
+Antippen zeigt einen kurzen Hinweis. Klammern und Alternativen werden
+beim Sprechen bereinigt: „αγαπ(ά)ω“ wird als „αγαπάω“ gesprochen,
+„και / κι“ als „και“, Zusätze wie „(ΕΕ)“ entfallen.
 
 ## Wie kommt die Statistik zustande?
 
