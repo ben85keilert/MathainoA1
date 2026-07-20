@@ -14,6 +14,12 @@ from mathainoa1.storage.settings import (
     load_default_settings,
     save_default_settings,
 )
+from mathainoa1.ui.audio import (
+    audio_store,
+    autoplay_button,
+    maybe_autoplay,
+    play_card,
+)
 
 ALL = "__all__"
 
@@ -342,6 +348,23 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     # Per Klick eingeblendet — gilt nur für die aktuelle Karte
     revealed = {"notes": False, "hints": False, "answered": False}
 
+    btn_play = ft.IconButton(
+        ft.Icons.VOLUME_UP, tooltip="Anhören",
+        on_click=lambda e: play_card(nav.page, shown["card"].id))
+    btn_play_slow = ft.IconButton(
+        ft.Icons.SLOW_MOTION_VIDEO, tooltip="Langsam — zum Nachsprechen",
+        on_click=lambda e: play_card(nav.page, shown["card"].id, slow=True))
+    audio_row = ft.Row([btn_play, btn_play_slow],
+                       alignment=ft.MainAxisAlignment.CENTER, visible=False)
+
+    def update_audio_row():
+        # Immer die griechische Seite abspielen — bei DE->GR also erst nach
+        # dem Aufdecken, sonst wäre die Antwort verraten
+        card = shown["card"]
+        greek_visible = (session.prompt_side(card) == "gr"
+                         or revealed["answered"])
+        audio_row.visible = greek_visible and audio_store().has_audio(card.id)
+
     def refresh_notes():
         card = shown["card"]
         if card is None:
@@ -376,6 +399,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         has_hints = any(card.hints_for(x) for x in sides)
         btn_notes.visible = has_notes and not show_notes
         btn_hint.visible = has_hints and not show_hints
+        update_audio_row()
         nav.page.update()
 
     def reveal_notes(e):
@@ -430,6 +454,9 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
                 ft.FilledButton("Prüfen", icon=ft.Icons.CHECK, on_click=check),
             ]
         refresh_notes()
+        # GR->DE: das griechische Wort steht schon in der Frage
+        if session.prompt_side(card) == "gr":
+            maybe_autoplay(nav.page, card.id)
         if session.settings.mode == "typing":
             focus_answer()
 
@@ -437,6 +464,10 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         """Nach Antwort/Aufdecken: alle Notizen/Hinweise beider Seiten zeigen."""
         revealed["answered"] = True
         refresh_notes()
+        # DE->GR: die griechische Seite erscheint erst jetzt mit der Antwort
+        card = shown["card"]
+        if session.prompt_side(card) == "de":
+            maybe_autoplay(nav.page, card.id)
 
     def reveal(e):
         card = session.current
@@ -507,10 +538,11 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     show_card()
     return ft.Column(
         [
-            ft.Row([progress_label, round_label],
+            ft.Row([progress_label, round_label, autoplay_button(nav.page)],
                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             seg_mode,
             ft.Container(prompt, padding=ft.Padding.symmetric(vertical=20)),
+            audio_row,
             notes_col, hint_row,
             answer, feedback, btn_wrong, own_answer,
             action_area,

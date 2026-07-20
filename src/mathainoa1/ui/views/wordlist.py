@@ -12,6 +12,7 @@ import flet as ft
 
 from mathainoa1.models import WORD_TYPES, VocabCard
 from mathainoa1.storage.progress import MAX_BOX, CardProgress
+from mathainoa1.ui.audio import audio_store, play_card
 
 BOX_COLORS = [ft.Colors.RED, ft.Colors.ORANGE, ft.Colors.AMBER,
               ft.Colors.LIGHT_GREEN, ft.Colors.GREEN]
@@ -53,6 +54,8 @@ def card_tiles(cards: list[VocabCard], on_click=None, on_delete=None,
     all_progress: Farbpunkt der Leitner-Box vorne (grau = untrainiert).
     """
     tiles = []
+    # Ein Verzeichnis-Scan für alle Zeilen statt stat() pro Karte
+    audio_ids = audio_store().existing_ids()
     for c in cards:
         extra = " · ".join(x for x in (c.notes_gr, c.notes_de, c.hints_gr, c.hints_de,
                                        "unregelmäßig" if (c.forms or c.stem2) else "") if x)
@@ -61,6 +64,23 @@ def card_tiles(cards: list[VocabCard], on_click=None, on_delete=None,
             p = all_progress.get(c.id)
             box = p.box if p and p.seen else 0
             leading = ft.Icon(ft.Icons.CIRCLE, size=14, color=box_color(box))
+        trailing_items: list[ft.Control] = []
+        if c.id in audio_ids:
+            trailing_items.append(ft.GestureDetector(
+                content=ft.Container(
+                    ft.Icon(ft.Icons.VOLUME_UP, color=ft.Colors.PRIMARY),
+                    padding=8,
+                    tooltip="Anhören — lang drücken: langsam",
+                ),
+                on_tap=lambda e, c=c: play_card(e.control.page, c.id),
+                on_long_press_start=lambda e, c=c: play_card(
+                    e.control.page, c.id, slow=True),
+            ))
+        if on_delete:
+            trailing_items.append(ft.IconButton(
+                ft.Icons.DELETE_OUTLINE, tooltip="Löschen",
+                on_click=lambda e, c=c: on_delete(c),
+            ))
         tiles.append(ft.ListTile(
             title=ft.Row(
                 [
@@ -76,10 +96,8 @@ def card_tiles(cards: list[VocabCard], on_click=None, on_delete=None,
             ) if extra else None,
             leading=leading,
             on_click=(lambda e, c=c: on_click(c)) if on_click else None,
-            trailing=ft.IconButton(
-                ft.Icons.DELETE_OUTLINE, tooltip="Löschen",
-                on_click=lambda e, c=c: on_delete(c),
-            ) if on_delete else None,
+            trailing=ft.Row(trailing_items, tight=True, spacing=0)
+            if trailing_items else None,
         ))
     return tiles
 

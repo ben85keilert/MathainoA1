@@ -28,6 +28,9 @@ class AppSettings:
     # Box 4+5 nur über D->G; Box 5 nur über getipptes D->G
     high_boxes_need_production: bool = True
     top_box_needs_typing: bool = True
+    # Wort-Audio automatisch abspielen, sobald im Training die
+    # griechische Seite sichtbar wird (Umschalter in den Trainings-Views)
+    autoplay_audio: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -58,6 +61,11 @@ def app_data_dir() -> Path:
 
 def user_vocab_dir() -> Path:
     return app_data_dir() / "vocab"
+
+
+def audio_dir() -> Path:
+    """Wort-Audiodateien, flach nach Karten-ID benannt (storage/audio.py)."""
+    return app_data_dir() / "audio"
 
 
 def book_vocab_dir() -> Path:

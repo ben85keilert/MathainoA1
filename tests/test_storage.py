@@ -301,9 +301,27 @@ def test_app_settings_roundtrip():
     from mathainoa1.storage.settings import AppSettings
     s = AppSettings(theme="dark", seed="green", accent_resets_box=True,
                     case_resets_box=True, high_boxes_need_production=False,
-                    top_box_needs_typing=False)
+                    top_box_needs_typing=False, autoplay_audio=True)
     assert AppSettings.from_dict(s.to_dict()) == s
     # unbekannte Keys werden ignoriert, Defaults greifen (Beschränkungen an)
     d = AppSettings.from_dict({"foo": 1})
     assert d.theme == "system"
     assert d.high_boxes_need_production and d.top_box_needs_typing
+
+
+def test_export_tts_text_format():
+    vlist = make_list()
+    text = content.export_tts_text(vlist)
+    lines = text.splitlines()
+    # eine Zeile pro Karte, kein Header: "<id>TAB<front>"
+    assert lines == [f"{c.id}\t{c.front}" for c in vlist.cards]
+    assert text.endswith("\n")
+    assert "το βιβλίο" in lines[0]  # front inkl. Artikel, ohne Plural-Zusatz
+
+
+def test_card_ids_survive_json_roundtrip():
+    # Die Audio-Zuordnung hängt an den Karten-IDs — sie müssen den
+    # Export/Import-Rundweg unverändert überstehen
+    vlist = make_list()
+    loaded = content.import_json(content.export_json(vlist))
+    assert [c.id for c in loaded.cards] == [c.id for c in vlist.cards]

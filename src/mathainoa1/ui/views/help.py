@@ -102,6 +102,30 @@ ZURÜCKFÜHREN AUF DIE GRUNDFORM
 
 {_CSV_FORMAT_RULES}"""
 
+# Prompt 3 — Audio-Prompt: aus dem TTS-Export (id<TAB>Wort) pro Zeile
+# eine Audiodatei erzeugen, benannt nach der Karten-ID
+AUDIO_PROMPT = """\
+AUFGABE
+Du bekommst eine Liste griechischer Vokabeln — als Textdatei oder
+direkt am Ende dieser Nachricht unter WORTLISTE. Jede Zeile hat das
+Format:
+
+<id><TAB><griechisches Wort>
+
+Erzeuge für jede Zeile eine Audiodatei mit der gesprochenen Aussprache
+des griechischen Worts (natürliche griechische Stimme, normales
+Sprechtempo, bei Nomen den Artikel mitsprechen — er steht mit in der
+Zeile).
+
+AUSGABEFORMAT
+- Pro Zeile genau eine MP3-Datei, benannt exakt nach der id:
+  "<id>.mp3" (z.B. "3f2a9c81d0b4.mp3"). Die id nicht verändern.
+- Alle Dateien zusammen in einer einzigen ZIP-Datei (ohne Unterordner)
+  zum Download bereitstellen.
+- Sprache: Griechisch (el-GR). Mono, 64 kbit/s genügt.
+- Keine weiteren Dateien und keinen Text in die ZIP legen.
+"""
+
 
 def _p(text: str) -> ft.Text:
     return ft.Text(text, size=14)
@@ -356,6 +380,40 @@ def help_view(nav, store=None) -> ft.Control:
         ),
     ])
 
+    audio = _chapter(nav, "Audio (Aussprache)", ft.Icons.VOLUME_UP, [
+        _p("Jede Karte kann eine Audiodatei mit der Aussprache haben. "
+           "Die Dateien werden außerhalb der App erzeugt (z.B. per "
+           "Chatbot mit Sprachausgabe) und dann importiert:"),
+        _bullets([
+            "Am einfachsten: im Listenmenü (⋮) „Audio erzeugen (Chatbot)“ "
+            "wählen — das kopiert den Prompt und die Wortliste (Karten-ID "
+            "+ Wort) mit einem Klick in die Zwischenablage; über die "
+            "beiden Checkboxen lässt sich auch nur die Liste oder nur der "
+            "Prompt kopieren (z.B. für eine Korrekturrunde).",
+            "Alternativ „Export Text (Audio/TTS)“: dieselbe Wortliste als "
+            "Datei, zusammen mit dem Audio-Prompt (unten) an den Chatbot "
+            "geben.",
+            "Der Chatbot liefert eine ZIP mit einer MP3 pro Wort, benannt "
+            "nach der Karten-ID. Die ZIP über „Audio importieren“ in der "
+            "Vokabelverwaltung einlesen — die Zuordnung läuft automatisch "
+            "über die IDs; das klappt auch für Buchlisten und gemischte "
+            "ZIPs.",
+            "Danach zeigt jede Karte mit Audio ein Lautsprecher-Symbol: "
+            "kurz antippen spielt normal, lang drücken langsam (zum "
+            "Nachsprechen). Im Training gibt es dafür zwei Symbole — "
+            "sie erscheinen erst, wenn die griechische Seite sichtbar "
+            "ist.",
+            "Auto-Play: Im Vokabel- und Verbtraining schaltet das "
+            "Lautsprecher-Symbol oben rechts um, ob das Audio automatisch "
+            "abgespielt wird, sobald der griechische Text erscheint (im "
+            "Verbtraining die Grundform des Verbs).",
+            "Größenordnung: ~100 Wörter ergeben etwa 1–1,5 MB.",
+        ]),
+        ft.Row([ft.OutlinedButton(
+            "Audio-Prompt", icon=ft.Icons.RECORD_VOICE_OVER,
+            on_click=open_prompt_dialog("Audio-Prompt", AUDIO_PROMPT))]),
+    ])
+
     wortsuche = _chapter(nav, "Wortsuche", ft.Icons.SEARCH, [
         _bullets([
             "Erreichbar über das runde Such-Symbol unten links in der "
@@ -411,7 +469,7 @@ def help_view(nav, store=None) -> ft.Control:
                "Verben …) findest du über das Buchsymbol oben in der "
                "Leiste."),
             trainings, wertung, leitner, editing, wortsuche, prompts,
-            about_row,
+            audio, about_row,
         ],
         spacing=4,
         scroll=ft.ScrollMode.AUTO,

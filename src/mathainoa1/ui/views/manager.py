@@ -6,6 +6,7 @@ Eigene Listen werden mit Namen angelegt (manuell oder per Import).
 
 from __future__ import annotations
 
+import zipfile
 from pathlib import Path
 
 import flet as ft
@@ -24,6 +25,8 @@ from mathainoa1.models import (
 from mathainoa1.storage import content
 from mathainoa1.storage.content import ContentStore
 from mathainoa1.storage.progress import ProgressStore
+from mathainoa1.ui.audio import audio_store
+from mathainoa1.ui.views.help import AUDIO_PROMPT
 from mathainoa1.ui.views.trainer import edit_notes_dialog
 from mathainoa1.ui.views.wordlist import (
     box_chip_controls,
@@ -62,6 +65,9 @@ def manager_view(nav, store: ContentStore,
     picker = ft.FilePicker()
     if picker not in page.services:
         page.services.append(picker)
+    clipboard = ft.Clipboard()
+    if clipboard not in page.services:
+        page.services.append(clipboard)
     body = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO)
     state = {"sort_mode": False}  # Listen-Reihenfolge per ↑/↓ ändern
 
@@ -93,6 +99,8 @@ def manager_view(nav, store: ContentStore,
                                   on_click=import_file),
                 ft.OutlinedButton("Als Text importieren", icon=ft.Icons.CONTENT_PASTE,
                                   on_click=import_text_dialog),
+                ft.OutlinedButton("Audio importieren", icon=ft.Icons.AUDIO_FILE,
+                                  on_click=import_audio_zip),
             ], spacing=8, wrap=True),
         ]
         if store.selections:
@@ -165,11 +173,29 @@ def manager_view(nav, store: ContentStore,
                                  on_click=lambda e, l=vlist: export_list(l, "json")),
                 ft.PopupMenuItem(content="Export CSV", icon=ft.Icons.DOWNLOAD,
                                  on_click=lambda e, l=vlist: export_list(l, "csv")),
+                ft.PopupMenuItem(content="Export Text (Audio/TTS)",
+                                 icon=ft.Icons.DOWNLOAD,
+                                 on_click=lambda e, l=vlist: export_list(l, "txt")),
+                ft.PopupMenuItem(content="Audio erzeugen (Chatbot)",
+                                 icon=ft.Icons.RECORD_VOICE_OVER,
+                                 on_click=lambda e, l=vlist: audio_copy_dialog(l)),
                 ft.PopupMenuItem(content="Löschen", icon=ft.Icons.DELETE,
                                  on_click=lambda e, l=vlist: delete_dialog(l)),
             ])
         else:
-            trailing = ft.Icon(ft.Icons.LOCK_OUTLINE, tooltip="Buchliste (nicht editierbar)")
+            # Buchlisten: nicht editierbar, aber die Audio-Erzeugung ist auch
+            # für sie sinnvoll (Audio wird über Karten-IDs zugeordnet)
+            trailing = ft.Row([
+                ft.Icon(ft.Icons.LOCK_OUTLINE, tooltip="Buchliste (nicht editierbar)"),
+                ft.PopupMenuButton(items=[
+                    ft.PopupMenuItem(content="Export Text (Audio/TTS)",
+                                     icon=ft.Icons.DOWNLOAD,
+                                     on_click=lambda e, l=vlist: export_list(l, "txt")),
+                    ft.PopupMenuItem(content="Audio erzeugen (Chatbot)",
+                                     icon=ft.Icons.RECORD_VOICE_OVER,
+                                     on_click=lambda e, l=vlist: audio_copy_dialog(l)),
+                ]),
+            ], tight=True, spacing=0)
         return ft.Card(
             content=ft.ListTile(
                 leading=ft.Icon(ft.Icons.LIST_ALT),
@@ -287,13 +313,121 @@ def manager_view(nav, store: ContentStore,
         refresh()
 
     async def export_list(vlist: VocabList, fmt: str):
-        text = content.export_json(vlist) if fmt == "json" else content.export_csv(vlist)
+        if fmt == "json":
+            text = content.export_json(vlist)
+        elif fmt == "txt":
+            text = content.export_tts_text(vlist)
+        else:
+            text = content.export_csv(vlist)
         await picker.save_file(
             dialog_title="Liste exportieren",
             file_name=f"{vlist.name}.{fmt}",
             allowed_extensions=[fmt],
             src_bytes=text.encode("utf-8"),
         )
+
+    def audio_copy_dialog(vlist: VocabList):
+        """4. Export-Option: Chatbot-Prompt und Wortliste (ID + Wort) mit
+        einem Klick in die Zwischenablage — der Chatbot liefert daraus die
+        Audio-ZIP für „Audio importieren“.
+
+        Über die Checkboxen lässt sich auch nur die Liste oder nur der
+        Prompt kopieren (z.B. für eine Korrekturrunde).
+        """
+        cb_prompt = ft.Checkbox(label="Chatbot-Prompt", value=True)
+        cb_list = ft.Checkbox(
+            label=f"Wortliste (ID + Wort, {len(vlist.cards)} Wörter)",
+            value=True)
+        btn_copy = ft.FilledButton("Kopieren", icon=ft.Icons.COPY)
+
+        def sync_button(e=None):
+            btn_copy.disabled = not (cb_prompt.value or cb_list.value)
+            page.update()
+
+        cb_prompt.on_change = sync_button
+        cb_list.on_change = sync_button
+
+        def copy(e):
+            parts = []
+            if cb_prompt.value:
+                parts.append(AUDIO_PROMPT)
+            if cb_list.value:
+                parts.append("WORTLISTE\n" + content.export_tts_text(vlist))
+            text = "\n".join(parts)
+
+            async def do():
+                await clipboard.set(text)
+            page.run_task(do)
+            page.pop_dialog()
+            page.show_dialog(ft.SnackBar(ft.Text(
+                "In die Zwischenablage kopiert — beim Chatbot einfügen.")))
+
+        btn_copy.on_click = copy
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text("Audio erzeugen (Chatbot)"),
+            content=ft.Column(
+                [
+                    ft.Text("Kopiert Prompt und Wortliste zusammen in die "
+                            "Zwischenablage. Beim Chatbot einfügen — er "
+                            "erzeugt eine ZIP mit einer MP3 pro Wort, die "
+                            "über „Audio importieren“ eingelesen wird.",
+                            size=14),
+                    cb_prompt,
+                    cb_list,
+                ],
+                tight=True, spacing=8, width=420,
+            ),
+            actions=[ft.TextButton("Abbrechen",
+                                   on_click=lambda e: page.pop_dialog()),
+                     btn_copy],
+        ))
+
+    async def import_audio_zip(e):
+        """ZIP mit "<karten-id>.mp3"-Dateien einlesen (siehe storage/audio.py).
+
+        Matcht global gegen alle Listen — so funktioniert eine gemischte
+        ZIP genauso wie Audio für Buchlisten.
+        """
+        files = await picker.pick_files(
+            dialog_title="Audio-ZIP importieren",
+            allowed_extensions=["zip"], with_data=True,
+        )
+        if not files:
+            return
+        f = files[0]
+        data = f.bytes_data if hasattr(f, "bytes_data") else None
+        if data is None and f.path:
+            data = Path(f.path).read_bytes()
+        if data is None:
+            return
+        try:
+            report = audio_store().import_zip(data, set(store.cards_by_id()))
+        except zipfile.BadZipFile:
+            page.show_dialog(ft.AlertDialog(
+                title=ft.Text("Audio-Import"),
+                content=ft.Text("Das ist keine gültige ZIP-Datei."),
+                actions=[ft.TextButton("OK",
+                                       on_click=lambda e: page.pop_dialog())],
+            ))
+            return
+        lines: list[ft.Control] = [
+            ft.Text(f"{len(report.imported)} Audio-Dateien übernommen."),
+        ]
+        if report.unmatched:
+            lines.append(ft.Text(
+                "Ohne passende Karte übersprungen:\n"
+                + ", ".join(report.unmatched), size=13))
+        if report.skipped:
+            lines.append(ft.Text(
+                f"{len(report.skipped)} Dateien ohne Audio-Endung ignoriert.",
+                size=13))
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text("Audio-Import"),
+            content=ft.Column(lines, tight=True, width=420,
+                              scroll=ft.ScrollMode.AUTO),
+            actions=[ft.TextButton("OK", on_click=lambda e: page.pop_dialog())],
+        ))
+        refresh()
 
     refresh()
     # Rundes Such-Symbol unten links (unten rechts kollidiert mit den

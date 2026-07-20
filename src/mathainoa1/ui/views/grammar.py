@@ -35,6 +35,7 @@ from mathainoa1.storage.settings import (
     save_conjugation_settings,
     save_declension_settings,
 )
+from mathainoa1.ui.audio import autoplay_button, maybe_autoplay
 
 
 def _make_session(tasks, settings, on_result=None) -> DeclensionSession:
@@ -467,7 +468,8 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
         session = _make_session(tasks, settings)
         nav.go("Verbtraining", run_view(
             nav, store, session, title="Verbtraining",
-            make_tasks=lambda s: conj.generate_tasks(store.cards_for(s.list_id), s)))
+            make_tasks=lambda s: conj.generate_tasks(store.cards_for(s.list_id), s),
+            card_audio=True))
 
     return ft.Column(
         [
@@ -499,10 +501,12 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
 
 
 def run_view(nav, store: ContentStore, session: DeclensionSession,
-             title: str, make_tasks) -> ft.Control:
+             title: str, make_tasks, card_audio: bool = False) -> ft.Control:
     """Trainingsrunde — gemeinsam für Deklination und Konjugation.
 
     make_tasks(settings) erzeugt die Aufgaben für "Neue Runde".
+    card_audio: Auto-Play des Karten-Audios (Grundform), sobald die
+    griechische Lösung erscheint — genutzt vom Verbtraining.
     """
     progress_label = ft.Text("", size=13)
     round_label = ft.Text("", size=13, color=ft.Colors.PRIMARY)
@@ -561,7 +565,8 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
     def show_task():
         task = session.current
         if task is None:
-            nav.go("Ergebnis", result_view(nav, store, session, title, make_tasks))
+            nav.go("Ergebnis", result_view(nav, store, session, title,
+                                           make_tasks, card_audio=card_audio))
             return
         done = len(session.answers)
         total = done + len(session.queue)
@@ -590,9 +595,16 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         if session.settings.mode == "typing":
             focus_answer()
 
+    def solution_shown(task):
+        # Die griechische Lösung ist jetzt sichtbar — bei Auto-Play die
+        # Grundform der Karte vorlesen (nur dafür gibt es Audio)
+        if card_audio and getattr(task, "card", None) is not None:
+            maybe_autoplay(nav.page, task.card.id)
+
     def reveal(e):
         task = session.current
         answer.value = task.expected
+        solution_shown(task)
         if session.in_repeat_round:
             # Fehlerrunde zählt nicht — Selbstbewertung wäre Scheinauswahl
             action_area.controls = [
@@ -654,13 +666,16 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
             # Abstand, damit man nicht versehentlich "Weiter" trifft
             action_area.controls = [ft.Container(height=24), weiter]
         answer.value = display
+        solution_shown(task)
         nav.page.update()
 
     show_task()
+    status_row = [progress_label, round_label]
+    if card_audio:
+        status_row.append(autoplay_button(nav.page))
     return ft.Column(
         [
-            ft.Row([progress_label, round_label],
-                   alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            ft.Row(status_row, alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             seg_mode,
             ft.Container(prompt, padding=ft.Padding.only(top=20)),
             task_label, meaning,
@@ -674,7 +689,7 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
 
 
 def result_view(nav, store: ContentStore, session: DeclensionSession,
-                title: str, make_tasks) -> ft.Control:
+                title: str, make_tasks, card_audio: bool = False) -> ft.Control:
     stats = session.stats()
     wrong_items = [
         ft.ListTile(
@@ -698,7 +713,8 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
         tasks = (wrong + fill)[: max(1, settings.word_count)]
         random.shuffle(tasks)
         session2 = _make_session(tasks, settings, on_result=session.on_result)
-        nav.go(title, run_view(nav, store, session2, title, make_tasks))
+        nav.go(title, run_view(nav, store, session2, title, make_tasks,
+                               card_audio=card_audio))
 
     def home(e):
         del nav.stack[1:]
