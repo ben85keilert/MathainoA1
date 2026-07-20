@@ -15,10 +15,9 @@ from mathainoa1.storage.settings import (
     save_default_settings,
 )
 from mathainoa1.ui.audio import (
-    audio_store,
     autoplay_button,
     maybe_autoplay,
-    play_card,
+    play_text,
 )
 
 ALL = "__all__"
@@ -350,10 +349,10 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
 
     btn_play = ft.IconButton(
         ft.Icons.VOLUME_UP, tooltip="Anhören",
-        on_click=lambda e: play_card(nav.page, shown["card"].id))
+        on_click=lambda e: play_text(nav.page, shown["card"].front))
     btn_play_slow = ft.IconButton(
         ft.Icons.SLOW_MOTION_VIDEO, tooltip="Langsam — zum Nachsprechen",
-        on_click=lambda e: play_card(nav.page, shown["card"].id, slow=True))
+        on_click=lambda e: play_text(nav.page, shown["card"].front, slow=True))
     audio_row = ft.Row([btn_play, btn_play_slow],
                        alignment=ft.MainAxisAlignment.CENTER, visible=False)
 
@@ -361,9 +360,8 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         # Immer die griechische Seite abspielen — bei DE->GR also erst nach
         # dem Aufdecken, sonst wäre die Antwort verraten
         card = shown["card"]
-        greek_visible = (session.prompt_side(card) == "gr"
-                         or revealed["answered"])
-        audio_row.visible = greek_visible and audio_store().has_audio(card.id)
+        audio_row.visible = (session.prompt_side(card) == "gr"
+                             or revealed["answered"])
 
     def refresh_notes():
         card = shown["card"]
@@ -456,7 +454,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         refresh_notes()
         # GR->DE: das griechische Wort steht schon in der Frage
         if session.prompt_side(card) == "gr":
-            maybe_autoplay(nav.page, card.id)
+            maybe_autoplay(nav.page, card.front)
         if session.settings.mode == "typing":
             focus_answer()
 
@@ -467,7 +465,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         # DE->GR: die griechische Seite erscheint erst jetzt mit der Antwort
         card = shown["card"]
         if session.prompt_side(card) == "de":
-            maybe_autoplay(nav.page, card.id)
+            maybe_autoplay(nav.page, card.front)
 
     def reveal(e):
         card = session.current

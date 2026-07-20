@@ -6,7 +6,7 @@ Eigene Listen werden mit Namen angelegt (manuell oder per Import).
 
 from __future__ import annotations
 
-import zipfile
+import asyncio
 from pathlib import Path
 
 import flet as ft
@@ -25,8 +25,8 @@ from mathainoa1.models import (
 from mathainoa1.storage import content
 from mathainoa1.storage.content import ContentStore
 from mathainoa1.storage.progress import ProgressStore
-from mathainoa1.ui.audio import audio_store
-from mathainoa1.ui.views.help import AUDIO_PROMPT
+from mathainoa1.storage.tts import TtsFetchError, speakable
+from mathainoa1.ui.audio import tts_cache
 from mathainoa1.ui.views.trainer import edit_notes_dialog
 from mathainoa1.ui.views.wordlist import (
     box_chip_controls,
@@ -65,9 +65,6 @@ def manager_view(nav, store: ContentStore,
     picker = ft.FilePicker()
     if picker not in page.services:
         page.services.append(picker)
-    clipboard = ft.Clipboard()
-    if clipboard not in page.services:
-        page.services.append(clipboard)
     body = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO)
     state = {"sort_mode": False}  # Listen-Reihenfolge per ↑/↓ ändern
 
@@ -99,8 +96,6 @@ def manager_view(nav, store: ContentStore,
                                   on_click=import_file),
                 ft.OutlinedButton("Als Text importieren", icon=ft.Icons.CONTENT_PASTE,
                                   on_click=import_text_dialog),
-                ft.OutlinedButton("Audio importieren", icon=ft.Icons.AUDIO_FILE,
-                                  on_click=import_audio_zip),
             ], spacing=8, wrap=True),
         ]
         if store.selections:
@@ -173,21 +168,21 @@ def manager_view(nav, store: ContentStore,
                                  on_click=lambda e, l=vlist: export_list(l, "json")),
                 ft.PopupMenuItem(content="Export CSV", icon=ft.Icons.DOWNLOAD,
                                  on_click=lambda e, l=vlist: export_list(l, "csv")),
-                ft.PopupMenuItem(content="Audio erzeugen (Chatbot)",
-                                 icon=ft.Icons.RECORD_VOICE_OVER,
-                                 on_click=lambda e, l=vlist: audio_copy_dialog(l)),
+                ft.PopupMenuItem(content="Audio vorbereiten",
+                                 icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
+                                 on_click=lambda e, l=vlist: prepare_audio_dialog(l)),
                 ft.PopupMenuItem(content="Löschen", icon=ft.Icons.DELETE,
                                  on_click=lambda e, l=vlist: delete_dialog(l)),
             ])
         else:
-            # Buchlisten: nicht editierbar, aber die Audio-Erzeugung ist auch
-            # für sie sinnvoll (Audio wird über Karten-IDs zugeordnet)
+            # Buchlisten: nicht editierbar, aber die Audio-Vorbereitung ist
+            # auch für sie sinnvoll (Cache hängt nur am Text)
             trailing = ft.Row([
                 ft.Icon(ft.Icons.LOCK_OUTLINE, tooltip="Buchliste (nicht editierbar)"),
                 ft.PopupMenuButton(items=[
-                    ft.PopupMenuItem(content="Audio erzeugen (Chatbot)",
-                                     icon=ft.Icons.RECORD_VOICE_OVER,
-                                     on_click=lambda e, l=vlist: audio_copy_dialog(l)),
+                    ft.PopupMenuItem(content="Audio vorbereiten",
+                                     icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
+                                     on_click=lambda e, l=vlist: prepare_audio_dialog(l)),
                 ]),
             ], tight=True, spacing=0)
         return ft.Card(
@@ -315,108 +310,77 @@ def manager_view(nav, store: ContentStore,
             src_bytes=text.encode("utf-8"),
         )
 
-    def audio_copy_dialog(vlist: VocabList):
-        """4. Export-Option: Chatbot-Prompt und Wortliste (ID + Wort) mit
-        einem Klick in die Zwischenablage — der Chatbot liefert daraus die
-        Audio-ZIP für „Audio importieren“.
+    def prepare_audio_dialog(vlist: VocabList):
+        """Lädt das Audio aller Wörter einer Liste vorab in den Cache —
+        danach ist die Liste komplett offline anhörbar.
 
-        Über die Checkboxen lässt sich auch nur die Liste oder nur der
-        Prompt kopieren (z.B. für eine Korrekturrunde).
+        Kleine Pause zwischen den Abrufen (Google drosselt sonst); nach
+        3 Fehlern in Folge wird abgebrochen (offline nicht durch die
+        ganze Liste laufen).
         """
-        cb_prompt = ft.Checkbox(label="Chatbot-Prompt", value=True)
-        cb_list = ft.Checkbox(
-            label=f"Wortliste (ID + Wort, {len(vlist.cards)} Wörter)",
-            value=True)
-        btn_copy = ft.FilledButton("Kopieren", icon=ft.Icons.COPY)
+        texts = list(dict.fromkeys(
+            t for t in (speakable(c.front) for c in vlist.cards) if t))
+        cache = tts_cache()
+        todo = [t for t in texts if not cache.has(t)]
+        already = len(texts) - len(todo)
 
-        def sync_button(e=None):
-            btn_copy.disabled = not (cb_prompt.value or cb_list.value)
+        bar = ft.ProgressBar(value=0.0)
+        status = ft.Text(f"{already} von {len(texts)} bereits vorhanden.",
+                         size=13)
+        btn_action = ft.TextButton("Abbrechen")
+        state = {"cancel": False, "done": False}
+
+        def close_or_cancel(e):
+            if state["done"]:
+                page.pop_dialog()
+            else:
+                state["cancel"] = True
+
+        btn_action.on_click = close_or_cancel
+
+        async def run():
+            ok, errors, streak = 0, 0, 0
+            for i, text in enumerate(todo):
+                if state["cancel"] or streak >= 3:
+                    break
+                status.value = f"Lade {i + 1} von {len(todo)}: {text}"
+                bar.value = i / max(1, len(todo))
+                page.update()
+                try:
+                    await asyncio.to_thread(cache.fetch, text)
+                    ok += 1
+                    streak = 0
+                except TtsFetchError:
+                    errors += 1
+                    streak += 1
+                await asyncio.sleep(0.3)
+            state["done"] = True
+            bar.value = 1.0
+            if streak >= 3:
+                status.value = (f"Abgebrochen — kein Internet? "
+                                f"{ok} neu geladen, {errors} Fehler.")
+            elif state["cancel"]:
+                status.value = f"Abgebrochen — {ok} neu geladen."
+            else:
+                status.value = (f"Fertig: {ok} neu geladen, "
+                                f"{already + ok} von {len(texts)} im Cache"
+                                + (f", {errors} Fehler." if errors else "."))
+            btn_action.text = "Schließen"
             page.update()
 
-        cb_prompt.on_change = sync_button
-        cb_list.on_change = sync_button
-
-        def copy(e):
-            parts = []
-            if cb_prompt.value:
-                parts.append(AUDIO_PROMPT)
-            if cb_list.value:
-                parts.append("WORTLISTE\n" + content.export_tts_text(vlist))
-            text = "\n".join(parts)
-
-            async def do():
-                await clipboard.set(text)
-            page.run_task(do)
-            page.pop_dialog()
-            page.show_dialog(ft.SnackBar(ft.Text(
-                "In die Zwischenablage kopiert — beim Chatbot einfügen.")))
-
-        btn_copy.on_click = copy
         page.show_dialog(ft.AlertDialog(
-            title=ft.Text("Audio erzeugen (Chatbot)"),
-            content=ft.Column(
-                [
-                    ft.Text("Kopiert Prompt und Wortliste zusammen in die "
-                            "Zwischenablage. Beim Chatbot einfügen — er "
-                            "erzeugt eine ZIP mit einer MP3 pro Wort, die "
-                            "über „Audio importieren“ eingelesen wird.",
-                            size=14),
-                    cb_prompt,
-                    cb_list,
-                ],
-                tight=True, spacing=8, width=420,
-            ),
-            actions=[ft.TextButton("Abbrechen",
-                                   on_click=lambda e: page.pop_dialog()),
-                     btn_copy],
+            title=ft.Text(f"Audio vorbereiten — {vlist.name}"),
+            content=ft.Column([bar, status], tight=True, spacing=12,
+                              width=420),
+            actions=[btn_action],
         ))
-
-    async def import_audio_zip(e):
-        """ZIP mit "<karten-id>.mp3"-Dateien einlesen (siehe storage/audio.py).
-
-        Matcht global gegen alle Listen — so funktioniert eine gemischte
-        ZIP genauso wie Audio für Buchlisten.
-        """
-        files = await picker.pick_files(
-            dialog_title="Audio-ZIP importieren",
-            allowed_extensions=["zip"], with_data=True,
-        )
-        if not files:
-            return
-        f = files[0]
-        data = f.bytes_data if hasattr(f, "bytes_data") else None
-        if data is None and f.path:
-            data = Path(f.path).read_bytes()
-        if data is None:
-            return
-        try:
-            report = audio_store().import_zip(data, set(store.cards_by_id()))
-        except zipfile.BadZipFile:
-            page.show_dialog(ft.AlertDialog(
-                title=ft.Text("Audio-Import"),
-                content=ft.Text("Das ist keine gültige ZIP-Datei."),
-                actions=[ft.TextButton("OK",
-                                       on_click=lambda e: page.pop_dialog())],
-            ))
-            return
-        lines: list[ft.Control] = [
-            ft.Text(f"{len(report.imported)} Audio-Dateien übernommen."),
-        ]
-        if report.unmatched:
-            lines.append(ft.Text(
-                "Ohne passende Karte übersprungen:\n"
-                + ", ".join(report.unmatched), size=13))
-        if report.skipped:
-            lines.append(ft.Text(
-                f"{len(report.skipped)} Dateien ohne Audio-Endung ignoriert.",
-                size=13))
-        page.show_dialog(ft.AlertDialog(
-            title=ft.Text("Audio-Import"),
-            content=ft.Column(lines, tight=True, width=420,
-                              scroll=ft.ScrollMode.AUTO),
-            actions=[ft.TextButton("OK", on_click=lambda e: page.pop_dialog())],
-        ))
-        refresh()
+        if todo:
+            page.run_task(run)
+        else:
+            state["done"] = True
+            bar.value = 1.0
+            status.value = f"Alle {len(texts)} Wörter sind schon im Cache."
+            btn_action.text = "Schließen"
 
     refresh()
     # Rundes Such-Symbol unten links (unten rechts kollidiert mit den
