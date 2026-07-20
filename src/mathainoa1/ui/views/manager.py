@@ -173,9 +173,6 @@ def manager_view(nav, store: ContentStore,
                                  on_click=lambda e, l=vlist: export_list(l, "json")),
                 ft.PopupMenuItem(content="Export CSV", icon=ft.Icons.DOWNLOAD,
                                  on_click=lambda e, l=vlist: export_list(l, "csv")),
-                ft.PopupMenuItem(content="Export Text (Audio/TTS)",
-                                 icon=ft.Icons.DOWNLOAD,
-                                 on_click=lambda e, l=vlist: export_list(l, "txt")),
                 ft.PopupMenuItem(content="Audio erzeugen (Chatbot)",
                                  icon=ft.Icons.RECORD_VOICE_OVER,
                                  on_click=lambda e, l=vlist: audio_copy_dialog(l)),
@@ -188,9 +185,6 @@ def manager_view(nav, store: ContentStore,
             trailing = ft.Row([
                 ft.Icon(ft.Icons.LOCK_OUTLINE, tooltip="Buchliste (nicht editierbar)"),
                 ft.PopupMenuButton(items=[
-                    ft.PopupMenuItem(content="Export Text (Audio/TTS)",
-                                     icon=ft.Icons.DOWNLOAD,
-                                     on_click=lambda e, l=vlist: export_list(l, "txt")),
                     ft.PopupMenuItem(content="Audio erzeugen (Chatbot)",
                                      icon=ft.Icons.RECORD_VOICE_OVER,
                                      on_click=lambda e, l=vlist: audio_copy_dialog(l)),
@@ -313,12 +307,7 @@ def manager_view(nav, store: ContentStore,
         refresh()
 
     async def export_list(vlist: VocabList, fmt: str):
-        if fmt == "json":
-            text = content.export_json(vlist)
-        elif fmt == "txt":
-            text = content.export_tts_text(vlist)
-        else:
-            text = content.export_csv(vlist)
+        text = content.export_json(vlist) if fmt == "json" else content.export_csv(vlist)
         await picker.save_file(
             dialog_title="Liste exportieren",
             file_name=f"{vlist.name}.{fmt}",

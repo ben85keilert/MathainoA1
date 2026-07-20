@@ -106,8 +106,8 @@ ZURÜCKFÜHREN AUF DIE GRUNDFORM
 # eine Audiodatei erzeugen, benannt nach der Karten-ID
 AUDIO_PROMPT = """\
 AUFGABE
-Du bekommst eine Liste griechischer Vokabeln — als Textdatei oder
-direkt am Ende dieser Nachricht unter WORTLISTE. Jede Zeile hat das
+Du bekommst eine Liste griechischer Vokabeln — am Ende dieser
+Nachricht unter WORTLISTE oder separat eingefügt. Jede Zeile hat das
 Format:
 
 <id><TAB><griechisches Wort>
@@ -385,14 +385,11 @@ def help_view(nav, store=None) -> ft.Control:
            "Die Dateien werden außerhalb der App erzeugt (z.B. per "
            "Chatbot mit Sprachausgabe) und dann importiert:"),
         _bullets([
-            "Am einfachsten: im Listenmenü (⋮) „Audio erzeugen (Chatbot)“ "
-            "wählen — das kopiert den Prompt und die Wortliste (Karten-ID "
-            "+ Wort) mit einem Klick in die Zwischenablage; über die "
-            "beiden Checkboxen lässt sich auch nur die Liste oder nur der "
-            "Prompt kopieren (z.B. für eine Korrekturrunde).",
-            "Alternativ „Export Text (Audio/TTS)“: dieselbe Wortliste als "
-            "Datei, zusammen mit dem Audio-Prompt (unten) an den Chatbot "
-            "geben.",
+            "Im Listenmenü (⋮) „Audio erzeugen (Chatbot)“ wählen — das "
+            "kopiert den Prompt und die Wortliste (Karten-ID + Wort) mit "
+            "einem Klick in die Zwischenablage; über die beiden Checkboxen "
+            "lässt sich auch nur die Liste oder nur der Prompt kopieren "
+            "(z.B. für eine Korrekturrunde).",
             "Der Chatbot liefert eine ZIP mit einer MP3 pro Wort, benannt "
             "nach der Karten-ID. Die ZIP über „Audio importieren“ in der "
             "Vokabelverwaltung einlesen — die Zuordnung läuft automatisch "
