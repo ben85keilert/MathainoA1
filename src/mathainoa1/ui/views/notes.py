@@ -115,7 +115,8 @@ def notes_view(nav) -> ft.Control:
 
     notes_header = ft.Text("Gespeicherte Notizen", size=16,
                            weight=ft.FontWeight.BOLD, visible=False)
-    notes_col = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO, expand=True)
+    notes_col = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO, expand=True,
+                          horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
 
     def note_tile(note: Note) -> ft.Control:
         return ft.Container(
@@ -175,4 +176,6 @@ def notes_view(nav) -> ft.Control:
         [tf, buttons, notes_header, notes_col],
         spacing=8,
         expand=True,
+        # Schreibfeld und Notiz-Kacheln über die volle Displaybreite
+        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
     )

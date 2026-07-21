@@ -31,6 +31,7 @@ from mathainoa1.ui.views.trainer import edit_notes_dialog
 from mathainoa1.ui.views.wordlist import (
     alpha_key,
     box_chip_controls,
+    box_color,
     box_of,
     card_tiles,
     drag_row,
@@ -194,7 +195,8 @@ def manager_view(nav, store: ContentStore,
                 title=ft.Text(vlist.name),
                 subtitle=ft.Text(f"{len(vlist.cards)} Karten"),
                 trailing=trailing,
-                on_click=lambda e, l=vlist: nav.go(l.name, list_view(nav, store, l)),
+                on_click=lambda e, l=vlist: nav.go(
+                    l.name, list_view(nav, store, l, progress)),
             ),
             opacity=1.0 if vlist.editable else 0.55,
         )
@@ -214,7 +216,7 @@ def manager_view(nav, store: ContentStore,
             store.save_user_list(vlist)
             close_dialog()
             refresh()
-            nav.go(vlist.name, list_view(nav, store, vlist))
+            nav.go(vlist.name, list_view(nav, store, vlist, progress))
         page.show_dialog(ft.AlertDialog(
             title=ft.Text("Neue Liste"),
             content=ft.Column([tf_name], tight=True, spacing=12),
@@ -455,7 +457,7 @@ def open_source_editor(nav, store: ContentStore, progress: ProgressStore,
     """
     if source_id in store.lists:
         vlist = store.lists[source_id]
-        nav.go(vlist.name, list_view(nav, store, vlist))
+        nav.go(vlist.name, list_view(nav, store, vlist, progress))
     elif source_id in store.selections:
         sel = store.selections[source_id]
         nav.go(sel.name, selection_editor(nav, store, sel,
@@ -566,6 +568,11 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
         sel_box_row.controls = box_chip_controls(sel_boxes, toggle_sel_box)
         counter.value = f"{len(selected_ids)} Karten ausgewählt"
         tab_selected.label = f"Ausgewählt ({len(selected_ids)})"
+        def box_dot(c: VocabCard) -> ft.Icon:
+            # Farbpunkt der Leitner-Box vor dem Wort (grau = untrainiert)
+            return ft.Icon(ft.Icons.CIRCLE, size=12,
+                           color=box_color(box_of(c, all_progress)))
+
         # linker Reiter: Karten der gefilterten Liste antippen
         pick_col.controls = [
             ft.ListTile(
@@ -575,7 +582,8 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
                     else ft.Icons.RADIO_BUTTON_UNCHECKED,
                     color=ft.Colors.PRIMARY if c.id in selected_ids else None,
                 ),
-                title=ft.Text(c.front),
+                title=ft.Row([box_dot(c), ft.Text(c.front)], spacing=6,
+                             vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 subtitle=ft.Text(c.back),
                 selected=c.id in selected_ids,
                 selected_tile_color=ft.Colors.PRIMARY_CONTAINER,
@@ -594,7 +602,8 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
                     ft.Icons.CANCEL if c.id in to_remove else ft.Icons.CHECK_CIRCLE,
                     color=ft.Colors.ERROR if c.id in to_remove else ft.Colors.PRIMARY,
                 ),
-                title=ft.Text(c.front),
+                title=ft.Row([box_dot(c), ft.Text(c.front)], spacing=6,
+                             vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 subtitle=ft.Text(c.back),
                 opacity=0.5 if c.id in to_remove else 1.0,
                 on_click=lambda e, c=c: mark_remove(c),
@@ -1004,8 +1013,10 @@ def open_card_editor(page, store: ContentStore, vlist: VocabList,
         edit_notes_dialog(page, store, card, on_saved=on_saved)
 
 
-def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
+def list_view(nav, store: ContentStore, vlist: VocabList,
+              progress: ProgressStore | None = None) -> ft.Control:
     page = nav.page
+    all_progress = progress.all() if progress else {}
     cards_col = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO)
     table_col = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO)
     # Worttyp-Filter und Karten-Sortiermodus schließen sich aus: über die
@@ -1410,10 +1421,12 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
                     color=ft.Colors.PRIMARY if c.id in selected else None,
                 ),
                 title=ft.Row(
-                    [ft.Text(c.with_plural(c.front), expand=1),
+                    [ft.Icon(ft.Icons.CIRCLE, size=12,
+                             color=box_color(box_of(c, all_progress))),
+                     ft.Text(c.with_plural(c.front), expand=1),
                      ft.Text(c.back, expand=1)],
-                    spacing=12,
-                    vertical_alignment=ft.CrossAxisAlignment.START,
+                    spacing=8,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
                 selected=c.id in selected,
                 selected_tile_color=ft.Colors.PRIMARY_CONTAINER,
@@ -1456,10 +1469,12 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
             if view_state["wtype"]:
                 rows.append(ft.Text(f"Filter: {view_state['wtype']}",
                                     italic=True, size=13))
+            # Farbpunkt der Leitner-Box vorne statt Papierkorb hinten —
+            # Löschen läuft über den Markiermodus (Mehrfachauswahl)
             rows += card_tiles(
                 shown,
                 on_click=open_card,
-                on_delete=(lambda c: delete_card(c)) if vlist.editable else None,
+                all_progress=all_progress,
             )
             if vlist.cards and not shown:
                 rows.append(ft.Text("Keine Karten für diesen Worttyp.",
@@ -1478,11 +1493,6 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
                 ft.Text("Keine Karten für diesen Worttyp." if vlist.cards
                         else "Noch keine Karten in dieser Liste.")]
         page.update()
-
-    def delete_card(card: VocabCard):
-        vlist.cards.remove(card)
-        store.save_user_list(vlist)
-        refresh()
 
     # Zwei Reiter: Kartenliste und Tabelle aller Werte; die TabBarView
     # lässt sich auch per Links-rechts-Wischen wechseln. Rechts neben den

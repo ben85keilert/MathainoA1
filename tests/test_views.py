@@ -68,7 +68,7 @@ def test_main_views_build(store_with_edge_cases, tmp_path):
         grammar.setup_view(nav, store, progress)
         grammar.conjugation_setup_view(nav, store, progress)
         manager.manager_view(nav, store, progress)
-        manager.list_view(nav, store, vlist)
+        manager.list_view(nav, store, vlist, progress)
         manager.selection_editor(nav, store, None, lambda s: None, progress)
     finally:
         progress.close()
