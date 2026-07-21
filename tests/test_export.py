@@ -2,7 +2,7 @@
 
 from mathainoa1.models import VocabCard
 from mathainoa1.storage import pdf_export
-from mathainoa1.storage.content import export_csv_columns
+from mathainoa1.storage.content import export_csv_columns, export_json_columns
 
 CARDS = [
     VocabCard(front="ο δρόμος", back="Straße", article="ο", plural="-οι",
@@ -30,6 +30,22 @@ def test_export_csv_columns_keeps_field_order():
     # Reihenfolge der Auswahl ist egal — exportiert wird in CSV_FIELDS-Ordnung
     text = export_csv_columns(CARDS, ["back", "front"])
     assert text.splitlines()[0] == "front,back"
+
+
+def test_export_json_columns_subset_keeps_ids():
+    import json
+    text = export_json_columns("Meine Liste", CARDS, ["front", "back"])
+    data = json.loads(text)
+    assert data["name"] == "Meine Liste"
+    assert data["cards"][0] == {"id": CARDS[0].id, "front": "ο δρόμος",
+                                "back": "Straße"}
+
+
+def test_export_json_columns_forms_stay_dict():
+    import json
+    text = export_json_columns("L", CARDS, ["front", "forms"])
+    data = json.loads(text)
+    assert data["cards"][0]["forms"] == {"gen_pl": "δρόμων"}
 
 
 def test_export_pdf_greek_roundtrip():

@@ -345,11 +345,9 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             seg_cases,
             seg_numbers,
             sw_adjectives, sw_repeat, sw_accent, sw_case,
+            # Lautsprecher = Auto-Vorlesen, ohne Label (selbsterklärend);
             # gespeichert wie die anderen Einstellungen (app_settings.json)
-            ft.Row([autoplay_button(nav.page),
-                    ft.Text("Griechisch automatisch vorlesen", size=13)],
-                   spacing=4,
-                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Row([autoplay_button(nav.page)]),
             error_text,
             ft.Row(
                 [
@@ -576,11 +574,9 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             seg_persons,
             seg_numbers,
             sw_repeat, sw_accent,
+            # Lautsprecher = Auto-Vorlesen, ohne Label (selbsterklärend);
             # gespeichert wie die anderen Einstellungen (app_settings.json)
-            ft.Row([autoplay_button(nav.page),
-                    ft.Text("Griechisch automatisch vorlesen", size=13)],
-                   spacing=4,
-                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Row([autoplay_button(nav.page)]),
             error_text,
             ft.Row(
                 [

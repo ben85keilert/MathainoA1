@@ -267,12 +267,11 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             seg_dir,
             sw_article, sw_repeat, sw_accent, sw_case,
+            ft.Text("Bei der Frage einblenden", size=13),
+            # Lautsprecher (Auto-Vorlesen) rechts daneben, ohne Label —
             # gespeichert wie die anderen Einstellungen (app_settings.json)
-            ft.Row([autoplay_button(nav.page),
-                    ft.Text("Griechisch automatisch vorlesen", size=13)],
-                   spacing=4,
+            ft.Row([seg_notes, autoplay_button(nav.page)], spacing=8,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            ft.Text("Bei der Frage einblenden", size=13), seg_notes,
             error_text,
             ft.Row(
                 [

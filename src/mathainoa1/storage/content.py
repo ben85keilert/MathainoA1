@@ -383,6 +383,23 @@ def export_json(vlist: VocabList) -> str:
     return json.dumps(vlist.to_dict(), ensure_ascii=False, indent=2)
 
 
+def export_json_columns(name: str, cards: list[VocabCard],
+                        fields: list[str]) -> str:
+    """JSON nur mit den gewünschten Spalten.
+
+    Die Karten-ID wird immer mitgeschrieben: beim Reimport bleibt der
+    Lernstand (progress.db) so an den Karten hängen. forms bleibt ein
+    Dict (kein Text wie im CSV)."""
+    fields = [f for f in CSV_FIELDS if f in fields]
+    out = {"name": name, "cards": []}
+    for c in cards:
+        d = c.to_dict()
+        row = {"id": c.id}
+        row.update({k: d[k] for k in fields})
+        out["cards"].append(row)
+    return json.dumps(out, ensure_ascii=False, indent=2)
+
+
 def import_json(text: str) -> VocabList:
     vlist = VocabList.from_dict(json.loads(text))
     vlist.editable = True

@@ -105,6 +105,8 @@ def manager_view(nav, store: ContentStore,
     picker = ft.FilePicker()
     if picker not in page.services:
         page.services.append(picker)
+    clipboard = ft.Clipboard()
+    page.services.append(clipboard)
     body = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO)
     state = {"sort_mode": False}  # Listen-Reihenfolge per ↑/↓ ändern
 
@@ -208,14 +210,14 @@ def manager_view(nav, store: ContentStore,
                          ft.FilledButton("Löschen", on_click=do)],
             ))
 
-        # dieselben Optionen wie bei Vokabellisten; Export und Audio
+        # exakt dieselben Optionen wie bei Vokabellisten; Export und Audio
         # arbeiten auf den aufgelösten Karten (cards_for löst die
         # referenzierten IDs in echte Karten auf)
         trailing = ft.PopupMenuButton(items=[
             ft.PopupMenuItem(content="Umbenennen", icon=ft.Icons.EDIT,
                              on_click=lambda e, s=sel: rename_selection_dialog(
                                  page, store, s, on_saved=refresh)),
-            ft.PopupMenuItem(content="Export CSV/PDF…",
+            ft.PopupMenuItem(content="Exportieren…",
                              icon=ft.Icons.DOWNLOAD,
                              on_click=lambda e, s=sel: export_dialog(
                                  s.name, store.cards_for(s.id))),
@@ -240,13 +242,12 @@ def manager_view(nav, store: ContentStore,
 
     def list_tile(vlist: VocabList) -> ft.Control:
         if vlist.editable:
+            # identisches Menü wie bei Auswahllisten (selection_tile)
             trailing = ft.PopupMenuButton(items=[
                 ft.PopupMenuItem(content="Umbenennen", icon=ft.Icons.EDIT,
                                  on_click=lambda e, l=vlist: rename_dialog(
                                      page, store, l, on_saved=refresh)),
-                ft.PopupMenuItem(content="Export JSON", icon=ft.Icons.DOWNLOAD,
-                                 on_click=lambda e, l=vlist: export_list(l, "json")),
-                ft.PopupMenuItem(content="Export CSV/PDF…",
+                ft.PopupMenuItem(content="Exportieren…",
                                  icon=ft.Icons.DOWNLOAD,
                                  on_click=lambda e, l=vlist: export_dialog(
                                      l.name, l.cards)),
@@ -258,12 +259,12 @@ def manager_view(nav, store: ContentStore,
                                  on_click=lambda e, l=vlist: delete_dialog(l)),
             ])
         else:
-            # Buchlisten: nicht editierbar, aber Export und Audio-
-            # Vorbereitung sind auch für sie sinnvoll
+            # Buchlisten: nicht editierbar (kein Umbenennen/Löschen), aber
+            # Export und Audio-Vorbereitung sind auch für sie sinnvoll
             trailing = ft.Row([
                 ft.Icon(ft.Icons.LOCK_OUTLINE, tooltip="Buchliste (nicht editierbar)"),
                 ft.PopupMenuButton(items=[
-                    ft.PopupMenuItem(content="Export CSV/PDF…",
+                    ft.PopupMenuItem(content="Exportieren…",
                                      icon=ft.Icons.DOWNLOAD,
                                      on_click=lambda e, l=vlist: export_dialog(
                                          l.name, l.cards)),
@@ -390,23 +391,64 @@ def manager_view(nav, store: ContentStore,
         store.save_user_list(vlist)
         refresh()
 
-    async def export_list(vlist: VocabList, fmt: str):
-        text = content.export_json(vlist) if fmt == "json" else content.export_csv(vlist)
-        await picker.save_file(
-            dialog_title="Liste exportieren",
-            file_name=f"{vlist.name}.{fmt}",
-            allowed_extensions=[fmt],
-            src_bytes=text.encode("utf-8"),
-        )
+    def copy_text(text: str):
+        async def do():
+            await clipboard.set(text)
+        page.run_task(do)
+
+    def plaintext_dialog(title: str, text: str):
+        """Exporttext anzeigen: markierbar plus Kopieren-Button."""
+        def copy(e):
+            copy_text(text)
+            page.pop_dialog()
+            page.show_dialog(ft.SnackBar(ft.Text(
+                "Export in die Zwischenablage kopiert.")))
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text(title, size=16),
+            content=ft.Column(
+                [ft.Text(text, size=12, selectable=True)],
+                scroll=ft.ScrollMode.AUTO, width=420, height=440,
+            ),
+            actions=[
+                ft.TextButton("Kopieren", icon=ft.Icons.COPY, on_click=copy),
+                ft.TextButton("Schließen",
+                              on_click=lambda e: page.pop_dialog()),
+            ],
+        ))
 
     def export_dialog(name: str, cards: list[VocabCard]):
-        """Export als CSV oder PDF — mit Spaltenauswahl per Checkbox.
+        """Export als CSV, JSON oder PDF — mit Spaltenauswahl per Checkbox.
 
-        Funktioniert für Vokabellisten und Auswahllisten gleichermaßen:
-        cards sind die aufgelösten Karten der Quelle."""
+        CSV/JSON gibt es als Plaintext (Zwischenablage) oder Datei,
+        PDF nur als Datei. Funktioniert für Vokabellisten und
+        Auswahllisten gleichermaßen: cards sind die aufgelösten Karten."""
         checks = {key: ft.Checkbox(label=label, value=True)
                   for key, label in EXPORT_COLUMNS}
         error = ft.Text("", color=ft.Colors.ERROR, size=13)
+        seg_format = ft.SegmentedButton(
+            selected=["csv"],
+            segments=[
+                ft.Segment(value="csv", label=ft.Text("CSV")),
+                ft.Segment(value="json", label=ft.Text("JSON")),
+                ft.Segment(value="pdf", label=ft.Text("PDF")),
+            ],
+        )
+        btn_text = ft.OutlinedButton("Als Text", icon=ft.Icons.COPY)
+        btn_file = ft.FilledButton("Datei speichern", icon=ft.Icons.DOWNLOAD)
+
+        def current_format() -> str:
+            sel = seg_format.selected
+            if isinstance(sel, (list, set, tuple)) and sel:
+                return next(iter(sel))
+            return sel or "csv"
+
+        def sync_buttons(e=None):
+            # PDF gibt es nur als Datei — Plaintext ergäbe Binärmüll
+            btn_text.disabled = current_format() == "pdf"
+            page.update()
+
+        seg_format.on_change = sync_buttons
+        sync_buttons()
 
         def set_all(value: bool):
             def handler(e):
@@ -415,72 +457,76 @@ def manager_view(nav, store: ContentStore,
                 page.update()
             return handler
 
-        def fields() -> list[str]:
-            return [k for k, cb in checks.items() if cb.value]
-
         def need_fields() -> list[str] | None:
-            f = fields()
+            f = [k for k, cb in checks.items() if cb.value]
             if not f:
                 error.value = "Bitte mindestens eine Spalte wählen."
                 page.update()
                 return None
             return f
 
-        async def do_csv(e):
-            f = need_fields()
-            if f is None:
-                return
-            text = content.export_csv_columns(cards, f)
-            page.pop_dialog()
-            await picker.save_file(
-                dialog_title="Liste exportieren",
-                file_name=f"{name}.csv",
-                allowed_extensions=["csv"],
-                src_bytes=text.encode("utf-8"),
-            )
+        def build_text(fmt: str, f: list[str]) -> str:
+            if fmt == "json":
+                return content.export_json_columns(name, cards, f)
+            return content.export_csv_columns(cards, f)
 
-        async def do_pdf(e):
+        def as_text(e):
+            fmt = current_format()
+            f = need_fields()
+            if f is None or fmt == "pdf":
+                return
+            page.pop_dialog()
+            plaintext_dialog(f"{name}.{fmt}", build_text(fmt, f))
+
+        async def as_file(e):
+            fmt = current_format()
             f = need_fields()
             if f is None:
                 return
-            ordered = [(k, label) for k, label in EXPORT_COLUMNS if k in f]
-            try:
-                data = pdf_export.export_pdf(
-                    name,
-                    [label for _k, label in ordered],
-                    [[_export_value(c, k) for k, _label in ordered]
-                     for c in cards],
-                )
-            except RuntimeError as exc:
-                error.value = str(exc)
-                page.update()
-                return
+            if fmt == "pdf":
+                ordered = [(k, label) for k, label in EXPORT_COLUMNS
+                           if k in f]
+                try:
+                    data = pdf_export.export_pdf(
+                        name,
+                        [label for _k, label in ordered],
+                        [[_export_value(c, k) for k, _label in ordered]
+                         for c in cards],
+                    )
+                except RuntimeError as exc:
+                    error.value = str(exc)
+                    page.update()
+                    return
+            else:
+                data = build_text(fmt, f).encode("utf-8")
             page.pop_dialog()
             await picker.save_file(
                 dialog_title="Liste exportieren",
-                file_name=f"{name}.pdf",
-                allowed_extensions=["pdf"],
+                file_name=f"{name}.{fmt}",
+                allowed_extensions=[fmt],
                 src_bytes=data,
             )
+
+        btn_text.on_click = as_text
+        btn_file.on_click = as_file
 
         page.show_dialog(ft.AlertDialog(
             title=ft.Text(f"„{name}“ exportieren"),
             content=ft.Column(
-                [ft.Row([ft.TextButton("Alles", on_click=set_all(True)),
+                [seg_format,
+                 ft.Row([ft.TextButton("Alles", on_click=set_all(True)),
                          ft.TextButton("Auswahl leeren",
                                        on_click=set_all(False))],
                         spacing=4),
                  *checks.values(), error],
                 tight=True, spacing=0, width=360,
-                scroll=ft.ScrollMode.AUTO, height=420,
+                scroll=ft.ScrollMode.AUTO, height=440,
             ),
             actions=[
                 ft.TextButton("Abbrechen",
                               on_click=lambda e: page.pop_dialog()),
-                ft.OutlinedButton("CSV", icon=ft.Icons.DOWNLOAD,
-                                  on_click=do_csv),
-                ft.FilledButton("PDF", icon=ft.Icons.PICTURE_AS_PDF,
-                                on_click=do_pdf),
+                btn_text,
+                btn_file,
             ],
         ))
 
