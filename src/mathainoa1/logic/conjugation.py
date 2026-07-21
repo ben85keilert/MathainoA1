@@ -216,7 +216,7 @@ class ConjugationSettings:
     # 1. Person Singular Präsens wird dann nicht abgefragt, denn sie IST
     # das angezeigte Lemma)
     direction: str = "de"
-    word_count: int = 20
+    word_count: int = 7  # Standard bei Neuinstallation; Änderungen werden gespeichert
     persons: list[int] = field(default_factory=lambda: [1, 2, 3])
     numbers: list[str] = field(default_factory=lambda: ["sg", "pl"])
     tenses: list[str] = field(default_factory=lambda: ["present"])

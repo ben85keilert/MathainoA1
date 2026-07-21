@@ -31,6 +31,9 @@ class AppSettings:
     # Wort-Audio automatisch abspielen, sobald im Training die
     # griechische Seite sichtbar wird (Umschalter in den Trainings-Views)
     autoplay_audio: bool = False
+    # Prüfen beim Schreiben: False = "Prüfen"-Button mittig unter dem
+    # Antwortfeld (Standard), True = rundes Häkchen rechts daneben
+    check_beside_field: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)

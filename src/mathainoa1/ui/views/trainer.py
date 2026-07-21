@@ -85,6 +85,25 @@ def edit_notes_dialog(page: ft.Page, store: ContentStore, card: VocabCard,
     ))
 
 
+def typing_controls(tf_answer: ft.TextField, check) -> list[ft.Control]:
+    """Antwortfeld + Prüfen für den Schreibmodus — Stil per Einstellung:
+    „Prüfen“-Button mittig unter dem Feld (Standard) oder rundes
+    Häkchen rechts daneben (kompakt, spart Höhe bei Tastatur).
+    Wird von Vokabel-, Nomen- und Verbtrainer gemeinsam genutzt."""
+    if load_app_settings().check_beside_field:
+        return [ft.Row(
+            [ft.Container(tf_answer, expand=True),
+             ft.IconButton(
+                 ft.Icons.CHECK, tooltip="Prüfen", icon_size=28,
+                 style=ft.ButtonStyle(bgcolor=ft.Colors.PRIMARY_CONTAINER),
+                 on_click=check)],
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )]
+    return [tf_answer,
+            ft.FilledButton("Prüfen", icon=ft.Icons.CHECK, on_click=check)]
+
+
 def setup_view(nav, store: ContentStore, progress: ProgressStore,
                preselect_id: str | None = None) -> ft.Control:
     s = load_default_settings()
@@ -258,7 +277,13 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
 
     return ft.Column(
         [
-            dd_list,
+            # Lautsprecher (Auto-Vorlesen) oben rechts — ungefähr dort,
+            # wo er auch in der Trainingsrunde sitzt; gespeichert wie
+            # die anderen Einstellungen (app_settings.json)
+            ft.Row([ft.Container(dd_list, expand=True),
+                    autoplay_button(nav.page)],
+                   spacing=8,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Row([ft.TextButton("Neue Auswahlliste erstellen…",
                                   icon=ft.Icons.PLAYLIST_ADD, on_click=new_selection)]),
             ft.Row([dd_type], spacing=8),
@@ -267,11 +292,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             seg_dir,
             sw_article, sw_repeat, sw_accent, sw_case,
-            ft.Text("Bei der Frage einblenden", size=13),
-            # Lautsprecher (Auto-Vorlesen) rechts daneben, ohne Label —
-            # gespeichert wie die anderen Einstellungen (app_settings.json)
-            ft.Row([seg_notes, autoplay_button(nav.page)], spacing=8,
-                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Text("Bei der Frage einblenden", size=13), seg_notes,
             error_text,
             ft.Row(
                 [
@@ -456,20 +477,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
                                                     on_click=reveal)]
         else:
             tf_answer.value = ""
-            # Prüfen direkt neben dem Feld: kein Scrollen nötig, wenn die
-            # Tastatur eingeblendet ist
-            action_area.controls = [
-                ft.Row(
-                    [ft.Container(tf_answer, expand=True),
-                     ft.IconButton(
-                         ft.Icons.CHECK, tooltip="Prüfen", icon_size=28,
-                         style=ft.ButtonStyle(
-                             bgcolor=ft.Colors.PRIMARY_CONTAINER),
-                         on_click=check)],
-                    spacing=8,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                ),
-            ]
+            action_area.controls = typing_controls(tf_answer, check)
         refresh_notes()
         # GR->DE: das griechische Wort steht schon in der Frage
         if session.prompt_side(card) == "gr":

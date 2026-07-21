@@ -90,6 +90,12 @@ class Navigator:
             if len(self.stack) > 1 else None
         )
         self.body.content = content
+        # Views mit on_reappear-Attribut frischen sich beim (Wieder-)
+        # Anzeigen selbst auf — z.B. das Listenmenü nach dem Anlegen
+        # einer Auswahlliste in einer Unterseite
+        callback = getattr(content, "on_reappear", None)
+        if callback:
+            callback()
         self.page.update()
 
 

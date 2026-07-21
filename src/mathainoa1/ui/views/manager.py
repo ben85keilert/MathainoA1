@@ -610,7 +610,11 @@ def manager_view(nav, store: ContentStore,
         tooltip="Wörter suchen",
         on_click=lambda e: nav.go("Wortsuche", search_view(nav, store)),
     )
-    return ft.Stack([body, search_fab], expand=True)
+    view = ft.Stack([body, search_fab], expand=True)
+    # beim Zurückkehren aus Unterseiten neu aufbauen — dort können
+    # Listen/Auswahllisten entstanden oder verändert worden sein
+    view.on_reappear = refresh
+    return view
 
 
 def search_view(nav, store: ContentStore) -> ft.Control:
@@ -710,27 +714,46 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
     # Ursprungsliste, sonst alphabetisch bzw. nach Lernstand (wie in den
     # Wortübersichten)
     sel_sort = {"alpha": False, "progress": False}
+    # dieselben Sortierungen auch im Reiter "Auswählen"
+    pick_sort = {"alpha": False, "progress": False}
 
-    def toggle_sel_alpha(e):
-        sel_sort["alpha"] = not sel_sort["alpha"]
-        sel_sort["progress"] = False
-        refresh()
+    def _make_sort_buttons(state: dict, alpha_tooltip: str):
+        def toggle_alpha(e):
+            state["alpha"] = not state["alpha"]
+            state["progress"] = False
+            refresh()
 
-    def toggle_sel_progress(e):
-        sel_sort["progress"] = not sel_sort["progress"]
-        sel_sort["alpha"] = False
-        refresh()
+        def toggle_progress(e):
+            state["progress"] = not state["progress"]
+            state["alpha"] = False
+            refresh()
 
-    sel_alpha_btn = ft.IconButton(
-        ft.Icons.SORT_BY_ALPHA,
-        tooltip="Alphabetisch sortieren (über alle Ursprungslisten)",
-        on_click=toggle_sel_alpha,
-    )
-    sel_progress_btn = ft.IconButton(
-        ft.Icons.SORT,
-        tooltip="Nach Lernstand sortieren (schlechteste zuerst)",
-        on_click=toggle_sel_progress,
-    )
+        alpha_btn = ft.IconButton(ft.Icons.SORT_BY_ALPHA,
+                                  tooltip=alpha_tooltip,
+                                  on_click=toggle_alpha)
+        progress_btn = ft.IconButton(
+            ft.Icons.SORT,
+            tooltip="Nach Lernstand sortieren (schlechteste zuerst)",
+            on_click=toggle_progress)
+        return alpha_btn, progress_btn
+
+    sel_alpha_btn, sel_progress_btn = _make_sort_buttons(
+        sel_sort, "Alphabetisch sortieren (über alle Ursprungslisten)")
+    pick_alpha_btn, pick_progress_btn = _make_sort_buttons(
+        pick_sort, "Alphabetisch sortieren")
+
+    def _wrong_of(c: VocabCard) -> int:
+        p = all_progress.get(c.id)
+        return p.wrong if p else 0
+
+    def _apply_sort(cards: list[VocabCard],
+                    state: dict) -> list[VocabCard]:
+        if state["alpha"]:
+            return sorted(cards, key=alpha_key)
+        if state["progress"]:
+            return sorted(cards, key=lambda c: (box_of(c, all_progress),
+                                                -_wrong_of(c)))
+        return cards
     pick_box_row = ft.Row(spacing=6, wrap=True)
     sel_box_row = ft.Row(spacing=6, wrap=True)
     counter = ft.Text("", size=13, weight=ft.FontWeight.BOLD)
@@ -744,7 +767,8 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
         cards = store.lists[dd_list.value].cards
         if dd_type.value:
             cards = [c for c in cards if c.word_type == dd_type.value]
-        return [c for c in cards if box_of(c, all_progress) in pick_boxes]
+        cards = [c for c in cards if box_of(c, all_progress) in pick_boxes]
+        return _apply_sort(cards, pick_sort)
 
     def selected_cards() -> list[VocabCard]:
         by_id = store.cards_by_id()
@@ -828,23 +852,19 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
                                     else None)
         sel_progress_btn.icon_color = (ft.Colors.PRIMARY
                                        if sel_sort["progress"] else None)
+        pick_alpha_btn.icon_color = (ft.Colors.PRIMARY if pick_sort["alpha"]
+                                     else None)
+        pick_progress_btn.icon_color = (ft.Colors.PRIMARY
+                                        if pick_sort["progress"] else None)
         shown_sel = selected_filtered()
         if not shown_sel:
             selected_col.controls = [ft.Text(
                 "Noch keine Karten ausgewählt." if not selected_ids
                 else "Keine ausgewählten Karten für diesen Filter.",
                 italic=True)]
-        elif sel_sort["alpha"]:
+        elif sel_sort["alpha"] or sel_sort["progress"]:
             selected_col.controls = [
-                sel_tile(c) for c in sorted(shown_sel, key=alpha_key)]
-        elif sel_sort["progress"]:
-            def wrong_of(c: VocabCard) -> int:
-                p = all_progress.get(c.id)
-                return p.wrong if p else 0
-            selected_col.controls = [
-                sel_tile(c) for c in sorted(
-                    shown_sel,
-                    key=lambda c: (box_of(c, all_progress), -wrong_of(c)))]
+                sel_tile(c) for c in _apply_sort(shown_sel, sel_sort)]
         else:
             names = origin_names(store)
             groups: dict[str, list[VocabCard]] = {}
@@ -911,7 +931,11 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
 
     pick_tab = ft.Column(
         [
-            dd_list, ft.Row([dd_type], spacing=8, wrap=True),
+            dd_list,
+            ft.Row([ft.Container(dd_type, expand=True),
+                    pick_alpha_btn, pick_progress_btn],
+                   spacing=4,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
             pick_box_row,
             ft.Row(
                 [
@@ -1239,8 +1263,11 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
     # "tab": aktiver Reiter (0 = Karten, 1 = Tabelle)
     # "select_mode": Mehrfachauswahl für Massenaktionen (Löschen,
     # Verschieben, Kopieren, Audio löschen, zur Auswahlliste)
+    # "sort_alpha"/"sort_box": Anzeige-Sortierung (alphabetisch bzw. nach
+    # Lernstand) — wie in den Wortübersichten, ändert die Liste nicht
     view_state = {"sort_mode": False, "wtype": None, "tab": 0,
-                  "select_mode": False}
+                  "select_mode": False, "sort_alpha": False,
+                  "sort_box": False}
     selected: set[str] = set()
 
     def open_card(c: VocabCard):
@@ -1340,10 +1367,22 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
 
 
     def shown_cards() -> list[VocabCard]:
-        """Karten nach Worttyp-Filter (im Sortiermodus immer alle)."""
-        if view_state["sort_mode"] or view_state["wtype"] is None:
+        """Karten nach Worttyp-Filter und Anzeige-Sortierung
+        (im Verschiebe-Sortiermodus immer alle, in Listenreihenfolge)."""
+        if view_state["sort_mode"]:
             return vlist.cards
-        return [c for c in vlist.cards if c.word_type == view_state["wtype"]]
+        cards = (vlist.cards if view_state["wtype"] is None else
+                 [c for c in vlist.cards
+                  if c.word_type == view_state["wtype"]])
+        if view_state["sort_alpha"]:
+            return sorted(cards, key=alpha_key)
+        if view_state["sort_box"]:
+            def wrong_of(c: VocabCard) -> int:
+                p = all_progress.get(c.id)
+                return p.wrong if p else 0
+            return sorted(cards, key=lambda c: (box_of(c, all_progress),
+                                                -wrong_of(c)))
+        return cards
 
     def set_filter(wtype: str | None):
         view_state["wtype"] = wtype
@@ -1354,6 +1393,8 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         view_state["sort_mode"] = not view_state["sort_mode"]
         view_state["wtype"] = None
         view_state["select_mode"] = False  # entweder sortieren oder markieren
+        # Verschieben braucht die echte Listenreihenfolge
+        view_state["sort_alpha"] = view_state["sort_box"] = False
         refresh()
 
     def toggle_select(e):
@@ -1363,8 +1404,27 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
             selected.clear()
         refresh()
 
+    def toggle_alpha(e):
+        view_state["sort_alpha"] = not view_state["sort_alpha"]
+        view_state["sort_box"] = False
+        view_state["sort_mode"] = False
+        refresh()
+
+    def toggle_box_sort(e):
+        view_state["sort_box"] = not view_state["sort_box"]
+        view_state["sort_alpha"] = False
+        view_state["sort_mode"] = False
+        refresh()
+
     filter_btn = ft.PopupMenuButton(icon=ft.Icons.FILTER_LIST,
                                     tooltip="Nach Worttyp filtern")
+    alpha_btn = ft.IconButton(ft.Icons.SORT_BY_ALPHA, icon_size=20,
+                              tooltip="Alphabetisch sortieren",
+                              on_click=toggle_alpha)
+    box_sort_btn = ft.IconButton(
+        ft.Icons.SORT, icon_size=20,
+        tooltip="Nach Lernstand sortieren (schlechteste zuerst)",
+        on_click=toggle_box_sort)
     sort_btn = ft.IconButton(on_click=toggle_sort)
     select_btn = ft.IconButton(ft.Icons.CHECKLIST, on_click=toggle_select)
 
@@ -1389,6 +1449,10 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         sort_btn.disabled = view_state["tab"] != 0
         sort_btn.tooltip = ("Sortieren beenden" if view_state["sort_mode"]
                             else "Karten verschieben (nur Kartenansicht)")
+        alpha_btn.icon_color = (ft.Colors.PRIMARY
+                                if view_state["sort_alpha"] else None)
+        box_sort_btn.icon_color = (ft.Colors.PRIMARY
+                                   if view_state["sort_box"] else None)
         # Markiermodus ebenso nur in der Kartenansicht
         select_btn.icon = (ft.Icons.CHECK if view_state["select_mode"]
                            else ft.Icons.CHECKLIST)
@@ -1717,7 +1781,8 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         ft.Tab(label="Karten", icon=ft.Icons.VIEW_AGENDA_OUTLINED),
         ft.Tab(label="Tabelle", icon=ft.Icons.TABLE_ROWS_OUTLINED),
     ])
-    header_row = [ft.Container(tab_bar, expand=True), filter_btn, select_btn]
+    header_row = [ft.Container(tab_bar, expand=True), filter_btn,
+                  alpha_btn, box_sort_btn, select_btn]
     if vlist.editable:
         header_row.append(sort_btn)
 
