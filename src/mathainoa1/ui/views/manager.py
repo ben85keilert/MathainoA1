@@ -22,7 +22,7 @@ from mathainoa1.models import (
     parse_verb_forms_text,
     verb_forms_to_text,
 )
-from mathainoa1.storage import content
+from mathainoa1.storage import content, pdf_export
 from mathainoa1.storage.content import ContentStore
 from mathainoa1.storage.progress import ProgressStore
 from mathainoa1.storage.tts import TtsFetchError, speakable
@@ -41,6 +41,21 @@ from mathainoa1.ui.views.wordlist import (
 
 ARTICLES = ["", "ο", "η", "το", "οι", "τα"]
 
+# Export-Spalten: (CSV-Feldname, Anzeigename) — Reihenfolge = Exportreihenfolge
+EXPORT_COLUMNS = [
+    ("front", "Griechisch"), ("back", "Deutsch"), ("plural", "Plural"),
+    ("article", "Artikel"), ("word_type", "Worttyp"),
+    ("forms", "Formen"), ("stem2", "2. Stamm"),
+    ("hints_gr", "Hinweis GR"), ("hints_de", "Hinweis DE"),
+    ("notes_gr", "Notiz GR"), ("notes_de", "Notiz DE"),
+]
+
+
+def _export_value(card: VocabCard, key: str) -> str:
+    if key == "forms":
+        return forms_to_text(card.forms)
+    return getattr(card, key) or ""
+
 
 def rename_dialog(page: ft.Page, store: ContentStore, vlist: VocabList,
                   on_saved=None) -> None:
@@ -57,6 +72,27 @@ def rename_dialog(page: ft.Page, store: ContentStore, vlist: VocabList,
 
     page.show_dialog(ft.AlertDialog(
         title=ft.Text("Liste umbenennen"),
+        content=tf,
+        actions=[ft.TextButton("Abbrechen", on_click=lambda e: page.pop_dialog()),
+                 ft.FilledButton("Speichern", on_click=save)],
+    ))
+
+
+def rename_selection_dialog(page: ft.Page, store: ContentStore,
+                            sel: SelectionList, on_saved=None) -> None:
+    """Dialog zum Umbenennen einer Auswahlliste."""
+    tf = ft.TextField(label="Name", value=sel.name, autofocus=True)
+
+    def save(e):
+        if tf.value.strip():
+            sel.name = tf.value.strip()
+            store.save_selection(sel)
+            page.pop_dialog()
+            if on_saved:
+                on_saved()
+
+    page.show_dialog(ft.AlertDialog(
+        title=ft.Text("Auswahlliste umbenennen"),
         content=tf,
         actions=[ft.TextButton("Abbrechen", on_click=lambda e: page.pop_dialog()),
                  ft.FilledButton("Speichern", on_click=save)],
@@ -82,6 +118,12 @@ def manager_view(nav, store: ContentStore,
         store.set_list_order(ids)
         refresh()
 
+    def reorder_selections(e):
+        ids = [s.id for s in store.ordered_selections()]
+        ids.insert(e.new_index, ids.pop(e.old_index))
+        store.set_selection_order(ids)
+        refresh()
+
     def refresh():
         ordered = store.ordered_lists()
         sort_btn = ft.IconButton(
@@ -104,8 +146,24 @@ def manager_view(nav, store: ContentStore,
         ]
         if store.selections:
             rows.append(ft.Text("Auswahllisten", size=16, weight=ft.FontWeight.BOLD))
-            for sel in sorted(store.selections.values(), key=lambda x: x.name):
-                rows.append(selection_tile(sel))
+            ordered_sels = store.ordered_selections()
+            if state["sort_mode"]:
+                # Auswahllisten im Sortiermodus ebenfalls verschiebbar;
+                # feste Höhe, damit sich die beiden Ziehlisten die
+                # Spalte teilen können
+                rows.append(ft.Container(
+                    ft.ReorderableListView(
+                        controls=[drag_row(s.name,
+                                           f"Auswahl · {len(s.card_ids)} Karten")
+                                  for s in ordered_sels],
+                        show_default_drag_handles=False,
+                        on_reorder=reorder_selections,
+                    ),
+                    height=min(320, 72 * len(ordered_sels)),
+                ))
+            else:
+                for sel in ordered_sels:
+                    rows.append(selection_tile(sel))
         rows.append(ft.Row([
             ft.Text("Vokabellisten", size=16, weight=ft.FontWeight.BOLD,
                     expand=True),
@@ -149,13 +207,31 @@ def manager_view(nav, store: ContentStore,
                 actions=[ft.TextButton("Abbrechen", on_click=lambda e: page.pop_dialog()),
                          ft.FilledButton("Löschen", on_click=do)],
             ))
+
+        # dieselben Optionen wie bei Vokabellisten; Export und Audio
+        # arbeiten auf den aufgelösten Karten (cards_for löst die
+        # referenzierten IDs in echte Karten auf)
+        trailing = ft.PopupMenuButton(items=[
+            ft.PopupMenuItem(content="Umbenennen", icon=ft.Icons.EDIT,
+                             on_click=lambda e, s=sel: rename_selection_dialog(
+                                 page, store, s, on_saved=refresh)),
+            ft.PopupMenuItem(content="Export CSV/PDF…",
+                             icon=ft.Icons.DOWNLOAD,
+                             on_click=lambda e, s=sel: export_dialog(
+                                 s.name, store.cards_for(s.id))),
+            ft.PopupMenuItem(content="Audio vorbereiten",
+                             icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
+                             on_click=lambda e, s=sel: prepare_audio_dialog(
+                                 s.name, store.cards_for(s.id))),
+            ft.PopupMenuItem(content="Löschen", icon=ft.Icons.DELETE,
+                             on_click=delete),
+        ])
         return ft.Card(
             content=ft.ListTile(
                 leading=ft.Icon(ft.Icons.STAR_OUTLINE),
                 title=ft.Text(sel.name),
                 subtitle=ft.Text(f"Auswahl · {len(sel.card_ids)} Karten"),
-                trailing=ft.IconButton(ft.Icons.DELETE_OUTLINE, tooltip="Löschen",
-                                       on_click=delete),
+                trailing=trailing,
                 on_click=lambda e, s=sel: nav.go(
                     s.name, selection_editor(nav, store, s, on_saved_selection,
                                              progress)),
@@ -170,23 +246,31 @@ def manager_view(nav, store: ContentStore,
                                      page, store, l, on_saved=refresh)),
                 ft.PopupMenuItem(content="Export JSON", icon=ft.Icons.DOWNLOAD,
                                  on_click=lambda e, l=vlist: export_list(l, "json")),
-                ft.PopupMenuItem(content="Export CSV", icon=ft.Icons.DOWNLOAD,
-                                 on_click=lambda e, l=vlist: export_list(l, "csv")),
+                ft.PopupMenuItem(content="Export CSV/PDF…",
+                                 icon=ft.Icons.DOWNLOAD,
+                                 on_click=lambda e, l=vlist: export_dialog(
+                                     l.name, l.cards)),
                 ft.PopupMenuItem(content="Audio vorbereiten",
                                  icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
-                                 on_click=lambda e, l=vlist: prepare_audio_dialog(l)),
+                                 on_click=lambda e, l=vlist: prepare_audio_dialog(
+                                     l.name, l.cards)),
                 ft.PopupMenuItem(content="Löschen", icon=ft.Icons.DELETE,
                                  on_click=lambda e, l=vlist: delete_dialog(l)),
             ])
         else:
-            # Buchlisten: nicht editierbar, aber die Audio-Vorbereitung ist
-            # auch für sie sinnvoll (Cache hängt nur am Text)
+            # Buchlisten: nicht editierbar, aber Export und Audio-
+            # Vorbereitung sind auch für sie sinnvoll
             trailing = ft.Row([
                 ft.Icon(ft.Icons.LOCK_OUTLINE, tooltip="Buchliste (nicht editierbar)"),
                 ft.PopupMenuButton(items=[
+                    ft.PopupMenuItem(content="Export CSV/PDF…",
+                                     icon=ft.Icons.DOWNLOAD,
+                                     on_click=lambda e, l=vlist: export_dialog(
+                                         l.name, l.cards)),
                     ft.PopupMenuItem(content="Audio vorbereiten",
                                      icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
-                                     on_click=lambda e, l=vlist: prepare_audio_dialog(l)),
+                                     on_click=lambda e, l=vlist: prepare_audio_dialog(
+                                         l.name, l.cards)),
                 ]),
             ], tight=True, spacing=0)
         return ft.Card(
@@ -315,16 +399,101 @@ def manager_view(nav, store: ContentStore,
             src_bytes=text.encode("utf-8"),
         )
 
-    def prepare_audio_dialog(vlist: VocabList):
-        """Lädt das Audio aller Wörter einer Liste vorab in den Cache —
-        danach ist die Liste komplett offline anhörbar.
+    def export_dialog(name: str, cards: list[VocabCard]):
+        """Export als CSV oder PDF — mit Spaltenauswahl per Checkbox.
+
+        Funktioniert für Vokabellisten und Auswahllisten gleichermaßen:
+        cards sind die aufgelösten Karten der Quelle."""
+        checks = {key: ft.Checkbox(label=label, value=True)
+                  for key, label in EXPORT_COLUMNS}
+        error = ft.Text("", color=ft.Colors.ERROR, size=13)
+
+        def set_all(value: bool):
+            def handler(e):
+                for cb in checks.values():
+                    cb.value = value
+                page.update()
+            return handler
+
+        def fields() -> list[str]:
+            return [k for k, cb in checks.items() if cb.value]
+
+        def need_fields() -> list[str] | None:
+            f = fields()
+            if not f:
+                error.value = "Bitte mindestens eine Spalte wählen."
+                page.update()
+                return None
+            return f
+
+        async def do_csv(e):
+            f = need_fields()
+            if f is None:
+                return
+            text = content.export_csv_columns(cards, f)
+            page.pop_dialog()
+            await picker.save_file(
+                dialog_title="Liste exportieren",
+                file_name=f"{name}.csv",
+                allowed_extensions=["csv"],
+                src_bytes=text.encode("utf-8"),
+            )
+
+        async def do_pdf(e):
+            f = need_fields()
+            if f is None:
+                return
+            ordered = [(k, label) for k, label in EXPORT_COLUMNS if k in f]
+            try:
+                data = pdf_export.export_pdf(
+                    name,
+                    [label for _k, label in ordered],
+                    [[_export_value(c, k) for k, _label in ordered]
+                     for c in cards],
+                )
+            except RuntimeError as exc:
+                error.value = str(exc)
+                page.update()
+                return
+            page.pop_dialog()
+            await picker.save_file(
+                dialog_title="Liste exportieren",
+                file_name=f"{name}.pdf",
+                allowed_extensions=["pdf"],
+                src_bytes=data,
+            )
+
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text(f"„{name}“ exportieren"),
+            content=ft.Column(
+                [ft.Row([ft.TextButton("Alles", on_click=set_all(True)),
+                         ft.TextButton("Auswahl leeren",
+                                       on_click=set_all(False))],
+                        spacing=4),
+                 *checks.values(), error],
+                tight=True, spacing=0, width=360,
+                scroll=ft.ScrollMode.AUTO, height=420,
+            ),
+            actions=[
+                ft.TextButton("Abbrechen",
+                              on_click=lambda e: page.pop_dialog()),
+                ft.OutlinedButton("CSV", icon=ft.Icons.DOWNLOAD,
+                                  on_click=do_csv),
+                ft.FilledButton("PDF", icon=ft.Icons.PICTURE_AS_PDF,
+                                on_click=do_pdf),
+            ],
+        ))
+
+    def prepare_audio_dialog(name: str, cards: list[VocabCard]):
+        """Lädt das Audio aller Wörter einer Liste (oder Auswahlliste)
+        vorab in den Cache — danach komplett offline anhörbar.
 
         Kleine Pause zwischen den Abrufen (Google drosselt sonst); nach
         3 Fehlern in Folge wird abgebrochen (offline nicht durch die
         ganze Liste laufen).
         """
         texts = list(dict.fromkeys(
-            t for t in (speakable(c.front) for c in vlist.cards) if t))
+            t for t in (speakable(c.front) for c in cards) if t))
         cache = tts_cache()
         todo = [t for t in texts if not cache.has(t)]
         already = len(texts) - len(todo)
@@ -374,7 +543,7 @@ def manager_view(nav, store: ContentStore,
             page.update()
 
         page.show_dialog(ft.AlertDialog(
-            title=ft.Text(f"Audio vorbereiten — {vlist.name}"),
+            title=ft.Text(f"Audio vorbereiten — {name}"),
             content=ft.Column([bar, status], tight=True, spacing=12,
                               width=420),
             actions=[btn_action],

@@ -315,3 +315,28 @@ def test_card_ids_survive_json_roundtrip():
     vlist = make_list()
     loaded = content.import_json(content.export_json(vlist))
     assert [c.id for c in loaded.cards] == [c.id for c in vlist.cards]
+
+
+# --- Auswahllisten-Reihenfolge (list_order.json, Schlüssel "selections") ---
+
+
+def test_ordered_selections_default_and_persist(tmp_path):
+    from mathainoa1.models import SelectionList
+    store = make_store(tmp_path, ["Alpha"])
+    a = SelectionList(name="Zeta-Auswahl")
+    b = SelectionList(name="Alpha-Auswahl")
+    store.save_selection(a)
+    store.save_selection(b)
+    # ohne Order: alphabetisch
+    assert [s.name for s in store.ordered_selections()] == [
+        "Alpha-Auswahl", "Zeta-Auswahl"]
+    store.set_selection_order([a.id, b.id])
+    assert [s.name for s in store.ordered_selections()] == [
+        "Zeta-Auswahl", "Alpha-Auswahl"]
+    # überlebt Neuladen und beißt sich nicht mit der Listen-Reihenfolge
+    store.set_list_order([l.id for l in store.ordered_lists()])
+    fresh = content.ContentStore(store.book_dir, store.user_dir)
+    fresh.load_all()
+    assert [s.name for s in fresh.ordered_selections()] == [
+        "Zeta-Auswahl", "Alpha-Auswahl"]
+    assert [l.name for l in fresh.ordered_lists()] == ["Buch", "Alpha"]

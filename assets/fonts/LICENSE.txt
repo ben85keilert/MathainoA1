@@ -1,0 +1,10 @@
+DejaVuSans.ttf — DejaVu Sans (Book)
+
+Quelle: https://dejavu-fonts.github.io/
+Lizenz: Bitstream Vera Fonts Copyright (c) 2003 by Bitstream, Inc.,
+mit DejaVu-Änderungen (Public Domain). Die Lizenz erlaubt Nutzung,
+Weitergabe und Bündelung mit Software; der vollständige Text:
+https://dejavu-fonts.github.io/License.html
+
+Die Schrift wird für den PDF-Export mitgeliefert, weil die PDF-
+Standardschriften keine griechischen Zeichen enthalten.
