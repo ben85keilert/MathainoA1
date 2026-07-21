@@ -32,6 +32,8 @@ class Navigator:
         self.appbar = ft.AppBar(
             title=ft.Text(APP_NAME),
             actions=[
+                ft.IconButton(ft.Icons.STICKY_NOTE_2_OUTLINED, tooltip="Notizen",
+                              on_click=self._open_notes),
                 reference_menu_button(self),
                 ft.IconButton(ft.Icons.HELP_OUTLINE, tooltip="Hilfe",
                               on_click=self._open_help),
@@ -69,6 +71,12 @@ class Navigator:
             return  # Hilfe ist schon offen
         self.go("Hilfe", help_view(self, self.store))
 
+    def _open_notes(self, e=None) -> None:
+        from mathainoa1.ui.views.notes import notes_view
+        if self.stack and self.stack[-1][0] == "Notizen":
+            return  # Notizen sind schon offen
+        self.go("Notizen", notes_view(self))
+
     def back(self, e=None) -> None:
         if len(self.stack) > 1:
             self.stack.pop()
@@ -82,6 +90,12 @@ class Navigator:
             if len(self.stack) > 1 else None
         )
         self.body.content = content
+        # Views mit on_reappear-Attribut frischen sich beim (Wieder-)
+        # Anzeigen selbst auf — z.B. das Listenmenü nach dem Anlegen
+        # einer Auswahlliste in einer Unterseite
+        callback = getattr(content, "on_reappear", None)
+        if callback:
+            callback()
         self.page.update()
 
 

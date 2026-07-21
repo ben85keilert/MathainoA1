@@ -471,7 +471,7 @@ class DeclensionSettings:
     mode: str = "typing"  # "flashcard" | "typing"
     direction: str = "gr"  # Vorgabe: "gr" = griechische Nominativphrase,
     # "de" = deutsche Bedeutung (schwerer; zählt für die Vokabelstatistik)
-    word_count: int = 20
+    word_count: int = 7  # Standard bei Neuinstallation; Änderungen werden gespeichert
     cases: list[str] = field(default_factory=lambda: ["acc"])
     numbers: list[str] = field(default_factory=lambda: ["sg", "pl"])
     with_adjectives: bool = False

@@ -36,6 +36,7 @@ from mathainoa1.storage.settings import (
     save_declension_settings,
 )
 from mathainoa1.ui.audio import autoplay_button, maybe_autoplay, play_text
+from mathainoa1.ui.views.trainer import typing_controls
 
 
 def _make_session(tasks, settings, on_result=None) -> DeclensionSession:
@@ -66,12 +67,14 @@ def _verb_sample(verb: conj.Verb) -> str:
 
 
 def _preview_header(nav, store: ContentStore, progress: ProgressStore,
-                    title: str, source_id: str) -> ft.Control:
+                    title: str, source_id: str,
+                    extra: list[ft.Control] | None = None) -> ft.Control:
     """Kopfzeile der Wörter-/Verben-Vorschau: Titel + „Liste bearbeiten“."""
     from mathainoa1.ui.views.manager import open_source_editor
     return ft.Row(
         [
             ft.Text(title, size=16, weight=ft.FontWeight.BOLD, expand=True),
+            *(extra or []),
             ft.OutlinedButton(
                 "Liste bearbeiten", icon=ft.Icons.EDIT_OUTLINED,
                 on_click=lambda e: open_source_editor(
@@ -79,6 +82,85 @@ def _preview_header(nav, store: ContentStore, progress: ProgressStore,
         ],
         vertical_alignment=ft.CrossAxisAlignment.CENTER,
     )
+
+
+def _grouped_word_rows(nav, store: ContentStore, source_id: str,
+                       items: list, tile,
+                       all_progress=None) -> tuple[list[ft.Control],
+                                                   ft.Control]:
+    """Wortzeilen der Vorschau mit einheitlichen Sortier-Umschaltern
+    (alphabetisch, nach Lernstand — wie in den anderen Listenansichten).
+
+    items: Paare (card, obj); tile(card, obj) -> ft.Control. Bei
+    Auswahllisten stehen die Wörter unter der Überschrift ihrer
+    Ursprungsliste. Gibt (Umschalt-Buttons, Spalte) zurück — die
+    Buttons gehören in die Kopfzeile."""
+    from mathainoa1.ui.views.wordlist import (
+        alpha_key,
+        box_of,
+        group_heading,
+        origin_names,
+    )
+    grouped = source_id in store.selections
+    all_progress = all_progress or {}
+    state = {"alpha": False, "progress": False}
+    body = ft.Column(spacing=0)
+    alpha_btn = ft.IconButton(
+        ft.Icons.SORT_BY_ALPHA,
+        tooltip="Alphabetisch sortieren"
+        + (" (über alle Ursprungslisten)" if grouped else ""),
+    )
+    progress_btn = ft.IconButton(
+        ft.Icons.SORT,
+        tooltip="Nach Lernstand sortieren (schlechteste zuerst)",
+    )
+
+    def _wrong_of(card) -> int:
+        p = all_progress.get(card.id)
+        return p.wrong if p else 0
+
+    def rebuild():
+        alpha_btn.icon_color = ft.Colors.PRIMARY if state["alpha"] else None
+        progress_btn.icon_color = (ft.Colors.PRIMARY if state["progress"]
+                                   else None)
+        if state["alpha"]:
+            body.controls = [tile(c, o) for c, o in
+                             sorted(items, key=lambda t: alpha_key(t[0]))]
+        elif state["progress"]:
+            body.controls = [tile(c, o) for c, o in
+                             sorted(items,
+                                    key=lambda t: (box_of(t[0], all_progress),
+                                                   -_wrong_of(t[0])))]
+        elif grouped:
+            names = origin_names(store)
+            groups: dict[str, list] = {}
+            for c, o in items:
+                groups.setdefault(names.get(c.id, "Unbekannte Liste"),
+                                  []).append((c, o))
+            rows: list[ft.Control] = []
+            for name, group in groups.items():
+                rows.append(group_heading(name))
+                rows += [tile(c, o) for c, o in group]
+            body.controls = rows
+        else:
+            body.controls = [tile(c, o) for c, o in items]
+
+    def toggle_alpha(e):
+        state["alpha"] = not state["alpha"]
+        state["progress"] = False
+        rebuild()
+        nav.page.update()
+
+    def toggle_progress(e):
+        state["progress"] = not state["progress"]
+        state["alpha"] = False
+        rebuild()
+        nav.page.update()
+
+    alpha_btn.on_click = toggle_alpha
+    progress_btn.on_click = toggle_progress
+    rebuild()
+    return [alpha_btn, progress_btn], body
 
 
 def setup_view(nav, store: ContentStore, progress: ProgressStore,
@@ -224,24 +306,31 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             nav.page.update()
             return
         adjs = decl.usable_adjectives(cards)
-        rows: list[ft.Control] = [
-            _preview_header(nav, store, progress,
-                            f"{store.name_for(settings.list_id)} — "
-                            f"{len(nouns)} Nomen", settings.list_id)
-        ]
-        for c, n in nouns:
+
+        def noun_tile(c, n) -> ft.Control:
             acc = decl.decline(n, "acc", "sg")
             gen = decl.decline(n, "gen", "sg")
             sub = " · ".join(
                 f"{CASE_NAMES[case]}: {decl.ARTICLES[(case, 'sg')][n.gender]} {f}"
                 for case, f in (("acc", acc), ("gen", gen)) if f
             ) or "nur Plural"
-            rows.append(ft.ListTile(
+            return ft.ListTile(
                 dense=True,
                 title=ft.Row([ft.Text(c.front, expand=1), ft.Text(c.back, expand=1)],
                              spacing=12),
                 subtitle=ft.Text(sub, size=12),
-            ))
+            )
+
+        sort_btns, word_rows = _grouped_word_rows(
+            nav, store, settings.list_id, nouns, noun_tile,
+            all_progress=progress.all())
+        rows: list[ft.Control] = [
+            _preview_header(nav, store, progress,
+                            f"{store.name_for(settings.list_id)} — "
+                            f"{len(nouns)} Nomen", settings.list_id,
+                            extra=sort_btns),
+            word_rows,
+        ]
         if adjs:
             rows.append(ft.Text(f"{len(adjs)} Adjektive", size=16,
                                 weight=ft.FontWeight.BOLD))
@@ -274,7 +363,12 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
 
     return ft.Column(
         [
-            dd_list,
+            # Lautsprecher (Auto-Vorlesen) oben rechts wie in der Übung;
+            # gespeichert wie die anderen Einstellungen (app_settings.json)
+            ft.Row([ft.Container(dd_list, expand=True),
+                    autoplay_button(nav.page)],
+                   spacing=8,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Row([ft.TextButton("Neue Auswahlliste erstellen…",
                                   icon=ft.Icons.PLAYLIST_ADD, on_click=new_selection)]),
             info_text,
@@ -329,6 +423,18 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                        icon=ft.Icons.STYLE),
             ft.Segment(value="typing", label=ft.Text("Schreiben"),
                        icon=ft.Icons.KEYBOARD),
+        ],
+    )
+    # Vorgabe: griechisches Lemma (leichter) oder deutscher Infinitiv.
+    # Bei Griechisch entfällt die 1. Person Singular Präsens — sie ist
+    # als Lemma ja schon zu sehen.
+    seg_direction = ft.SegmentedButton(
+        selected=[s.direction if s.direction in ("gr", "de") else "de"],
+        segments=[
+            ft.Segment(value="gr", label=ft.Text("Griechisch"),
+                       icon=ft.Icons.TRANSLATE),
+            ft.Segment(value="de", label=ft.Text("Deutsch"),
+                       icon=ft.Icons.PSYCHOLOGY),
         ],
     )
     seg_tenses = ft.SegmentedButton(
@@ -403,8 +509,10 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             nav.page.update()
             return None
         mode_sel = multi_values(seg_mode)
+        dir_sel = multi_values(seg_direction)
         return ConjugationSettings(
             mode=mode_sel[0] if mode_sel else "typing",
+            direction=dir_sel[0] if dir_sel else "de",
             word_count=count,
             persons=persons,
             numbers=numbers,
@@ -436,18 +544,24 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             error_text.value = "Keine konjugierbaren Verben in dieser Liste."
             nav.page.update()
             return
-        rows: list[ft.Control] = [
-            _preview_header(nav, store, progress,
-                            f"{store.name_for(settings.list_id)} — "
-                            f"{len(verbs)} Verben", settings.list_id)
-        ]
-        for c, v in verbs:
-            rows.append(ft.ListTile(
+        def verb_tile(c, v) -> ft.Control:
+            return ft.ListTile(
                 dense=True,
                 title=ft.Row([ft.Text(c.front, expand=1), ft.Text(c.back, expand=1)],
                              spacing=12),
                 subtitle=ft.Text(_verb_sample(v), size=12),
-            ))
+            )
+
+        sort_btns, word_rows = _grouped_word_rows(
+            nav, store, settings.list_id, verbs, verb_tile,
+            all_progress=progress.all())
+        rows: list[ft.Control] = [
+            _preview_header(nav, store, progress,
+                            f"{store.name_for(settings.list_id)} — "
+                            f"{len(verbs)} Verben", settings.list_id,
+                            extra=sort_btns),
+            word_rows,
+        ]
         nav.go(f"Verben ({len(verbs)})",
                ft.Column(rows, spacing=4, scroll=ft.ScrollMode.AUTO))
 
@@ -457,11 +571,19 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             return
         tasks = conj.generate_tasks(store.cards_for(settings.list_id), settings)
         if not tasks:
-            error_text.value = (
-                "Keine Verben mit 2. Stamm in dieser Liste — Futur braucht "
-                "das Feld „2. Stamm“ in der Vokabelverwaltung."
-                if settings.tenses == ["future"]
-                else "Keine passenden Aufgaben für diese Auswahl gefunden.")
+            if settings.tenses == ["future"]:
+                error_text.value = (
+                    "Keine Verben mit 2. Stamm in dieser Liste — Futur "
+                    "braucht das Feld „2. Stamm“ in der Vokabelverwaltung.")
+            elif (settings.direction == "gr" and settings.persons == [1]
+                    and settings.numbers == ["sg"]):
+                error_text.value = (
+                    "Bei griechischer Vorgabe wird die 1. Person Singular "
+                    "Präsens nicht abgefragt — sie steht ja schon da. "
+                    "Bitte weitere Personen/Zahlen wählen.")
+            else:
+                error_text.value = ("Keine passenden Aufgaben für diese "
+                                    "Auswahl gefunden.")
             nav.page.update()
             return
         save_conjugation_settings(settings)
@@ -472,13 +594,19 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
 
     return ft.Column(
         [
-            dd_list,
+            # Lautsprecher (Auto-Vorlesen) oben rechts wie in der Übung;
+            # gespeichert wie die anderen Einstellungen (app_settings.json)
+            ft.Row([ft.Container(dd_list, expand=True),
+                    autoplay_button(nav.page)],
+                   spacing=8,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Row([ft.TextButton("Neue Auswahlliste erstellen…",
                                   icon=ft.Icons.PLAYLIST_ADD, on_click=new_selection)]),
             info_text,
             ft.Divider(),
             ft.Row([seg_mode, tf_count], spacing=12,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            seg_direction,
             seg_tenses,
             seg_persons,
             seg_numbers,
@@ -582,15 +710,18 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         wrong_eye.visible = True
         own_answer.visible = False
         own_answer.value = ""
+        # Futur: das "θα" ist offensichtlich und steht schon vor dem
+        # Antwortfeld — getippt wird nur die Verbform (zählt auch so,
+        # die Varianten ohne θα sind ohnehin gültig)
+        tf_answer.prefix = (
+            ft.Text("θα ", size=16)
+            if getattr(task, "tense", None) == "future" else None)
         if session.settings.mode == "flashcard":
             action_area.controls = [ft.FilledButton("Zeigen", icon=ft.Icons.VISIBILITY,
                                                     on_click=reveal)]
         else:
             tf_answer.value = ""
-            action_area.controls = [
-                tf_answer,
-                ft.FilledButton("Prüfen", icon=ft.Icons.CHECK, on_click=check),
-            ]
+            action_area.controls = typing_controls(tf_answer, check)
         nav.page.update()
         if session.settings.mode == "typing":
             focus_answer()
@@ -642,6 +773,14 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         result = session.check_typed(given)
         weiter = ft.FilledButton("Weiter", icon=ft.Icons.ARROW_FORWARD,
                                  on_click=lambda e: show_task(), autofocus=True)
+
+        def show_own(e, g=given):
+            wrong_label.value = "Meine Antwort:"
+            wrong_eye.visible = False
+            own_answer.value = g if g.strip() else "(leer)"
+            own_answer.visible = True
+            nav.page.update()
+
         if result == Result.CORRECT:
             feedback.value = "Richtig!"
             feedback.color = ft.Colors.GREEN
@@ -659,18 +798,13 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
             action_area.controls = [weiter]
         else:
             feedback.value = ""
-            btn_wrong.visible = True
-
-            def show_own(e, g=given):
-                wrong_label.value = "Meine Antwort:"
-                wrong_eye.visible = False
-                own_answer.value = g if g.strip() else "(leer)"
-                own_answer.visible = True
-                nav.page.update()
-
-            btn_wrong.on_click = show_own
             # Abstand, damit man nicht versehentlich "Weiter" trifft
             action_area.controls = [ft.Container(height=24), weiter]
+        if result != Result.CORRECT:
+            # Auch bei Akzent-/Groß-Klein-Fehlern die eigene (falsche)
+            # Antwort einblendbar machen — nur so sieht man den Fehler
+            btn_wrong.visible = True
+            btn_wrong.on_click = show_own
         answer.value = display
         solution_shown(task)
         nav.page.update()
@@ -678,18 +812,21 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
     show_task()
     return ft.Column(
         [
-            ft.Row([progress_label, round_label, autoplay_button(nav.page)],
-                   alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            seg_mode,
-            ft.Container(prompt, padding=ft.Padding.only(top=20)),
-            task_label, meaning,
-            ft.Row([answer, btn_answer_play], tight=True, spacing=4,
-                   alignment=ft.MainAxisAlignment.CENTER,
+            # Lösungs-Audio oben in der Statuszeile, damit der Prüfen-
+            # Button bei eingeblendeter Tastatur sichtbar bleibt
+            ft.Row([progress_label, round_label,
+                    ft.Row([btn_answer_play, autoplay_button(nav.page)],
+                           tight=True, spacing=0)],
+                   alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            seg_mode,
+            ft.Container(prompt, padding=ft.Padding.only(top=8)),
+            task_label, meaning,
+            answer,
             feedback, btn_wrong, own_answer,
             action_area,
         ],
-        spacing=12,
+        spacing=8,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         scroll=ft.ScrollMode.AUTO,
     )

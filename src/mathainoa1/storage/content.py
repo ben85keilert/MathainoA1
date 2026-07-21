@@ -47,6 +47,7 @@ class ContentStore:
         self.selections: dict[str, SelectionList] = {}
         self._annotations: dict[str, dict] = {}
         self._list_order: list[str] = []
+        self._selection_order: list[str] = []
 
     def load_all(self) -> None:
         self.lists.clear()
@@ -72,12 +73,18 @@ class ContentStore:
 
     def _load_list_order(self) -> None:
         self._list_order = []
+        self._selection_order = []
         if self.order_path.exists():
             try:
                 with open(self.order_path, encoding="utf-8") as f:
-                    order = json.load(f).get("order", [])
+                    data = json.load(f)
+                order = data.get("order", [])
                 if isinstance(order, list):
                     self._list_order = [i for i in order if isinstance(i, str)]
+                sel_order = data.get("selections", [])
+                if isinstance(sel_order, list):
+                    self._selection_order = [i for i in sel_order
+                                             if isinstance(i, str)]
             except (json.JSONDecodeError, OSError):
                 pass  # kaputte Datei: Default-Reihenfolge statt Absturz
 
@@ -90,14 +97,32 @@ class ContentStore:
                       key=lambda l: (l.editable, l.name))
         return known + rest
 
+    def _write_order(self) -> None:
+        self.order_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.order_path, "w", encoding="utf-8") as f:
+            json.dump({"order": self._list_order,
+                       "selections": self._selection_order},
+                      f, ensure_ascii=False, indent=2)
+
     def set_list_order(self, ids: list[str]) -> None:
         """Speichert die komplette Listen-Reihenfolge (verwaiste IDs
         verschwinden dabei, weil nur die übergebenen IDs geschrieben werden)."""
         self._list_order = list(ids)
-        self.order_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.order_path, "w", encoding="utf-8") as f:
-            json.dump({"order": self._list_order}, f, ensure_ascii=False,
-                      indent=2)
+        self._write_order()
+
+    def ordered_selections(self) -> list[SelectionList]:
+        """Auswahllisten in gespeicherter Reihenfolge; neue hinten
+        (alphabetisch)."""
+        known = [self.selections[i] for i in self._selection_order
+                 if i in self.selections]
+        seen = set(self._selection_order)
+        rest = sorted((s for s in self.selections.values()
+                       if s.id not in seen), key=lambda s: s.name)
+        return known + rest
+
+    def set_selection_order(self, ids: list[str]) -> None:
+        self._selection_order = list(ids)
+        self._write_order()
 
     def move_list(self, list_id: str, delta: int) -> None:
         """Verschiebt eine Liste um eine Position (klemmt an den Rändern)."""
@@ -238,14 +263,21 @@ CSV_FIELDS = ["front", "back", "plural", "article", "word_type",
 
 
 def export_csv(vlist: VocabList) -> str:
+    return export_csv_columns(vlist.cards, CSV_FIELDS)
+
+
+def export_csv_columns(cards: list[VocabCard], fields: list[str]) -> str:
+    """CSV nur mit den gewünschten Spalten (Reihenfolge wie CSV_FIELDS)."""
+    fields = [f for f in CSV_FIELDS if f in fields]
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=CSV_FIELDS, extrasaction="ignore")
+    writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
     writer.writeheader()
-    for c in vlist.cards:
+    for c in cards:
         row = {k: (v if v is not None else "") for k, v in c.to_dict().items()
-               if k in CSV_FIELDS}
-        # forms als Text serialisieren: "gen_pl=γυναικών; 2sg=πας"
-        row["forms"] = forms_to_text(c.forms)
+               if k in fields}
+        if "forms" in fields:
+            # forms als Text serialisieren: "gen_pl=γυναικών; 2sg=πας"
+            row["forms"] = forms_to_text(c.forms)
         writer.writerow(row)
     return buf.getvalue()
 
@@ -349,6 +381,23 @@ def example_vocab_list() -> VocabList:
 
 def export_json(vlist: VocabList) -> str:
     return json.dumps(vlist.to_dict(), ensure_ascii=False, indent=2)
+
+
+def export_json_columns(name: str, cards: list[VocabCard],
+                        fields: list[str]) -> str:
+    """JSON nur mit den gewünschten Spalten.
+
+    Die Karten-ID wird immer mitgeschrieben: beim Reimport bleibt der
+    Lernstand (progress.db) so an den Karten hängen. forms bleibt ein
+    Dict (kein Text wie im CSV)."""
+    fields = [f for f in CSV_FIELDS if f in fields]
+    out = {"name": name, "cards": []}
+    for c in cards:
+        d = c.to_dict()
+        row = {"id": c.id}
+        row.update({k: d[k] for k in fields})
+        out["cards"].append(row)
+    return json.dumps(out, ensure_ascii=False, indent=2)
 
 
 def import_json(text: str) -> VocabList:

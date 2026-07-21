@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import flet as ft
 
+from mathainoa1.logic.answer_check import normalize, strip_accents
 from mathainoa1.models import WORD_TYPES, VocabCard
 from mathainoa1.storage.progress import MAX_BOX, CardProgress
 from mathainoa1.ui.audio import play_text
@@ -43,6 +44,34 @@ def box_chip_controls(active: set[int], on_toggle) -> list[ft.Control]:
         )
         for b in [1, 2, 3, 4, 5, 0]
     ]
+
+
+def alpha_key(card: VocabCard) -> str:
+    """Sortierschlüssel fürs griechische Alphabet: ohne Artikel und Akzente."""
+    return strip_accents(normalize(card.greek(with_article=False)))
+
+
+def origin_names(store) -> dict[str, str]:
+    """card_id -> Name der Vokabelliste, aus der die Karte stammt."""
+    return {c.id: vl.name for vl in store.ordered_lists() for c in vl.cards}
+
+
+def group_by_origin(cards: list[VocabCard],
+                    names: dict[str, str]) -> list[tuple[str, list[VocabCard]]]:
+    """Gruppiert Karten nach Ursprungsliste, Reihenfolge des Auftretens."""
+    groups: dict[str, list[VocabCard]] = {}
+    for c in cards:
+        groups.setdefault(names.get(c.id, "Unbekannte Liste"), []).append(c)
+    return list(groups.items())
+
+
+def group_heading(name: str) -> ft.Control:
+    """Überschrift „Liste X“ über einer Ursprungsgruppe."""
+    return ft.Container(
+        ft.Text(name, size=14, weight=ft.FontWeight.BOLD,
+                color=ft.Colors.PRIMARY),
+        padding=ft.Padding.only(top=8, bottom=2),
+    )
 
 
 def card_tiles(cards: list[VocabCard], on_click=None, on_delete=None,
@@ -114,9 +143,19 @@ def drag_row(title: str | ft.Control, subtitle: str = "") -> ft.ListTile:
 
 def word_list_panel(page: ft.Page, cards: list[VocabCard],
                     all_progress: dict[str, CardProgress],
-                    on_click=None) -> ft.Control:
+                    on_click=None, store=None,
+                    source_id: str | None = None) -> ft.Control:
     """Wortliste mit Farbpunkt und Filtern: Box-Chips, Worttyp-Dropdown
-    und Sortierung nach Lernstand (schlechteste zuerst)."""
+    und Sortierung nach Lernstand (schlechteste zuerst).
+
+    Bei Auswahllisten (store + source_id einer Auswahl) werden die Wörter
+    unter Überschriften ihrer Ursprungsliste gruppiert; der Alphabet-
+    Umschalter sortiert stattdessen listenübergreifend alphabetisch."""
+
+    # Nur Auswahllisten mischen Karten mehrerer Listen — dort gruppieren
+    grouped = (store is not None and source_id is not None
+               and source_id in store.selections)
+    names = origin_names(store) if grouped else {}
 
     def box_of(c: VocabCard) -> int:
         p = all_progress.get(c.id)
@@ -131,7 +170,7 @@ def word_list_panel(page: ft.Page, cards: list[VocabCard],
         counts[box_of(c)] += 1
 
     active: set[int] = set(range(0, MAX_BOX + 1))
-    state = {"wtype": None, "sort_progress": False}
+    state = {"wtype": None, "sort_progress": False, "sort_alpha": False}
     chip_row = ft.Row(spacing=6, wrap=True)
     words_col = ft.Column(spacing=0)
 
@@ -160,13 +199,31 @@ def word_list_panel(page: ft.Page, cards: list[VocabCard],
 
     def toggle_sort(e):
         state["sort_progress"] = not state["sort_progress"]
+        state["sort_alpha"] = False  # die Sortierungen schließen sich aus
+        sync_sort_buttons()
+        refresh()
+
+    def toggle_alpha(e):
+        state["sort_alpha"] = not state["sort_alpha"]
+        state["sort_progress"] = False
+        sync_sort_buttons()
+        refresh()
+
+    def sync_sort_buttons():
         sort_btn.icon_color = (ft.Colors.PRIMARY if state["sort_progress"]
                                else None)
-        refresh()
+        alpha_btn.icon_color = (ft.Colors.PRIMARY if state["sort_alpha"]
+                                else None)
 
     sort_btn = ft.IconButton(
         ft.Icons.SORT, tooltip="Nach Lernstand sortieren (schlechteste zuerst)",
         on_click=toggle_sort,
+    )
+    alpha_btn = ft.IconButton(
+        ft.Icons.SORT_BY_ALPHA,
+        tooltip="Alphabetisch sortieren"
+        + (" (über alle Ursprungslisten)" if grouped else ""),
+        on_click=toggle_alpha,
     )
 
     def refresh():
@@ -185,12 +242,24 @@ def word_list_panel(page: ft.Page, cards: list[VocabCard],
         shown = [c for c in cards
                  if box_of(c) in active
                  and (state["wtype"] is None or c.word_type == state["wtype"])]
-        if state["sort_progress"]:
+        if state["sort_alpha"]:
+            shown.sort(key=alpha_key)
+        elif state["sort_progress"]:
             shown.sort(key=lambda c: (box_of(c), -wrong_of(c)))
-        words_col.controls = (
-            card_tiles(shown, on_click=on_click, all_progress=all_progress)
-            or [ft.Text("Keine Wörter für diese Auswahl.", italic=True)]
-        )
+        if not shown:
+            words_col.controls = [ft.Text("Keine Wörter für diese Auswahl.",
+                                          italic=True)]
+        elif grouped and not state["sort_alpha"] and not state["sort_progress"]:
+            # Auswahlliste: Wörter unter der Überschrift ihrer Ursprungsliste
+            rows: list[ft.Control] = []
+            for name, group in group_by_origin(shown, names):
+                rows.append(group_heading(name))
+                rows += card_tiles(group, on_click=on_click,
+                                   all_progress=all_progress)
+            words_col.controls = rows
+        else:
+            words_col.controls = card_tiles(shown, on_click=on_click,
+                                            all_progress=all_progress)
         page.update()
 
     refresh()
@@ -198,7 +267,7 @@ def word_list_panel(page: ft.Page, cards: list[VocabCard],
         [
             ft.Text("Boxen an-/abwählen:", size=13),
             chip_row,
-            ft.Row([dd_type, sort_btn],
+            ft.Row([dd_type, alpha_btn, sort_btn],
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             words_col,
         ],

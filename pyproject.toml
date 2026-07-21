@@ -8,6 +8,7 @@ dependencies = [
     "flet>=0.85,<0.86",
     "flet-audio>=0.85,<0.86",
     "gTTS>=2.5,<3",
+    "fpdf2>=2.8,<3",
 ]
 
 [project.optional-dependencies]

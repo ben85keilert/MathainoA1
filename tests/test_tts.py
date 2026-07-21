@@ -19,6 +19,18 @@ def test_speakable_alternatives_and_parens():
     assert speakable("") == ""
 
 
+def test_speakable_article_variants():
+    # Ein-Wort-Alternativen am Anfang: erste Variante + gemeinsamer Rest —
+    # früher blieb nur "ο" übrig und das Audio war kaputt
+    assert speakable("ο / η συνταξιούχος") == "ο συνταξιούχος"
+    assert speakable("ο/η συνταξιούχος") == "ο συνταξιούχος"
+    assert speakable("ο / η / το ίδιος") == "ο ίδιος"
+    # Verb-Varianten ohne Rest: erste Form
+    assert speakable("αγαπάω / αγαπώ") == "αγαπάω"
+    # mehrwortige erste Alternative bleibt beim alten Verhalten
+    assert speakable("τα λέμε / γεια σου") == "τα λέμε"
+
+
 def test_path_for_stable_and_normalized(tmp_path):
     cache = TtsCache(tmp_path)
     p1 = cache.path_for("ο δρόμος")

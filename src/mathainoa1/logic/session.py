@@ -18,7 +18,7 @@ class TrainingSettings:
 
     mode: str = "flashcard"  # "flashcard" | "typing"
     direction: str = "de_gr"  # "de_gr" | "gr_de" | "mixed"
-    word_count: int = 20
+    word_count: int = 7  # Standard bei Neuinstallation; Änderungen werden gespeichert
     with_article: bool = True
     repeat_errors: bool = True
     accent_tolerant: bool = True

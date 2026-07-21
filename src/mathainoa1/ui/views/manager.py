@@ -22,20 +22,39 @@ from mathainoa1.models import (
     parse_verb_forms_text,
     verb_forms_to_text,
 )
-from mathainoa1.storage import content
+from mathainoa1.storage import content, pdf_export
 from mathainoa1.storage.content import ContentStore
 from mathainoa1.storage.progress import ProgressStore
 from mathainoa1.storage.tts import TtsFetchError, speakable
 from mathainoa1.ui.audio import tts_cache
 from mathainoa1.ui.views.trainer import edit_notes_dialog
 from mathainoa1.ui.views.wordlist import (
+    alpha_key,
     box_chip_controls,
+    box_color,
     box_of,
     card_tiles,
     drag_row,
+    group_heading,
+    origin_names,
 )
 
 ARTICLES = ["", "ο", "η", "το", "οι", "τα"]
+
+# Export-Spalten: (CSV-Feldname, Anzeigename) — Reihenfolge = Exportreihenfolge
+EXPORT_COLUMNS = [
+    ("front", "Griechisch"), ("back", "Deutsch"), ("plural", "Plural"),
+    ("article", "Artikel"), ("word_type", "Worttyp"),
+    ("forms", "Formen"), ("stem2", "2. Stamm"),
+    ("hints_gr", "Hinweis GR"), ("hints_de", "Hinweis DE"),
+    ("notes_gr", "Notiz GR"), ("notes_de", "Notiz DE"),
+]
+
+
+def _export_value(card: VocabCard, key: str) -> str:
+    if key == "forms":
+        return forms_to_text(card.forms)
+    return getattr(card, key) or ""
 
 
 def rename_dialog(page: ft.Page, store: ContentStore, vlist: VocabList,
@@ -59,12 +78,35 @@ def rename_dialog(page: ft.Page, store: ContentStore, vlist: VocabList,
     ))
 
 
+def rename_selection_dialog(page: ft.Page, store: ContentStore,
+                            sel: SelectionList, on_saved=None) -> None:
+    """Dialog zum Umbenennen einer Auswahlliste."""
+    tf = ft.TextField(label="Name", value=sel.name, autofocus=True)
+
+    def save(e):
+        if tf.value.strip():
+            sel.name = tf.value.strip()
+            store.save_selection(sel)
+            page.pop_dialog()
+            if on_saved:
+                on_saved()
+
+    page.show_dialog(ft.AlertDialog(
+        title=ft.Text("Auswahlliste umbenennen"),
+        content=tf,
+        actions=[ft.TextButton("Abbrechen", on_click=lambda e: page.pop_dialog()),
+                 ft.FilledButton("Speichern", on_click=save)],
+    ))
+
+
 def manager_view(nav, store: ContentStore,
                  progress: ProgressStore) -> ft.Control:
     page = nav.page
     picker = ft.FilePicker()
     if picker not in page.services:
         page.services.append(picker)
+    clipboard = ft.Clipboard()
+    page.services.append(clipboard)
     body = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO)
     state = {"sort_mode": False}  # Listen-Reihenfolge per ↑/↓ ändern
 
@@ -76,6 +118,12 @@ def manager_view(nav, store: ContentStore,
         ids = [l.id for l in store.ordered_lists()]
         ids.insert(e.new_index, ids.pop(e.old_index))
         store.set_list_order(ids)
+        refresh()
+
+    def reorder_selections(e):
+        ids = [s.id for s in store.ordered_selections()]
+        ids.insert(e.new_index, ids.pop(e.old_index))
+        store.set_selection_order(ids)
         refresh()
 
     def refresh():
@@ -100,8 +148,24 @@ def manager_view(nav, store: ContentStore,
         ]
         if store.selections:
             rows.append(ft.Text("Auswahllisten", size=16, weight=ft.FontWeight.BOLD))
-            for sel in sorted(store.selections.values(), key=lambda x: x.name):
-                rows.append(selection_tile(sel))
+            ordered_sels = store.ordered_selections()
+            if state["sort_mode"]:
+                # Auswahllisten im Sortiermodus ebenfalls verschiebbar;
+                # feste Höhe, damit sich die beiden Ziehlisten die
+                # Spalte teilen können
+                rows.append(ft.Container(
+                    ft.ReorderableListView(
+                        controls=[drag_row(s.name,
+                                           f"Auswahl · {len(s.card_ids)} Karten")
+                                  for s in ordered_sels],
+                        show_default_drag_handles=False,
+                        on_reorder=reorder_selections,
+                    ),
+                    height=min(320, 72 * len(ordered_sels)),
+                ))
+            else:
+                for sel in ordered_sels:
+                    rows.append(selection_tile(sel))
         rows.append(ft.Row([
             ft.Text("Vokabellisten", size=16, weight=ft.FontWeight.BOLD,
                     expand=True),
@@ -145,13 +209,31 @@ def manager_view(nav, store: ContentStore,
                 actions=[ft.TextButton("Abbrechen", on_click=lambda e: page.pop_dialog()),
                          ft.FilledButton("Löschen", on_click=do)],
             ))
+
+        # exakt dieselben Optionen wie bei Vokabellisten; Export und Audio
+        # arbeiten auf den aufgelösten Karten (cards_for löst die
+        # referenzierten IDs in echte Karten auf)
+        trailing = ft.PopupMenuButton(items=[
+            ft.PopupMenuItem(content="Umbenennen", icon=ft.Icons.EDIT,
+                             on_click=lambda e, s=sel: rename_selection_dialog(
+                                 page, store, s, on_saved=refresh)),
+            ft.PopupMenuItem(content="Exportieren…",
+                             icon=ft.Icons.DOWNLOAD,
+                             on_click=lambda e, s=sel: export_dialog(
+                                 s.name, store.cards_for(s.id))),
+            ft.PopupMenuItem(content="Audio vorbereiten",
+                             icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
+                             on_click=lambda e, s=sel: prepare_audio_dialog(
+                                 s.name, store.cards_for(s.id))),
+            ft.PopupMenuItem(content="Löschen", icon=ft.Icons.DELETE,
+                             on_click=delete),
+        ])
         return ft.Card(
             content=ft.ListTile(
                 leading=ft.Icon(ft.Icons.STAR_OUTLINE),
                 title=ft.Text(sel.name),
                 subtitle=ft.Text(f"Auswahl · {len(sel.card_ids)} Karten"),
-                trailing=ft.IconButton(ft.Icons.DELETE_OUTLINE, tooltip="Löschen",
-                                       on_click=delete),
+                trailing=trailing,
                 on_click=lambda e, s=sel: nav.go(
                     s.name, selection_editor(nav, store, s, on_saved_selection,
                                              progress)),
@@ -160,29 +242,36 @@ def manager_view(nav, store: ContentStore,
 
     def list_tile(vlist: VocabList) -> ft.Control:
         if vlist.editable:
+            # identisches Menü wie bei Auswahllisten (selection_tile)
             trailing = ft.PopupMenuButton(items=[
                 ft.PopupMenuItem(content="Umbenennen", icon=ft.Icons.EDIT,
                                  on_click=lambda e, l=vlist: rename_dialog(
                                      page, store, l, on_saved=refresh)),
-                ft.PopupMenuItem(content="Export JSON", icon=ft.Icons.DOWNLOAD,
-                                 on_click=lambda e, l=vlist: export_list(l, "json")),
-                ft.PopupMenuItem(content="Export CSV", icon=ft.Icons.DOWNLOAD,
-                                 on_click=lambda e, l=vlist: export_list(l, "csv")),
+                ft.PopupMenuItem(content="Exportieren…",
+                                 icon=ft.Icons.DOWNLOAD,
+                                 on_click=lambda e, l=vlist: export_dialog(
+                                     l.name, l.cards)),
                 ft.PopupMenuItem(content="Audio vorbereiten",
                                  icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
-                                 on_click=lambda e, l=vlist: prepare_audio_dialog(l)),
+                                 on_click=lambda e, l=vlist: prepare_audio_dialog(
+                                     l.name, l.cards)),
                 ft.PopupMenuItem(content="Löschen", icon=ft.Icons.DELETE,
                                  on_click=lambda e, l=vlist: delete_dialog(l)),
             ])
         else:
-            # Buchlisten: nicht editierbar, aber die Audio-Vorbereitung ist
-            # auch für sie sinnvoll (Cache hängt nur am Text)
+            # Buchlisten: nicht editierbar (kein Umbenennen/Löschen), aber
+            # Export und Audio-Vorbereitung sind auch für sie sinnvoll
             trailing = ft.Row([
                 ft.Icon(ft.Icons.LOCK_OUTLINE, tooltip="Buchliste (nicht editierbar)"),
                 ft.PopupMenuButton(items=[
+                    ft.PopupMenuItem(content="Exportieren…",
+                                     icon=ft.Icons.DOWNLOAD,
+                                     on_click=lambda e, l=vlist: export_dialog(
+                                         l.name, l.cards)),
                     ft.PopupMenuItem(content="Audio vorbereiten",
                                      icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
-                                     on_click=lambda e, l=vlist: prepare_audio_dialog(l)),
+                                     on_click=lambda e, l=vlist: prepare_audio_dialog(
+                                         l.name, l.cards)),
                 ]),
             ], tight=True, spacing=0)
         return ft.Card(
@@ -191,7 +280,8 @@ def manager_view(nav, store: ContentStore,
                 title=ft.Text(vlist.name),
                 subtitle=ft.Text(f"{len(vlist.cards)} Karten"),
                 trailing=trailing,
-                on_click=lambda e, l=vlist: nav.go(l.name, list_view(nav, store, l)),
+                on_click=lambda e, l=vlist: nav.go(
+                    l.name, list_view(nav, store, l, progress)),
             ),
             opacity=1.0 if vlist.editable else 0.55,
         )
@@ -211,7 +301,7 @@ def manager_view(nav, store: ContentStore,
             store.save_user_list(vlist)
             close_dialog()
             refresh()
-            nav.go(vlist.name, list_view(nav, store, vlist))
+            nav.go(vlist.name, list_view(nav, store, vlist, progress))
         page.show_dialog(ft.AlertDialog(
             title=ft.Text("Neue Liste"),
             content=ft.Column([tf_name], tight=True, spacing=12),
@@ -301,25 +391,155 @@ def manager_view(nav, store: ContentStore,
         store.save_user_list(vlist)
         refresh()
 
-    async def export_list(vlist: VocabList, fmt: str):
-        text = content.export_json(vlist) if fmt == "json" else content.export_csv(vlist)
-        await picker.save_file(
-            dialog_title="Liste exportieren",
-            file_name=f"{vlist.name}.{fmt}",
-            allowed_extensions=[fmt],
-            src_bytes=text.encode("utf-8"),
-        )
+    def copy_text(text: str):
+        async def do():
+            await clipboard.set(text)
+        page.run_task(do)
 
-    def prepare_audio_dialog(vlist: VocabList):
-        """Lädt das Audio aller Wörter einer Liste vorab in den Cache —
-        danach ist die Liste komplett offline anhörbar.
+    def plaintext_dialog(title: str, text: str):
+        """Exporttext anzeigen: markierbar plus Kopieren-Button."""
+        def copy(e):
+            copy_text(text)
+            page.pop_dialog()
+            page.show_dialog(ft.SnackBar(ft.Text(
+                "Export in die Zwischenablage kopiert.")))
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text(title, size=16),
+            content=ft.Column(
+                [ft.Text(text, size=12, selectable=True)],
+                scroll=ft.ScrollMode.AUTO, width=420, height=440,
+            ),
+            actions=[
+                ft.TextButton("Kopieren", icon=ft.Icons.COPY, on_click=copy),
+                ft.TextButton("Schließen",
+                              on_click=lambda e: page.pop_dialog()),
+            ],
+        ))
+
+    def export_dialog(name: str, cards: list[VocabCard]):
+        """Export als CSV, JSON oder PDF — mit Spaltenauswahl per Checkbox.
+
+        CSV/JSON gibt es als Plaintext (Zwischenablage) oder Datei,
+        PDF nur als Datei. Funktioniert für Vokabellisten und
+        Auswahllisten gleichermaßen: cards sind die aufgelösten Karten."""
+        checks = {key: ft.Checkbox(label=label, value=True)
+                  for key, label in EXPORT_COLUMNS}
+        error = ft.Text("", color=ft.Colors.ERROR, size=13)
+        seg_format = ft.SegmentedButton(
+            selected=["csv"],
+            segments=[
+                ft.Segment(value="csv", label=ft.Text("CSV")),
+                ft.Segment(value="json", label=ft.Text("JSON")),
+                ft.Segment(value="pdf", label=ft.Text("PDF")),
+            ],
+        )
+        btn_text = ft.OutlinedButton("Als Text", icon=ft.Icons.COPY)
+        btn_file = ft.FilledButton("Datei speichern", icon=ft.Icons.DOWNLOAD)
+
+        def current_format() -> str:
+            sel = seg_format.selected
+            if isinstance(sel, (list, set, tuple)) and sel:
+                return next(iter(sel))
+            return sel or "csv"
+
+        def sync_buttons(e=None):
+            # PDF gibt es nur als Datei — Plaintext ergäbe Binärmüll
+            btn_text.disabled = current_format() == "pdf"
+            page.update()
+
+        seg_format.on_change = sync_buttons
+        sync_buttons()
+
+        def set_all(value: bool):
+            def handler(e):
+                for cb in checks.values():
+                    cb.value = value
+                page.update()
+            return handler
+
+        def need_fields() -> list[str] | None:
+            f = [k for k, cb in checks.items() if cb.value]
+            if not f:
+                error.value = "Bitte mindestens eine Spalte wählen."
+                page.update()
+                return None
+            return f
+
+        def build_text(fmt: str, f: list[str]) -> str:
+            if fmt == "json":
+                return content.export_json_columns(name, cards, f)
+            return content.export_csv_columns(cards, f)
+
+        def as_text(e):
+            fmt = current_format()
+            f = need_fields()
+            if f is None or fmt == "pdf":
+                return
+            page.pop_dialog()
+            plaintext_dialog(f"{name}.{fmt}", build_text(fmt, f))
+
+        async def as_file(e):
+            fmt = current_format()
+            f = need_fields()
+            if f is None:
+                return
+            if fmt == "pdf":
+                ordered = [(k, label) for k, label in EXPORT_COLUMNS
+                           if k in f]
+                try:
+                    data = pdf_export.export_pdf(
+                        name,
+                        [label for _k, label in ordered],
+                        [[_export_value(c, k) for k, _label in ordered]
+                         for c in cards],
+                    )
+                except RuntimeError as exc:
+                    error.value = str(exc)
+                    page.update()
+                    return
+            else:
+                data = build_text(fmt, f).encode("utf-8")
+            page.pop_dialog()
+            await picker.save_file(
+                dialog_title="Liste exportieren",
+                file_name=f"{name}.{fmt}",
+                allowed_extensions=[fmt],
+                src_bytes=data,
+            )
+
+        btn_text.on_click = as_text
+        btn_file.on_click = as_file
+
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text(f"„{name}“ exportieren"),
+            content=ft.Column(
+                [seg_format,
+                 ft.Row([ft.TextButton("Alles", on_click=set_all(True)),
+                         ft.TextButton("Auswahl leeren",
+                                       on_click=set_all(False))],
+                        spacing=4),
+                 *checks.values(), error],
+                tight=True, spacing=0, width=360,
+                scroll=ft.ScrollMode.AUTO, height=440,
+            ),
+            actions=[
+                ft.TextButton("Abbrechen",
+                              on_click=lambda e: page.pop_dialog()),
+                btn_text,
+                btn_file,
+            ],
+        ))
+
+    def prepare_audio_dialog(name: str, cards: list[VocabCard]):
+        """Lädt das Audio aller Wörter einer Liste (oder Auswahlliste)
+        vorab in den Cache — danach komplett offline anhörbar.
 
         Kleine Pause zwischen den Abrufen (Google drosselt sonst); nach
         3 Fehlern in Folge wird abgebrochen (offline nicht durch die
         ganze Liste laufen).
         """
         texts = list(dict.fromkeys(
-            t for t in (speakable(c.front) for c in vlist.cards) if t))
+            t for t in (speakable(c.front) for c in cards) if t))
         cache = tts_cache()
         todo = [t for t in texts if not cache.has(t)]
         already = len(texts) - len(todo)
@@ -369,7 +589,7 @@ def manager_view(nav, store: ContentStore,
             page.update()
 
         page.show_dialog(ft.AlertDialog(
-            title=ft.Text(f"Audio vorbereiten — {vlist.name}"),
+            title=ft.Text(f"Audio vorbereiten — {name}"),
             content=ft.Column([bar, status], tight=True, spacing=12,
                               width=420),
             actions=[btn_action],
@@ -390,7 +610,11 @@ def manager_view(nav, store: ContentStore,
         tooltip="Wörter suchen",
         on_click=lambda e: nav.go("Wortsuche", search_view(nav, store)),
     )
-    return ft.Stack([body, search_fab], expand=True)
+    view = ft.Stack([body, search_fab], expand=True)
+    # beim Zurückkehren aus Unterseiten neu aufbauen — dort können
+    # Listen/Auswahllisten entstanden oder verändert worden sein
+    view.on_reappear = refresh
+    return view
 
 
 def search_view(nav, store: ContentStore) -> ft.Control:
@@ -452,7 +676,7 @@ def open_source_editor(nav, store: ContentStore, progress: ProgressStore,
     """
     if source_id in store.lists:
         vlist = store.lists[source_id]
-        nav.go(vlist.name, list_view(nav, store, vlist))
+        nav.go(vlist.name, list_view(nav, store, vlist, progress))
     elif source_id in store.selections:
         sel = store.selections[source_id]
         nav.go(sel.name, selection_editor(nav, store, sel,
@@ -486,6 +710,50 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
     )
     dd_type = ft.Dropdown(label="Worttyp", value="")
     dd_type_sel = ft.Dropdown(label="Worttyp", value="")
+    # Sortierung im Reiter "Ausgewählt": ohne Umschalter gruppiert nach
+    # Ursprungsliste, sonst alphabetisch bzw. nach Lernstand (wie in den
+    # Wortübersichten)
+    sel_sort = {"alpha": False, "progress": False}
+    # dieselben Sortierungen auch im Reiter "Auswählen"
+    pick_sort = {"alpha": False, "progress": False}
+
+    def _make_sort_buttons(state: dict, alpha_tooltip: str):
+        def toggle_alpha(e):
+            state["alpha"] = not state["alpha"]
+            state["progress"] = False
+            refresh()
+
+        def toggle_progress(e):
+            state["progress"] = not state["progress"]
+            state["alpha"] = False
+            refresh()
+
+        alpha_btn = ft.IconButton(ft.Icons.SORT_BY_ALPHA,
+                                  tooltip=alpha_tooltip,
+                                  on_click=toggle_alpha)
+        progress_btn = ft.IconButton(
+            ft.Icons.SORT,
+            tooltip="Nach Lernstand sortieren (schlechteste zuerst)",
+            on_click=toggle_progress)
+        return alpha_btn, progress_btn
+
+    sel_alpha_btn, sel_progress_btn = _make_sort_buttons(
+        sel_sort, "Alphabetisch sortieren (über alle Ursprungslisten)")
+    pick_alpha_btn, pick_progress_btn = _make_sort_buttons(
+        pick_sort, "Alphabetisch sortieren")
+
+    def _wrong_of(c: VocabCard) -> int:
+        p = all_progress.get(c.id)
+        return p.wrong if p else 0
+
+    def _apply_sort(cards: list[VocabCard],
+                    state: dict) -> list[VocabCard]:
+        if state["alpha"]:
+            return sorted(cards, key=alpha_key)
+        if state["progress"]:
+            return sorted(cards, key=lambda c: (box_of(c, all_progress),
+                                                -_wrong_of(c)))
+        return cards
     pick_box_row = ft.Row(spacing=6, wrap=True)
     sel_box_row = ft.Row(spacing=6, wrap=True)
     counter = ft.Text("", size=13, weight=ft.FontWeight.BOLD)
@@ -499,7 +767,8 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
         cards = store.lists[dd_list.value].cards
         if dd_type.value:
             cards = [c for c in cards if c.word_type == dd_type.value]
-        return [c for c in cards if box_of(c, all_progress) in pick_boxes]
+        cards = [c for c in cards if box_of(c, all_progress) in pick_boxes]
+        return _apply_sort(cards, pick_sort)
 
     def selected_cards() -> list[VocabCard]:
         by_id = store.cards_by_id()
@@ -538,6 +807,11 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
         sel_box_row.controls = box_chip_controls(sel_boxes, toggle_sel_box)
         counter.value = f"{len(selected_ids)} Karten ausgewählt"
         tab_selected.label = f"Ausgewählt ({len(selected_ids)})"
+        def box_dot(c: VocabCard) -> ft.Icon:
+            # Farbpunkt der Leitner-Box vor dem Wort (grau = untrainiert)
+            return ft.Icon(ft.Icons.CIRCLE, size=12,
+                           color=box_color(box_of(c, all_progress)))
+
         # linker Reiter: Karten der gefilterten Liste antippen
         pick_col.controls = [
             ft.ListTile(
@@ -547,7 +821,8 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
                     else ft.Icons.RADIO_BUTTON_UNCHECKED,
                     color=ft.Colors.PRIMARY if c.id in selected_ids else None,
                 ),
-                title=ft.Text(c.front),
+                title=ft.Row([box_dot(c), ft.Text(c.front)], spacing=6,
+                             vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 subtitle=ft.Text(c.back),
                 selected=c.id in selected_ids,
                 selected_tile_color=ft.Colors.PRIMARY_CONTAINER,
@@ -555,23 +830,52 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
             )
             for c in filtered()
         ]
-        # rechter Reiter: bereits Ausgewählte, Antippen markiert zum Entfernen
-        selected_col.controls = [
-            ft.ListTile(
+        # rechter Reiter: bereits Ausgewählte, Antippen markiert zum
+        # Entfernen. Ohne Sortier-Umschalter gruppiert nach Ursprungsliste
+        # („Liste X“-Überschriften), sonst flach alphabetisch bzw. nach
+        # Lernstand sortiert.
+        def sel_tile(c: VocabCard) -> ft.Control:
+            return ft.ListTile(
                 dense=True,
                 leading=ft.Icon(
                     ft.Icons.CANCEL if c.id in to_remove else ft.Icons.CHECK_CIRCLE,
                     color=ft.Colors.ERROR if c.id in to_remove else ft.Colors.PRIMARY,
                 ),
-                title=ft.Text(c.front),
+                title=ft.Row([box_dot(c), ft.Text(c.front)], spacing=6,
+                             vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 subtitle=ft.Text(c.back),
                 opacity=0.5 if c.id in to_remove else 1.0,
                 on_click=lambda e, c=c: mark_remove(c),
             )
-            for c in selected_filtered()
-        ] or [ft.Text(
-            "Noch keine Karten ausgewählt." if not selected_ids
-            else "Keine ausgewählten Karten für diesen Filter.", italic=True)]
+
+        sel_alpha_btn.icon_color = (ft.Colors.PRIMARY if sel_sort["alpha"]
+                                    else None)
+        sel_progress_btn.icon_color = (ft.Colors.PRIMARY
+                                       if sel_sort["progress"] else None)
+        pick_alpha_btn.icon_color = (ft.Colors.PRIMARY if pick_sort["alpha"]
+                                     else None)
+        pick_progress_btn.icon_color = (ft.Colors.PRIMARY
+                                        if pick_sort["progress"] else None)
+        shown_sel = selected_filtered()
+        if not shown_sel:
+            selected_col.controls = [ft.Text(
+                "Noch keine Karten ausgewählt." if not selected_ids
+                else "Keine ausgewählten Karten für diesen Filter.",
+                italic=True)]
+        elif sel_sort["alpha"] or sel_sort["progress"]:
+            selected_col.controls = [
+                sel_tile(c) for c in _apply_sort(shown_sel, sel_sort)]
+        else:
+            names = origin_names(store)
+            groups: dict[str, list[VocabCard]] = {}
+            for c in shown_sel:
+                groups.setdefault(names.get(c.id, "Unbekannte Liste"),
+                                  []).append(c)
+            rows: list[ft.Control] = []
+            for name, group in groups.items():
+                rows.append(group_heading(name))
+                rows += [sel_tile(c) for c in group]
+            selected_col.controls = rows
         btn_apply.content = (f"Aktualisieren ({len(to_remove)} entfernen)"
                              if to_remove else "Aktualisieren")
         btn_apply.disabled = not to_remove
@@ -614,10 +918,7 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
             error.value = "Bitte einen Namen eingeben."
             page.update()
             return
-        if not selected_ids:
-            error.value = "Bitte mindestens eine Karte auswählen."
-            page.update()
-            return
+        # 0 Karten sind erlaubt — man darf eine Auswahl auch ganz leeren
         sel.name = name
         sel.card_ids = [c.id for c in selected_cards()]
         store.save_selection(sel)
@@ -630,7 +931,11 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
 
     pick_tab = ft.Column(
         [
-            dd_list, ft.Row([dd_type], spacing=8, wrap=True),
+            dd_list,
+            ft.Row([ft.Container(dd_type, expand=True),
+                    pick_alpha_btn, pick_progress_btn],
+                   spacing=4,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
             pick_box_row,
             ft.Row(
                 [
@@ -647,7 +952,10 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
     )
     selected_tab = ft.Column(
         [
-            ft.Row([dd_type_sel], spacing=8, wrap=True),
+            ft.Row([ft.Container(dd_type_sel, expand=True),
+                    sel_alpha_btn, sel_progress_btn],
+                   spacing=4,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
             sel_box_row,
             ft.Text("Antippen markiert zum Entfernen — wirksam erst mit "
                     "„Aktualisieren“.", size=13, italic=True),
@@ -944,14 +1252,23 @@ def open_card_editor(page, store: ContentStore, vlist: VocabList,
         edit_notes_dialog(page, store, card, on_saved=on_saved)
 
 
-def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
+def list_view(nav, store: ContentStore, vlist: VocabList,
+              progress: ProgressStore | None = None) -> ft.Control:
     page = nav.page
+    all_progress = progress.all() if progress else {}
     cards_col = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO)
     table_col = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO)
     # Worttyp-Filter und Karten-Sortiermodus schließen sich aus: über die
     # Lücken ausgeblendeter Karten hinweg zu verschieben wäre verwirrend.
     # "tab": aktiver Reiter (0 = Karten, 1 = Tabelle)
-    view_state = {"sort_mode": False, "wtype": None, "tab": 0}
+    # "select_mode": Mehrfachauswahl für Massenaktionen (Löschen,
+    # Verschieben, Kopieren, Audio löschen, zur Auswahlliste)
+    # "sort_alpha"/"sort_box": Anzeige-Sortierung (alphabetisch bzw. nach
+    # Lernstand) — wie in den Wortübersichten, ändert die Liste nicht
+    view_state = {"sort_mode": False, "wtype": None, "tab": 0,
+                  "select_mode": False, "sort_alpha": False,
+                  "sort_box": False}
+    selected: set[str] = set()
 
     def open_card(c: VocabCard):
         open_card_editor(page, store, vlist, c, on_saved=refresh)
@@ -967,19 +1284,23 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
         w = getattr(page, "width", None) or 420
         first_w = max(120, 0.30 * w)
         cols = [("Deutsch", 150), ("Plural", 90), ("Artikel", 70),
-                ("Typ", 100), ("Hinweis GR", 130), ("Hinweis DE", 130),
-                ("Notiz GR", 130), ("Notiz DE", 130), ("Formen", 170),
-                ("2. Stamm", 110)]
+                ("Typ", 100), ("Formen", 170), ("2. Stamm", 110),
+                ("Hinweis GR", 130), ("Hinweis DE", 130),
+                ("Notiz GR", 130), ("Notiz DE", 130)]
         max_k = len(cols) - 1
         k = min(max(view_state.get("col_offset", 0), 0), max_k)
         view_state["col_offset"] = k
-        # so viele Spalten ab k, wie neben erste Spalte + Pfeile passen
-        avail = w - first_w - 104
+        # so viele Spalten ab k, wie neben erste Spalte + Pfeile passen.
+        # Breite Spalten (z.B. "Formen") werden auf den freien Platz
+        # gestutzt — sonst würde die Kopfzeile überlaufen und die
+        # ▶/◀-Pfeile aus dem Fenster schieben (Blättern bräche dann ab)
+        avail = max(80, w - first_w - 104)
         visible: list[tuple[str, int]] = []
         used = 0
         for name, cw in cols[k:]:
             if visible and used + cw > avail:
                 break
+            cw = min(cw, avail)
             visible.append((name, cw))
             used += cw
         zebra = ft.Colors.SURFACE_CONTAINER_HIGHEST
@@ -999,23 +1320,34 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
                 refresh()
             return handler
 
+        # Pfeile in einer eigenen Zeile über der Kopfzeile: der Hinweistext
+        # ist flexibel (expand) und macht Platz — die Pfeile können so auf
+        # keiner Fensterbreite abgeschnitten werden (das Blättern blieb
+        # sonst nach einigen Spalten stecken). Sobald die letzte Spalte
+        # sichtbar ist, endet das Blättern — danach kommt ja nichts mehr.
+        at_end = k + len(visible) - 1 >= max_k
+        pager = ft.Row(
+            [ft.Text("Antippen einer Zeile öffnet die Karte · "
+                     "◀ ▶ blättert durch die Spalten.", size=12,
+                     italic=True, expand=True),
+             ft.IconButton(ft.Icons.CHEVRON_LEFT, icon_size=20,
+                           tooltip="Spalte zurück",
+                           on_click=turn(-1), disabled=k == 0),
+             ft.IconButton(ft.Icons.CHEVRON_RIGHT, icon_size=20,
+                           tooltip="Nächste Spalte",
+                           on_click=turn(1), disabled=at_end)],
+            spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
         header = ft.Row(
             [cell("Griechisch", first_w, bold=True)]
-            + [cell(name, cw, bold=True) for name, cw in visible]
-            + [ft.Container(expand=True),
-               ft.IconButton(ft.Icons.CHEVRON_LEFT, icon_size=20,
-                             tooltip="Spalte zurück",
-                             on_click=turn(-1), disabled=k == 0),
-               ft.IconButton(ft.Icons.CHEVRON_RIGHT, icon_size=20,
-                             tooltip="Nächste Spalte",
-                             on_click=turn(1), disabled=k >= max_k)],
+            + [cell(name, cw, bold=True) for name, cw in visible],
             spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
         def values(c: VocabCard) -> tuple:
             return (c.back, c.plural, c.article or "", c.word_type,
-                    c.hints_gr, c.hints_de, c.notes_gr, c.notes_de,
-                    forms_to_text(c.forms), c.stem2)
+                    forms_to_text(c.forms), c.stem2,
+                    c.hints_gr, c.hints_de, c.notes_gr, c.notes_de)
 
         rows = []
         for i, c in enumerate(shown_cards()):
@@ -1030,15 +1362,27 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
             ))
         body = ft.Column(rows, scroll=ft.ScrollMode.AUTO, expand=True,
                          spacing=0)
-        return ft.Column([header, ft.Divider(height=1), body],
+        return ft.Column([pager, header, ft.Divider(height=1), body],
                          spacing=0, expand=True)
 
 
     def shown_cards() -> list[VocabCard]:
-        """Karten nach Worttyp-Filter (im Sortiermodus immer alle)."""
-        if view_state["sort_mode"] or view_state["wtype"] is None:
+        """Karten nach Worttyp-Filter und Anzeige-Sortierung
+        (im Verschiebe-Sortiermodus immer alle, in Listenreihenfolge)."""
+        if view_state["sort_mode"]:
             return vlist.cards
-        return [c for c in vlist.cards if c.word_type == view_state["wtype"]]
+        cards = (vlist.cards if view_state["wtype"] is None else
+                 [c for c in vlist.cards
+                  if c.word_type == view_state["wtype"]])
+        if view_state["sort_alpha"]:
+            return sorted(cards, key=alpha_key)
+        if view_state["sort_box"]:
+            def wrong_of(c: VocabCard) -> int:
+                p = all_progress.get(c.id)
+                return p.wrong if p else 0
+            return sorted(cards, key=lambda c: (box_of(c, all_progress),
+                                                -wrong_of(c)))
+        return cards
 
     def set_filter(wtype: str | None):
         view_state["wtype"] = wtype
@@ -1048,11 +1392,41 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
     def toggle_sort(e):
         view_state["sort_mode"] = not view_state["sort_mode"]
         view_state["wtype"] = None
+        view_state["select_mode"] = False  # entweder sortieren oder markieren
+        # Verschieben braucht die echte Listenreihenfolge
+        view_state["sort_alpha"] = view_state["sort_box"] = False
+        refresh()
+
+    def toggle_select(e):
+        view_state["select_mode"] = not view_state["select_mode"]
+        view_state["sort_mode"] = False
+        if not view_state["select_mode"]:
+            selected.clear()
+        refresh()
+
+    def toggle_alpha(e):
+        view_state["sort_alpha"] = not view_state["sort_alpha"]
+        view_state["sort_box"] = False
+        view_state["sort_mode"] = False
+        refresh()
+
+    def toggle_box_sort(e):
+        view_state["sort_box"] = not view_state["sort_box"]
+        view_state["sort_alpha"] = False
+        view_state["sort_mode"] = False
         refresh()
 
     filter_btn = ft.PopupMenuButton(icon=ft.Icons.FILTER_LIST,
                                     tooltip="Nach Worttyp filtern")
+    alpha_btn = ft.IconButton(ft.Icons.SORT_BY_ALPHA, icon_size=20,
+                              tooltip="Alphabetisch sortieren",
+                              on_click=toggle_alpha)
+    box_sort_btn = ft.IconButton(
+        ft.Icons.SORT, icon_size=20,
+        tooltip="Nach Lernstand sortieren (schlechteste zuerst)",
+        on_click=toggle_box_sort)
     sort_btn = ft.IconButton(on_click=toggle_sort)
+    select_btn = ft.IconButton(ft.Icons.CHECKLIST, on_click=toggle_select)
 
     def refresh_header_buttons():
         present = [t for t in WORD_TYPES
@@ -1075,6 +1449,18 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
         sort_btn.disabled = view_state["tab"] != 0
         sort_btn.tooltip = ("Sortieren beenden" if view_state["sort_mode"]
                             else "Karten verschieben (nur Kartenansicht)")
+        alpha_btn.icon_color = (ft.Colors.PRIMARY
+                                if view_state["sort_alpha"] else None)
+        box_sort_btn.icon_color = (ft.Colors.PRIMARY
+                                   if view_state["sort_box"] else None)
+        # Markiermodus ebenso nur in der Kartenansicht
+        select_btn.icon = (ft.Icons.CHECK if view_state["select_mode"]
+                           else ft.Icons.CHECKLIST)
+        select_btn.icon_color = (ft.Colors.PRIMARY
+                                 if view_state["select_mode"] else None)
+        select_btn.disabled = view_state["tab"] != 0
+        select_btn.tooltip = ("Markieren beenden" if view_state["select_mode"]
+                              else "Wörter markieren (Mehrfachauswahl)")
         # im Sortiermodus ist der Tab-Wechsel gesperrt
         tab_bar.disabled = view_state["sort_mode"]
 
@@ -1100,6 +1486,234 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
             expand=True,
         )
 
+    # --- Mehrfachauswahl (Massenaktionen) ---
+
+    def snack(text: str):
+        page.show_dialog(ft.SnackBar(ft.Text(text)))
+
+    def selected_cards() -> list[VocabCard]:
+        return [c for c in vlist.cards if c.id in selected]
+
+    def toggle_selected(card: VocabCard):
+        if card.id in selected:
+            selected.discard(card.id)
+        else:
+            selected.add(card.id)
+        refresh()
+
+    def select_all(select: bool):
+        if select:
+            selected.update(c.id for c in shown_cards())
+        else:
+            selected.clear()
+        refresh()
+
+    def pick_list_dialog(title: str, targets: list[VocabList], on_pick):
+        """Zielliste wählen (für Verschieben/Kopieren)."""
+        dd = ft.Dropdown(
+            label="Zielliste", value=targets[0].id,
+            options=[ft.DropdownOption(key=l.id, text=l.name)
+                     for l in targets],
+        )
+
+        def ok(e):
+            page.pop_dialog()
+            on_pick(dd.value)
+
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text(title),
+            content=dd,
+            actions=[ft.TextButton("Abbrechen",
+                                   on_click=lambda e: page.pop_dialog()),
+                     ft.FilledButton("OK", on_click=ok)],
+        ))
+
+    def delete_selected(e):
+        cards = selected_cards()
+
+        def do(e):
+            for c in cards:
+                vlist.cards.remove(c)
+            store.save_user_list(vlist)
+            selected.clear()
+            page.pop_dialog()
+            refresh()
+
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text(f"{len(cards)} Karten löschen?"),
+            content=ft.Text("Die markierten Karten werden endgültig "
+                            "aus dieser Liste gelöscht."),
+            actions=[ft.TextButton("Abbrechen",
+                                   on_click=lambda e: page.pop_dialog()),
+                     ft.FilledButton("Löschen", on_click=do)],
+        ))
+
+    def move_selected(e):
+        targets = [l for l in store.ordered_lists()
+                   if l.editable and l.id != vlist.id]
+        if not targets:
+            snack("Keine andere eigene Liste vorhanden.")
+            return
+
+        def do(target_id: str):
+            target = store.lists[target_id]
+            moving = selected_cards()
+            for c in moving:
+                vlist.cards.remove(c)
+            target.cards.extend(moving)
+            store.save_user_list(target)
+            store.save_user_list(vlist)
+            selected.clear()
+            refresh()
+            snack(f"{len(moving)} Karten nach „{target.name}“ verschoben.")
+
+        pick_list_dialog(f"{len(selected)} Karten verschieben", targets, do)
+
+    def copy_selected(e):
+        targets = [l for l in store.ordered_lists()
+                   if l.editable and l.id != vlist.id]
+        if not targets:
+            snack("Keine eigene Zielliste vorhanden — erst eine anlegen.")
+            return
+
+        def do(target_id: str):
+            target = store.lists[target_id]
+            n = 0
+            for c in selected_cards():
+                d = c.to_dict()
+                d.pop("id", None)  # Kopie bekommt eine frische ID
+                copy = VocabCard.from_dict(d)
+                copy.source = "custom"
+                target.cards.append(copy)
+                n += 1
+            store.save_user_list(target)
+            refresh()
+            snack(f"{n} Karten nach „{target.name}“ kopiert.")
+
+        pick_list_dialog(f"{len(selected)} Karten kopieren", targets, do)
+
+    def delete_audio_selected(e):
+        # Gecachte MP3s der markierten Wörter löschen — beim nächsten
+        # Abspielen wird frisches Audio geholt (so lässt sich kaputtes
+        # Audio korrigieren)
+        cache = tts_cache()
+        n = 0
+        for c in selected_cards():
+            path = cache.path_for(speakable(c.front))
+            if path.exists():
+                path.unlink()
+                n += 1
+        snack(f"{n} Audio-Dateien gelöscht — beim nächsten Abspielen "
+              "wird das Audio neu erzeugt.")
+
+    def add_to_selection_selected(e):
+        sels = sorted(store.selections.values(), key=lambda x: x.name)
+        NEW = "__new__"
+        dd = ft.Dropdown(
+            label="Auswahlliste",
+            value=(sels[0].id if sels else NEW),
+            options=[ft.DropdownOption(key=x.id, text=x.name) for x in sels]
+            + [ft.DropdownOption(key=NEW, text="➕ Neue Auswahlliste…")],
+        )
+        tf_name = ft.TextField(label="Name der neuen Auswahlliste",
+                               visible=not sels)
+        error = ft.Text("", color=ft.Colors.ERROR, size=13)
+
+        def on_select(e=None):
+            tf_name.visible = dd.value == NEW
+            page.update()
+
+        # Flet-0.85-Dropdowns feuern on_select (kein on_change)
+        dd.on_select = on_select
+
+        def ok(e):
+            cards = selected_cards()
+            if dd.value == NEW:
+                name = (tf_name.value or "").strip()
+                if not name:
+                    error.value = "Bitte einen Namen eingeben."
+                    page.update()
+                    return
+                sel = SelectionList(name=name,
+                                    card_ids=[c.id for c in cards])
+                store.save_selection(sel)
+                page.pop_dialog()
+                snack(f"Auswahlliste „{name}“ mit {len(cards)} "
+                      "Karten angelegt.")
+                return
+            sel = store.selections[dd.value]
+            new = [c.id for c in cards if c.id not in sel.card_ids]
+            sel.card_ids.extend(new)
+            store.save_selection(sel)
+            page.pop_dialog()
+            snack(f"{len(new)} Karten zu „{sel.name}“ hinzugefügt.")
+
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text(f"{len(selected)} Karten zur Auswahlliste"),
+            content=ft.Column([dd, tf_name, error], tight=True, spacing=10),
+            actions=[ft.TextButton("Abbrechen",
+                                   on_click=lambda e: page.pop_dialog()),
+                     ft.FilledButton("Hinzufügen", on_click=ok)],
+        ))
+
+    def select_action_bar() -> ft.Control:
+        none = not selected
+
+        def act_btn(icon, tooltip, handler, disabled=False):
+            return ft.IconButton(icon, tooltip=tooltip, on_click=handler,
+                                 disabled=disabled or none)
+
+        buttons = [
+            act_btn(ft.Icons.PLAYLIST_ADD, "Zur Auswahlliste hinzufügen…",
+                    add_to_selection_selected),
+            act_btn(ft.Icons.VOLUME_OFF,
+                    "Audio löschen (wird neu erzeugt)",
+                    delete_audio_selected),
+            act_btn(ft.Icons.CONTENT_COPY, "In andere Liste kopieren…",
+                    copy_selected),
+        ]
+        if vlist.editable:
+            buttons += [
+                act_btn(ft.Icons.DRIVE_FILE_MOVE_OUTLINED,
+                        "In andere Liste verschieben…", move_selected),
+                act_btn(ft.Icons.DELETE_OUTLINE, "Markierte löschen…",
+                        delete_selected),
+            ]
+        return ft.Column([
+            ft.Row([
+                ft.Text(f"{len(selected)} markiert", size=13,
+                        weight=ft.FontWeight.BOLD),
+                ft.TextButton("Alle", on_click=lambda e: select_all(True)),
+                ft.TextButton("Keine", on_click=lambda e: select_all(False)),
+            ], spacing=4, wrap=True,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Row(buttons, spacing=0, wrap=True),
+        ], spacing=0)
+
+    def select_tiles(cards: list[VocabCard]) -> list[ft.Control]:
+        return [
+            ft.ListTile(
+                dense=True,
+                leading=ft.Icon(
+                    ft.Icons.CHECK_BOX if c.id in selected
+                    else ft.Icons.CHECK_BOX_OUTLINE_BLANK,
+                    color=ft.Colors.PRIMARY if c.id in selected else None,
+                ),
+                title=ft.Row(
+                    [ft.Icon(ft.Icons.CIRCLE, size=12,
+                             color=box_color(box_of(c, all_progress))),
+                     ft.Text(c.with_plural(c.front), expand=1),
+                     ft.Text(c.back, expand=1)],
+                    spacing=8,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                selected=c.id in selected,
+                selected_tile_color=ft.Colors.PRIMARY_CONTAINER,
+                on_click=lambda e, c=c: toggle_selected(c),
+            )
+            for c in cards
+        ]
+
     def refresh():
         refresh_header_buttons()
         shown = shown_cards()
@@ -1111,6 +1725,16 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
             rows.append(ft.Text("Sortiermodus: Karten am ≡ ziehen.",
                                 italic=True, size=13))
             rows.append(sort_view())
+        elif view_state["select_mode"]:
+            cards_col.scroll = ft.ScrollMode.AUTO
+            rows.append(select_action_bar())
+            if view_state["wtype"]:
+                rows.append(ft.Text(f"Filter: {view_state['wtype']}",
+                                    italic=True, size=13))
+            rows += select_tiles(shown)
+            if vlist.cards and not shown:
+                rows.append(ft.Text("Keine Karten für diesen Worttyp.",
+                                    italic=True))
         else:
             cards_col.scroll = ft.ScrollMode.AUTO
             if vlist.editable:
@@ -1124,10 +1748,12 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
             if view_state["wtype"]:
                 rows.append(ft.Text(f"Filter: {view_state['wtype']}",
                                     italic=True, size=13))
+            # Farbpunkt der Leitner-Box vorne statt Papierkorb hinten —
+            # Löschen läuft über den Markiermodus (Mehrfachauswahl)
             rows += card_tiles(
                 shown,
                 on_click=open_card,
-                on_delete=(lambda c: delete_card(c)) if vlist.editable else None,
+                all_progress=all_progress,
             )
             if vlist.cards and not shown:
                 rows.append(ft.Text("Keine Karten für diesen Worttyp.",
@@ -1139,23 +1765,13 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
             # die Tabelle scrollt selbst (fixe Kopfzeile) — die Spalte
             # darf dann nicht auch noch scrollen
             table_col.scroll = None
-            table_col.controls = [
-                ft.Text("Antippen einer Zeile öffnet die Karte · "
-                        "◀ ▶ blättert durch die Spalten.", size=12,
-                        italic=True),
-                build_table(),
-            ]
+            table_col.controls = [build_table()]
         else:
             table_col.scroll = ft.ScrollMode.AUTO
             table_col.controls = [
                 ft.Text("Keine Karten für diesen Worttyp." if vlist.cards
                         else "Noch keine Karten in dieser Liste.")]
         page.update()
-
-    def delete_card(card: VocabCard):
-        vlist.cards.remove(card)
-        store.save_user_list(vlist)
-        refresh()
 
     # Zwei Reiter: Kartenliste und Tabelle aller Werte; die TabBarView
     # lässt sich auch per Links-rechts-Wischen wechseln. Rechts neben den
@@ -1165,7 +1781,8 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
         ft.Tab(label="Karten", icon=ft.Icons.VIEW_AGENDA_OUTLINED),
         ft.Tab(label="Tabelle", icon=ft.Icons.TABLE_ROWS_OUTLINED),
     ])
-    header_row = [ft.Container(tab_bar, expand=True), filter_btn]
+    header_row = [ft.Container(tab_bar, expand=True), filter_btn,
+                  alpha_btn, box_sort_btn, select_btn]
     if vlist.editable:
         header_row.append(sort_btn)
 

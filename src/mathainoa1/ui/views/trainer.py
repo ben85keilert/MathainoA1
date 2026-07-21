@@ -85,6 +85,25 @@ def edit_notes_dialog(page: ft.Page, store: ContentStore, card: VocabCard,
     ))
 
 
+def typing_controls(tf_answer: ft.TextField, check) -> list[ft.Control]:
+    """Antwortfeld + Prüfen für den Schreibmodus — Stil per Einstellung:
+    „Prüfen“-Button mittig unter dem Feld (Standard) oder rundes
+    Häkchen rechts daneben (kompakt, spart Höhe bei Tastatur).
+    Wird von Vokabel-, Nomen- und Verbtrainer gemeinsam genutzt."""
+    if load_app_settings().check_beside_field:
+        return [ft.Row(
+            [ft.Container(tf_answer, expand=True),
+             ft.IconButton(
+                 ft.Icons.CHECK, tooltip="Prüfen", icon_size=28,
+                 style=ft.ButtonStyle(bgcolor=ft.Colors.PRIMARY_CONTAINER),
+                 on_click=check)],
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )]
+    return [tf_answer,
+            ft.FilledButton("Prüfen", icon=ft.Icons.CHECK, on_click=check)]
+
+
 def setup_view(nav, store: ContentStore, progress: ProgressStore,
                preselect_id: str | None = None) -> ft.Control:
     s = load_default_settings()
@@ -228,7 +247,8 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         nav.go(
             f"Auswahl ({len(cards)} Karten)",
             ft.Column(
-                [header, word_list_panel(nav.page, cards, progress.all())],
+                [header, word_list_panel(nav.page, cards, progress.all(),
+                                         store=store, source_id=list_id)],
                 spacing=4, expand=True,
             ),
         )
@@ -257,7 +277,13 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
 
     return ft.Column(
         [
-            dd_list,
+            # Lautsprecher (Auto-Vorlesen) oben rechts — ungefähr dort,
+            # wo er auch in der Trainingsrunde sitzt; gespeichert wie
+            # die anderen Einstellungen (app_settings.json)
+            ft.Row([ft.Container(dd_list, expand=True),
+                    autoplay_button(nav.page)],
+                   spacing=8,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Row([ft.TextButton("Neue Auswahlliste erstellen…",
                                   icon=ft.Icons.PLAYLIST_ADD, on_click=new_selection)]),
             ft.Row([dd_type], spacing=8),
@@ -342,26 +368,30 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     btn_notes = ft.TextButton("Notizen", icon=ft.Icons.STICKY_NOTE_2_OUTLINED)
     btn_hint = ft.TextButton("Hinweis", icon=ft.Icons.LIGHTBULB_OUTLINE)
     btn_edit = ft.IconButton(ft.Icons.EDIT_NOTE, tooltip="Hinweise/Notizen bearbeiten")
-    hint_row = ft.Row([btn_notes, btn_hint, btn_edit],
-                      alignment=ft.MainAxisAlignment.CENTER)
+    # Notizen/Hinweis auf Höhe ihrer eingeblendeten Texte; darunter die
+    # Zeile mit den drei Symbolen (Anhören, Langsam, Bearbeiten)
+    hint_row = ft.Row([btn_notes, btn_hint],
+                      alignment=ft.MainAxisAlignment.CENTER, spacing=0)
     # Per Klick eingeblendet — gilt nur für die aktuelle Karte
     revealed = {"notes": False, "hints": False, "answered": False}
 
+    # Audiobuttons neben dem Bearbeiten-Symbol: drei Symbole in einer
+    # kompakten Zeile direkt über dem Antwortfeld
     btn_play = ft.IconButton(
         ft.Icons.VOLUME_UP, tooltip="Anhören",
         on_click=lambda e: play_text(nav.page, shown["card"].front))
     btn_play_slow = ft.IconButton(
         ft.Icons.SLOW_MOTION_VIDEO, tooltip="Langsam — zum Nachsprechen",
         on_click=lambda e: play_text(nav.page, shown["card"].front, slow=True))
-    audio_row = ft.Row([btn_play, btn_play_slow],
-                       alignment=ft.MainAxisAlignment.CENTER, visible=False)
+    icons_row = ft.Row([btn_play, btn_play_slow, btn_edit],
+                       alignment=ft.MainAxisAlignment.CENTER, spacing=0)
 
     def update_audio_row():
         # Immer die griechische Seite abspielen — bei DE->GR also erst nach
         # dem Aufdecken, sonst wäre die Antwort verraten
         card = shown["card"]
-        audio_row.visible = (session.prompt_side(card) == "gr"
-                             or revealed["answered"])
+        on = session.prompt_side(card) == "gr" or revealed["answered"]
+        btn_play.visible = btn_play_slow.visible = on
 
     def refresh_notes():
         card = shown["card"]
@@ -447,10 +477,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
                                                     on_click=reveal)]
         else:
             tf_answer.value = ""
-            action_area.controls = [
-                tf_answer,
-                ft.FilledButton("Prüfen", icon=ft.Icons.CHECK, on_click=check),
-            ]
+            action_area.controls = typing_controls(tf_answer, check)
         refresh_notes()
         # GR->DE: das griechische Wort steht schon in der Frage
         if session.prompt_side(card) == "gr":
@@ -501,6 +528,14 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         result = session.check_typed(given)
         weiter = ft.FilledButton("Weiter", icon=ft.Icons.ARROW_FORWARD,
                                  on_click=lambda e: show_card(), autofocus=True)
+
+        def show_own(e, g=given):
+            wrong_label.value = "Meine Antwort:"
+            wrong_eye.visible = False
+            own_answer.value = g if g.strip() else "(leer)"
+            own_answer.visible = True
+            nav.page.update()
+
         if result == Result.CORRECT:
             feedback.value = "Richtig!"
             feedback.color = ft.Colors.GREEN
@@ -518,18 +553,13 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
             action_area.controls = [weiter]
         else:
             feedback.value = ""
-            btn_wrong.visible = True
-
-            def show_own(e, g=given):
-                wrong_label.value = "Meine Antwort:"
-                wrong_eye.visible = False
-                own_answer.value = g if g.strip() else "(leer)"
-                own_answer.visible = True
-                nav.page.update()
-
-            btn_wrong.on_click = show_own
             # Abstand, damit man nicht versehentlich "Weiter" trifft
             action_area.controls = [ft.Container(height=24), weiter]
+        if result != Result.CORRECT:
+            # Auch bei Akzent-/Groß-Klein-Fehlern die eigene (falsche)
+            # Antwort einblendbar machen — nur so sieht man den Fehler
+            btn_wrong.visible = True
+            btn_wrong.on_click = show_own
         answer.value = display
         after_answer()
 
@@ -537,15 +567,18 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     return ft.Column(
         [
             ft.Row([progress_label, round_label, autoplay_button(nav.page)],
-                   alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                   alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
             seg_mode,
-            ft.Container(prompt, padding=ft.Padding.symmetric(vertical=20)),
-            audio_row,
+            ft.Container(prompt, padding=ft.Padding.symmetric(vertical=8)),
             notes_col, hint_row,
+            icons_row,
             answer, feedback, btn_wrong, own_answer,
             action_area,
         ],
-        spacing=12,
+        # enge Abstände: mit allen Symbolen darf der Prüfen-Button bei
+        # eingeblendeter Tastatur nicht unter den Rand rutschen
+        spacing=6,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         scroll=ft.ScrollMode.AUTO,
     )

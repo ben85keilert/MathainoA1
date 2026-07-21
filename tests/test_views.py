@@ -68,10 +68,148 @@ def test_main_views_build(store_with_edge_cases, tmp_path):
         grammar.setup_view(nav, store, progress)
         grammar.conjugation_setup_view(nav, store, progress)
         manager.manager_view(nav, store, progress)
-        manager.list_view(nav, store, vlist)
+        manager.list_view(nav, store, vlist, progress)
         manager.selection_editor(nav, store, None, lambda s: None, progress)
     finally:
         progress.close()
+
+
+def test_word_list_panel_groups_selection(store_with_edge_cases):
+    """Auswahllisten-Wortübersicht: die Wörter stehen unter der Überschrift
+    ihrer jeweiligen Ursprungsliste — auch bei Karten aus mehreren Listen."""
+    from mathainoa1.models import SelectionList, VocabCard, VocabList
+    from mathainoa1.ui.views import wordlist
+    store, vlist = store_with_edge_cases
+    other = VocabList(name="Zweite Liste", cards=[
+        VocabCard(front="η θάλασσα", back="Meer", article="η",
+                  word_type="Nomen")])
+    store.save_user_list(other)
+    cards = list(vlist.cards) + list(other.cards)
+    sel = SelectionList(name="Meine Auswahl",
+                        card_ids=[c.id for c in cards])
+    store.save_selection(sel)
+    nav = _fake_nav()
+    panel = wordlist.word_list_panel(nav.page, store.cards_for(sel.id), {},
+                                     store=store, source_id=sel.id)
+
+    def texts(ctrl, out):
+        import flet as ft
+        if isinstance(ctrl, ft.Text) and ctrl.value:
+            out.append(ctrl.value)
+        for attr in ("controls", "content", "title", "subtitle"):
+            sub = getattr(ctrl, attr, None)
+            subs = sub if isinstance(sub, list) else [sub]
+            for s in subs:
+                if isinstance(s, ft.Control):
+                    texts(s, out)
+
+    found: list[str] = []
+    texts(panel, found)
+    # beide Ursprungslisten-Überschriften erscheinen, jede Karte unter ihrer
+    assert vlist.name in found and "Zweite Liste" in found
+    # das Wort der zweiten Liste steht NACH deren Überschrift
+    idx_head = found.index("Zweite Liste")
+    idx_word = next(i for i, t in enumerate(found) if "θάλασσα" in t)
+    assert idx_word > idx_head
+
+
+def test_word_list_panel_alpha_sort(store_with_edge_cases):
+    """alpha_key sortiert ohne Artikel und Akzente griechisch-alphabetisch."""
+    from mathainoa1.ui.views.wordlist import alpha_key
+    store, vlist = store_with_edge_cases
+    keys = sorted(alpha_key(c) for c in vlist.cards)
+    assert keys == sorted(keys)
+    # Artikel zählt nicht mit: "το μετρό" sortiert unter μ, nicht τ
+    metro = next(c for c in vlist.cards if "μετρό" in c.front)
+    assert alpha_key(metro).startswith("μ")
+
+
+def test_selection_editor_groups_and_sorts(store_with_edge_cases, tmp_path):
+    """Reiter „Ausgewählt“: Ursprungslisten-Überschriften erscheinen, und
+    die Sortier-Umschalter (alphabetisch/Lernstand) bauen ohne Fehler."""
+    import flet as ft
+    from mathainoa1.models import SelectionList, VocabCard, VocabList
+    store, vlist = store_with_edge_cases
+    other = VocabList(name="Editor-Zweitliste", cards=[
+        VocabCard(front="η θάλασσα", back="Meer", article="η",
+                  word_type="Nomen")])
+    store.save_user_list(other)
+    sel = SelectionList(name="Auswahl", card_ids=[
+        c.id for c in list(vlist.cards) + list(other.cards)])
+    store.save_selection(sel)
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "sel.db")
+    try:
+        view = manager.selection_editor(nav, store, sel,
+                                        lambda s: None, progress)
+
+        def collect(ctrl, out):
+            if isinstance(ctrl, ft.Text) and ctrl.value:
+                out.append(ctrl.value)
+            if isinstance(ctrl, ft.IconButton) and ctrl.tooltip:
+                out.append(ctrl.tooltip)
+            for attr in ("controls", "content", "title", "subtitle"):
+                sub = getattr(ctrl, attr, None)
+                subs = sub if isinstance(sub, list) else [sub]
+                for s in subs:
+                    if isinstance(s, ft.Control):
+                        collect(s, out)
+
+        found: list[str] = []
+        collect(view, found)
+        # Gruppierung: beide Ursprungslisten als Überschrift
+        assert vlist.name in found and "Editor-Zweitliste" in found
+        # Sortier-Umschalter vorhanden — und Umschalten baut fehlerfrei
+        assert any("Alphabetisch sortieren" in t for t in found)
+        assert any("Lernstand" in t for t in found)
+
+        def find_btn(ctrl, tooltip_part):
+            if (isinstance(ctrl, ft.IconButton) and ctrl.tooltip
+                    and tooltip_part in ctrl.tooltip):
+                return ctrl
+            for attr in ("controls", "content", "title"):
+                sub = getattr(ctrl, attr, None)
+                subs = sub if isinstance(sub, list) else [sub]
+                for s in subs:
+                    if isinstance(s, ft.Control):
+                        hit = find_btn(s, tooltip_part)
+                        if hit is not None:
+                            return hit
+            return None
+
+        find_btn(view, "Alphabetisch sortieren").on_click(None)
+        find_btn(view, "Lernstand").on_click(None)
+    finally:
+        progress.close()
+
+
+def test_list_view_select_mode(store_with_edge_cases):
+    """Markiermodus: Umschalter aktiviert die Mehrfachauswahl-Zeile."""
+    store, vlist = store_with_edge_cases
+    nav = _fake_nav()
+    view = manager.list_view(nav, store, vlist)
+
+    def find_icon_button(ctrl, tooltip):
+        import flet as ft
+        if isinstance(ctrl, ft.IconButton) and ctrl.tooltip == tooltip:
+            return ctrl
+        for attr in ("controls", "content", "title"):
+            sub = getattr(ctrl, attr, None)
+            subs = sub if isinstance(sub, list) else [sub]
+            for s in subs:
+                if isinstance(s, ft.Control):
+                    hit = find_icon_button(s, tooltip)
+                    if hit is not None:
+                        return hit
+        return None
+
+    import flet as ft
+    btn = find_icon_button(view, "Wörter markieren (Mehrfachauswahl)")
+    assert btn is not None
+    btn.on_click(None)  # Markiermodus an — baut die Auswahl-Kacheln
+    assert find_icon_button(view, "Markieren beenden") is not None
+    assert find_icon_button(view, "Markierte löschen…") is not None
+    assert find_icon_button(view, "Audio löschen (wird neu erzeugt)") is not None
 
 
 def test_verb_preview_sample_no_crash(store_with_edge_cases):

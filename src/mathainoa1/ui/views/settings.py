@@ -118,6 +118,17 @@ def settings_view(nav) -> ft.Control:
     sw_high.on_change = on_high
     sw_top.on_change = on_top
 
+    # --- Abfrage: Prüfbutton-Stil beim Schreiben ---
+    sw_check = ft.Switch(
+        label="Prüf-Häkchen rechts neben dem Antwortfeld (kompakt)",
+        value=s.check_beside_field)
+
+    def on_check(e):
+        s.check_beside_field = sw_check.value
+        save_app_settings(s)
+
+    sw_check.on_change = on_check
+
     def _h(text: str) -> ft.Text:
         return ft.Text(text, size=16, weight=ft.FontWeight.BOLD)
 
@@ -142,6 +153,12 @@ def settings_view(nav) -> ft.Control:
                     size=13, italic=True),
             sw_high,
             sw_top,
+            ft.Divider(),
+            ft.Text("Prüfen beim Schreiben", size=13),
+            ft.Text("Aus = „Prüfen“-Button mittig unter dem Antwortfeld, "
+                    "an = rundes Häkchen rechts daneben (spart Platz bei "
+                    "eingeblendeter Tastatur).", size=13, italic=True),
+            sw_check,
         ],
         spacing=12,
         scroll=ft.ScrollMode.AUTO,
