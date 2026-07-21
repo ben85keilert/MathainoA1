@@ -29,10 +29,13 @@ from mathainoa1.storage.tts import TtsFetchError, speakable
 from mathainoa1.ui.audio import tts_cache
 from mathainoa1.ui.views.trainer import edit_notes_dialog
 from mathainoa1.ui.views.wordlist import (
+    alpha_key,
     box_chip_controls,
     box_of,
     card_tiles,
     drag_row,
+    group_heading,
+    origin_names,
 )
 
 ARTICLES = ["", "ο", "η", "το", "οι", "τα"]
@@ -486,6 +489,31 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
     )
     dd_type = ft.Dropdown(label="Worttyp", value="")
     dd_type_sel = ft.Dropdown(label="Worttyp", value="")
+    # Sortierung im Reiter "Ausgewählt": ohne Umschalter gruppiert nach
+    # Ursprungsliste, sonst alphabetisch bzw. nach Lernstand (wie in den
+    # Wortübersichten)
+    sel_sort = {"alpha": False, "progress": False}
+
+    def toggle_sel_alpha(e):
+        sel_sort["alpha"] = not sel_sort["alpha"]
+        sel_sort["progress"] = False
+        refresh()
+
+    def toggle_sel_progress(e):
+        sel_sort["progress"] = not sel_sort["progress"]
+        sel_sort["alpha"] = False
+        refresh()
+
+    sel_alpha_btn = ft.IconButton(
+        ft.Icons.SORT_BY_ALPHA,
+        tooltip="Alphabetisch sortieren (über alle Ursprungslisten)",
+        on_click=toggle_sel_alpha,
+    )
+    sel_progress_btn = ft.IconButton(
+        ft.Icons.SORT,
+        tooltip="Nach Lernstand sortieren (schlechteste zuerst)",
+        on_click=toggle_sel_progress,
+    )
     pick_box_row = ft.Row(spacing=6, wrap=True)
     sel_box_row = ft.Row(spacing=6, wrap=True)
     counter = ft.Text("", size=13, weight=ft.FontWeight.BOLD)
@@ -555,9 +583,12 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
             )
             for c in filtered()
         ]
-        # rechter Reiter: bereits Ausgewählte, Antippen markiert zum Entfernen
-        selected_col.controls = [
-            ft.ListTile(
+        # rechter Reiter: bereits Ausgewählte, Antippen markiert zum
+        # Entfernen. Ohne Sortier-Umschalter gruppiert nach Ursprungsliste
+        # („Liste X“-Überschriften), sonst flach alphabetisch bzw. nach
+        # Lernstand sortiert.
+        def sel_tile(c: VocabCard) -> ft.Control:
+            return ft.ListTile(
                 dense=True,
                 leading=ft.Icon(
                     ft.Icons.CANCEL if c.id in to_remove else ft.Icons.CHECK_CIRCLE,
@@ -568,10 +599,39 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
                 opacity=0.5 if c.id in to_remove else 1.0,
                 on_click=lambda e, c=c: mark_remove(c),
             )
-            for c in selected_filtered()
-        ] or [ft.Text(
-            "Noch keine Karten ausgewählt." if not selected_ids
-            else "Keine ausgewählten Karten für diesen Filter.", italic=True)]
+
+        sel_alpha_btn.icon_color = (ft.Colors.PRIMARY if sel_sort["alpha"]
+                                    else None)
+        sel_progress_btn.icon_color = (ft.Colors.PRIMARY
+                                       if sel_sort["progress"] else None)
+        shown_sel = selected_filtered()
+        if not shown_sel:
+            selected_col.controls = [ft.Text(
+                "Noch keine Karten ausgewählt." if not selected_ids
+                else "Keine ausgewählten Karten für diesen Filter.",
+                italic=True)]
+        elif sel_sort["alpha"]:
+            selected_col.controls = [
+                sel_tile(c) for c in sorted(shown_sel, key=alpha_key)]
+        elif sel_sort["progress"]:
+            def wrong_of(c: VocabCard) -> int:
+                p = all_progress.get(c.id)
+                return p.wrong if p else 0
+            selected_col.controls = [
+                sel_tile(c) for c in sorted(
+                    shown_sel,
+                    key=lambda c: (box_of(c, all_progress), -wrong_of(c)))]
+        else:
+            names = origin_names(store)
+            groups: dict[str, list[VocabCard]] = {}
+            for c in shown_sel:
+                groups.setdefault(names.get(c.id, "Unbekannte Liste"),
+                                  []).append(c)
+            rows: list[ft.Control] = []
+            for name, group in groups.items():
+                rows.append(group_heading(name))
+                rows += [sel_tile(c) for c in group]
+            selected_col.controls = rows
         btn_apply.content = (f"Aktualisieren ({len(to_remove)} entfernen)"
                              if to_remove else "Aktualisieren")
         btn_apply.disabled = not to_remove
@@ -644,7 +704,10 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
     )
     selected_tab = ft.Column(
         [
-            ft.Row([dd_type_sel], spacing=8, wrap=True),
+            ft.Row([ft.Container(dd_type_sel, expand=True),
+                    sel_alpha_btn, sel_progress_btn],
+                   spacing=4,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
             sel_box_row,
             ft.Text("Antippen markiert zum Entfernen — wirksam erst mit "
                     "„Aktualisieren“.", size=13, italic=True),

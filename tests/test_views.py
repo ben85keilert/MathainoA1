@@ -124,6 +124,65 @@ def test_word_list_panel_alpha_sort(store_with_edge_cases):
     assert alpha_key(metro).startswith("μ")
 
 
+def test_selection_editor_groups_and_sorts(store_with_edge_cases, tmp_path):
+    """Reiter „Ausgewählt“: Ursprungslisten-Überschriften erscheinen, und
+    die Sortier-Umschalter (alphabetisch/Lernstand) bauen ohne Fehler."""
+    import flet as ft
+    from mathainoa1.models import SelectionList, VocabCard, VocabList
+    store, vlist = store_with_edge_cases
+    other = VocabList(name="Editor-Zweitliste", cards=[
+        VocabCard(front="η θάλασσα", back="Meer", article="η",
+                  word_type="Nomen")])
+    store.save_user_list(other)
+    sel = SelectionList(name="Auswahl", card_ids=[
+        c.id for c in list(vlist.cards) + list(other.cards)])
+    store.save_selection(sel)
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "sel.db")
+    try:
+        view = manager.selection_editor(nav, store, sel,
+                                        lambda s: None, progress)
+
+        def collect(ctrl, out):
+            if isinstance(ctrl, ft.Text) and ctrl.value:
+                out.append(ctrl.value)
+            if isinstance(ctrl, ft.IconButton) and ctrl.tooltip:
+                out.append(ctrl.tooltip)
+            for attr in ("controls", "content", "title", "subtitle"):
+                sub = getattr(ctrl, attr, None)
+                subs = sub if isinstance(sub, list) else [sub]
+                for s in subs:
+                    if isinstance(s, ft.Control):
+                        collect(s, out)
+
+        found: list[str] = []
+        collect(view, found)
+        # Gruppierung: beide Ursprungslisten als Überschrift
+        assert vlist.name in found and "Editor-Zweitliste" in found
+        # Sortier-Umschalter vorhanden — und Umschalten baut fehlerfrei
+        assert any("Alphabetisch sortieren" in t for t in found)
+        assert any("Lernstand" in t for t in found)
+
+        def find_btn(ctrl, tooltip_part):
+            if (isinstance(ctrl, ft.IconButton) and ctrl.tooltip
+                    and tooltip_part in ctrl.tooltip):
+                return ctrl
+            for attr in ("controls", "content", "title"):
+                sub = getattr(ctrl, attr, None)
+                subs = sub if isinstance(sub, list) else [sub]
+                for s in subs:
+                    if isinstance(s, ft.Control):
+                        hit = find_btn(s, tooltip_part)
+                        if hit is not None:
+                            return hit
+            return None
+
+        find_btn(view, "Alphabetisch sortieren").on_click(None)
+        find_btn(view, "Lernstand").on_click(None)
+    finally:
+        progress.close()
+
+
 def test_list_view_select_mode(store_with_edge_cases):
     """Markiermodus: Umschalter aktiviert die Mehrfachauswahl-Zeile."""
     store, vlist = store_with_edge_cases
