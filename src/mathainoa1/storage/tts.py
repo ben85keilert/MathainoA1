@@ -30,11 +30,21 @@ class TtsFetchError(Exception):
 def speakable(text: str) -> str:
     """Sprechbare Form eines Kartentexts.
 
-    - erste "/"-Alternative ("και / κι" -> "και")
+    - Ein-Wort-Alternativen am Anfang: erste Variante plus Rest
+      ("ο / η συνταξιούχος" -> "ο συνταξιούχος", "και / κι" -> "και")
+    - sonst erste "/"-Alternative ("τα λέμε / γεια" -> "τα λέμε")
     - Klammern im Wort auffüllen ("αγαπ(ά)ω" -> "αγαπάω")
     - freistehende Klammerzusätze streichen ("η Ένωση (ΕΕ)" -> "η Ένωση")
     """
-    t = text.split("/")[0]
+    t = text.strip()
+    # "ο / η συνταξιούχος": die "/"-Gruppe besteht aus einzelnen Wörtern,
+    # der gemeinsame Rest gehört zu jeder Variante — erste Variante nehmen,
+    # Rest behalten (der alte split("/") ließe nur "ο" übrig)
+    m = re.match(r"^(\S+)(?:\s*/\s*\S+)+(\s.*)?$", t)
+    if m:
+        t = m.group(1) + (m.group(2) or "")
+    else:
+        t = t.split("/")[0]
     t = re.sub(r"(?<=\S)\(([^)]*)\)", r"\1", t)
     t = re.sub(r"\s*\([^)]*\)", "", t)
     return " ".join(t.split())

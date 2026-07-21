@@ -74,6 +74,75 @@ def test_main_views_build(store_with_edge_cases, tmp_path):
         progress.close()
 
 
+def test_word_list_panel_groups_selection(store_with_edge_cases):
+    """Auswahllisten-Wortübersicht: Überschrift der Ursprungsliste erscheint;
+    der Alphabet-Umschalter sortiert flach über alle Listen."""
+    from mathainoa1.models import SelectionList
+    from mathainoa1.ui.views import wordlist
+    store, vlist = store_with_edge_cases
+    sel = SelectionList(name="Meine Auswahl",
+                        card_ids=[c.id for c in vlist.cards])
+    store.save_selection(sel)
+    nav = _fake_nav()
+    panel = wordlist.word_list_panel(nav.page, vlist.cards, {},
+                                     store=store, source_id=sel.id)
+
+    def texts(ctrl, out):
+        import flet as ft
+        if isinstance(ctrl, ft.Text) and ctrl.value:
+            out.append(ctrl.value)
+        for attr in ("controls", "content", "title", "subtitle"):
+            sub = getattr(ctrl, attr, None)
+            subs = sub if isinstance(sub, list) else [sub]
+            for s in subs:
+                if isinstance(s, ft.Control):
+                    texts(s, out)
+
+    found: list[str] = []
+    texts(panel, found)
+    assert vlist.name in found  # Überschrift „Liste X“ über der Gruppe
+
+
+def test_word_list_panel_alpha_sort(store_with_edge_cases):
+    """alpha_key sortiert ohne Artikel und Akzente griechisch-alphabetisch."""
+    from mathainoa1.ui.views.wordlist import alpha_key
+    store, vlist = store_with_edge_cases
+    keys = sorted(alpha_key(c) for c in vlist.cards)
+    assert keys == sorted(keys)
+    # Artikel zählt nicht mit: "το μετρό" sortiert unter μ, nicht τ
+    metro = next(c for c in vlist.cards if "μετρό" in c.front)
+    assert alpha_key(metro).startswith("μ")
+
+
+def test_list_view_select_mode(store_with_edge_cases):
+    """Markiermodus: Umschalter aktiviert die Mehrfachauswahl-Zeile."""
+    store, vlist = store_with_edge_cases
+    nav = _fake_nav()
+    view = manager.list_view(nav, store, vlist)
+
+    def find_icon_button(ctrl, tooltip):
+        import flet as ft
+        if isinstance(ctrl, ft.IconButton) and ctrl.tooltip == tooltip:
+            return ctrl
+        for attr in ("controls", "content", "title"):
+            sub = getattr(ctrl, attr, None)
+            subs = sub if isinstance(sub, list) else [sub]
+            for s in subs:
+                if isinstance(s, ft.Control):
+                    hit = find_icon_button(s, tooltip)
+                    if hit is not None:
+                        return hit
+        return None
+
+    import flet as ft
+    btn = find_icon_button(view, "Wörter markieren (Mehrfachauswahl)")
+    assert btn is not None
+    btn.on_click(None)  # Markiermodus an — baut die Auswahl-Kacheln
+    assert find_icon_button(view, "Markieren beenden") is not None
+    assert find_icon_button(view, "Markierte löschen…") is not None
+    assert find_icon_button(view, "Audio löschen (wird neu erzeugt)") is not None
+
+
 def test_verb_preview_sample_no_crash(store_with_edge_cases):
     """Der Vorschau-Pfad selbst (nicht nur der View-Aufbau): jede Verbform
     liefert einen String, auch das custom-Verb ohne 2. Person Plural."""

@@ -211,6 +211,11 @@ def conjugate_future(verb: Verb, person: int, number: str) -> list[str]:
 @dataclass
 class ConjugationSettings:
     mode: str = "typing"  # "flashcard" | "typing"
+    # Vorgabe: "de" = deutscher Infinitiv (schwerer — das griechische Verb
+    # muss mit erinnert werden), "gr" = griechisches Lemma (leichter; die
+    # 1. Person Singular Präsens wird dann nicht abgefragt, denn sie IST
+    # das angezeigte Lemma)
+    direction: str = "de"
     word_count: int = 20
     persons: list[int] = field(default_factory=lambda: [1, 2, 3])
     numbers: list[str] = field(default_factory=lambda: ["sg", "pl"])
@@ -233,8 +238,8 @@ class ConjugationTask:
     card: VocabCard
     person: int
     number: str
-    prompt: str  # deutscher Infinitiv (Rückseite der Karte)
-    meaning: str  # leer — die Bedeutung ist ja die Frage
+    prompt: str  # deutscher Infinitiv ODER griechisches Lemma (direction)
+    meaning: str  # deutsche Bedeutung bei griechischer Vorgabe, sonst leer
     expected: str  # kanonische Form, z.B. "μένετε" / "θα γράψετε"
     variants: list[str] = field(default_factory=list)
     tense: str = "present"
@@ -265,7 +270,11 @@ def conjugatable_verbs(cards: list[VocabCard]) -> list[tuple[VocabCard, Verb]]:
 
 
 def build_task(card: VocabCard, verb: Verb, person: int, number: str,
-               tense: str = "present") -> ConjugationTask | None:
+               tense: str = "present",
+               direction: str = "de") -> ConjugationTask | None:
+    """direction "de": Vorgabe ist der deutsche Infinitiv. direction "gr":
+    Vorgabe ist das griechische Lemma, die deutsche Bedeutung wird dazu
+    eingeblendet."""
     if tense == "future":
         forms = conjugate_future(verb, person, number)
         if not forms:
@@ -278,15 +287,21 @@ def build_task(card: VocabCard, verb: Verb, person: int, number: str,
         if not forms:
             return None
         expected, variants = forms[0], forms[1:]
+    if direction == "gr":
+        prompt, meaning = card.front, card.back
+    else:
+        prompt, meaning = card.back, ""
     return ConjugationTask(card=card, person=person, number=number,
-                           prompt=card.back, meaning="",
+                           prompt=prompt, meaning=meaning,
                            expected=expected, variants=variants, tense=tense)
 
 
 def generate_tasks(cards: list[VocabCard], settings: ConjugationSettings,
                    rng: random.Random | None = None) -> list[ConjugationTask]:
     """Alle Aufgaben für die Auswahl: je Verb × Zeit × Person × Zahl
-    (mischt selbst). Verben ohne 2. Stamm liefern keine Futur-Aufgaben."""
+    (mischt selbst). Verben ohne 2. Stamm liefern keine Futur-Aufgaben.
+    Bei griechischer Vorgabe entfällt die 1. Person Singular Präsens —
+    sie stünde als Lemma schon in der Frage."""
     rng = rng or random.Random()
     tenses = [t for t in settings.tenses if t in TENSES] or ["present"]
     tasks = []
@@ -296,7 +311,11 @@ def generate_tasks(cards: list[VocabCard], settings: ConjugationSettings,
                 continue
             for person in settings.persons:
                 for number in settings.numbers:
-                    task = build_task(card, verb, person, number, tense)
+                    if (settings.direction == "gr" and tense == "present"
+                            and person == 1 and number == "sg"):
+                        continue
+                    task = build_task(card, verb, person, number, tense,
+                                      direction=settings.direction)
                     if task is not None:
                         tasks.append(task)
     rng.shuffle(tasks)

@@ -160,6 +160,34 @@ def test_settings_roundtrip():
     assert ConjugationSettings.from_dict(s.to_dict()) == s
 
 
+def test_build_task_greek_prompt():
+    v = verb("μένω", "wohnen")
+    task = build_task(v, parse_verb(v), 2, "pl", direction="gr")
+    assert task.prompt == "μένω"
+    assert task.meaning == "wohnen"
+    assert task.expected == "μένετε"
+
+
+def test_generate_tasks_greek_skips_1sg_present():
+    cards = [verb("μένω", "wohnen")]
+    settings = ConjugationSettings(persons=[1, 2], numbers=["sg"],
+                                   direction="gr")
+    tasks = generate_tasks(cards, settings, rng=random.Random(1))
+    # 1. Person Singular Präsens entfällt — sie ist das angezeigte Lemma
+    assert sorted(t.expected for t in tasks) == ["μένεις"]
+    assert all(t.prompt == "μένω" for t in tasks)
+
+
+def test_generate_tasks_greek_keeps_1sg_future():
+    card = verb("γράφω", "schreiben")
+    card.stem2 = "γράψ-"
+    settings = ConjugationSettings(persons=[1], numbers=["sg"],
+                                   tenses=["future"], direction="gr")
+    tasks = generate_tasks([card], settings, rng=random.Random(1))
+    # im Futur ist die 1. Person Singular nicht offensichtlich
+    assert [t.expected for t in tasks] == ["θα γράψω"]
+
+
 # --- Unregelmäßige Formen (Karten-Feld forms) ---
 
 def test_verb_form_override():

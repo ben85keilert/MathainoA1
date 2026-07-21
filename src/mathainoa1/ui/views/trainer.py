@@ -228,7 +228,8 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         nav.go(
             f"Auswahl ({len(cards)} Karten)",
             ft.Column(
-                [header, word_list_panel(nav.page, cards, progress.all())],
+                [header, word_list_panel(nav.page, cards, progress.all(),
+                                         store=store, source_id=list_id)],
                 spacing=4, expand=True,
             ),
         )
@@ -347,21 +348,22 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     # Per Klick eingeblendet — gilt nur für die aktuelle Karte
     revealed = {"notes": False, "hints": False, "answered": False}
 
+    # Audiobuttons oben in der Statuszeile (nicht zwischen Frage und
+    # Antwort): so bleibt der Prüfen-Button auch bei eingeblendeter
+    # Tastatur ohne Scrollen erreichbar
     btn_play = ft.IconButton(
         ft.Icons.VOLUME_UP, tooltip="Anhören",
         on_click=lambda e: play_text(nav.page, shown["card"].front))
     btn_play_slow = ft.IconButton(
         ft.Icons.SLOW_MOTION_VIDEO, tooltip="Langsam — zum Nachsprechen",
         on_click=lambda e: play_text(nav.page, shown["card"].front, slow=True))
-    audio_row = ft.Row([btn_play, btn_play_slow],
-                       alignment=ft.MainAxisAlignment.CENTER, visible=False)
 
     def update_audio_row():
         # Immer die griechische Seite abspielen — bei DE->GR also erst nach
         # dem Aufdecken, sonst wäre die Antwort verraten
         card = shown["card"]
-        audio_row.visible = (session.prompt_side(card) == "gr"
-                             or revealed["answered"])
+        on = session.prompt_side(card) == "gr" or revealed["answered"]
+        btn_play.visible = btn_play_slow.visible = on
 
     def refresh_notes():
         card = shown["card"]
@@ -447,9 +449,19 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
                                                     on_click=reveal)]
         else:
             tf_answer.value = ""
+            # Prüfen direkt neben dem Feld: kein Scrollen nötig, wenn die
+            # Tastatur eingeblendet ist
             action_area.controls = [
-                tf_answer,
-                ft.FilledButton("Prüfen", icon=ft.Icons.CHECK, on_click=check),
+                ft.Row(
+                    [ft.Container(tf_answer, expand=True),
+                     ft.IconButton(
+                         ft.Icons.CHECK, tooltip="Prüfen", icon_size=28,
+                         style=ft.ButtonStyle(
+                             bgcolor=ft.Colors.PRIMARY_CONTAINER),
+                         on_click=check)],
+                    spacing=8,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
             ]
         refresh_notes()
         # GR->DE: das griechische Wort steht schon in der Frage
@@ -501,6 +513,14 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         result = session.check_typed(given)
         weiter = ft.FilledButton("Weiter", icon=ft.Icons.ARROW_FORWARD,
                                  on_click=lambda e: show_card(), autofocus=True)
+
+        def show_own(e, g=given):
+            wrong_label.value = "Meine Antwort:"
+            wrong_eye.visible = False
+            own_answer.value = g if g.strip() else "(leer)"
+            own_answer.visible = True
+            nav.page.update()
+
         if result == Result.CORRECT:
             feedback.value = "Richtig!"
             feedback.color = ft.Colors.GREEN
@@ -518,34 +538,32 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
             action_area.controls = [weiter]
         else:
             feedback.value = ""
-            btn_wrong.visible = True
-
-            def show_own(e, g=given):
-                wrong_label.value = "Meine Antwort:"
-                wrong_eye.visible = False
-                own_answer.value = g if g.strip() else "(leer)"
-                own_answer.visible = True
-                nav.page.update()
-
-            btn_wrong.on_click = show_own
             # Abstand, damit man nicht versehentlich "Weiter" trifft
             action_area.controls = [ft.Container(height=24), weiter]
+        if result != Result.CORRECT:
+            # Auch bei Akzent-/Groß-Klein-Fehlern die eigene (falsche)
+            # Antwort einblendbar machen — nur so sieht man den Fehler
+            btn_wrong.visible = True
+            btn_wrong.on_click = show_own
         answer.value = display
         after_answer()
 
     show_card()
     return ft.Column(
         [
-            ft.Row([progress_label, round_label, autoplay_button(nav.page)],
-                   alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            ft.Row([progress_label, round_label,
+                    ft.Row([btn_play, btn_play_slow,
+                            autoplay_button(nav.page)],
+                           tight=True, spacing=0)],
+                   alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
             seg_mode,
-            ft.Container(prompt, padding=ft.Padding.symmetric(vertical=20)),
-            audio_row,
+            ft.Container(prompt, padding=ft.Padding.symmetric(vertical=8)),
             notes_col, hint_row,
             answer, feedback, btn_wrong, own_answer,
             action_area,
         ],
-        spacing=12,
+        spacing=8,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         scroll=ft.ScrollMode.AUTO,
     )
