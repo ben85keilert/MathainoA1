@@ -343,20 +343,23 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     btn_notes = ft.TextButton("Notizen", icon=ft.Icons.STICKY_NOTE_2_OUTLINED)
     btn_hint = ft.TextButton("Hinweis", icon=ft.Icons.LIGHTBULB_OUTLINE)
     btn_edit = ft.IconButton(ft.Icons.EDIT_NOTE, tooltip="Hinweise/Notizen bearbeiten")
-    hint_row = ft.Row([btn_notes, btn_hint, btn_edit],
-                      alignment=ft.MainAxisAlignment.CENTER)
+    # Notizen/Hinweis auf Höhe ihrer eingeblendeten Texte; darunter die
+    # Zeile mit den drei Symbolen (Anhören, Langsam, Bearbeiten)
+    hint_row = ft.Row([btn_notes, btn_hint],
+                      alignment=ft.MainAxisAlignment.CENTER, spacing=0)
     # Per Klick eingeblendet — gilt nur für die aktuelle Karte
     revealed = {"notes": False, "hints": False, "answered": False}
 
-    # Audiobuttons oben in der Statuszeile (nicht zwischen Frage und
-    # Antwort): so bleibt der Prüfen-Button auch bei eingeblendeter
-    # Tastatur ohne Scrollen erreichbar
+    # Audiobuttons neben dem Bearbeiten-Symbol: drei Symbole in einer
+    # kompakten Zeile direkt über dem Antwortfeld
     btn_play = ft.IconButton(
         ft.Icons.VOLUME_UP, tooltip="Anhören",
         on_click=lambda e: play_text(nav.page, shown["card"].front))
     btn_play_slow = ft.IconButton(
         ft.Icons.SLOW_MOTION_VIDEO, tooltip="Langsam — zum Nachsprechen",
         on_click=lambda e: play_text(nav.page, shown["card"].front, slow=True))
+    icons_row = ft.Row([btn_play, btn_play_slow, btn_edit],
+                       alignment=ft.MainAxisAlignment.CENTER, spacing=0)
 
     def update_audio_row():
         # Immer die griechische Seite abspielen — bei DE->GR also erst nach
@@ -551,19 +554,19 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     show_card()
     return ft.Column(
         [
-            ft.Row([progress_label, round_label,
-                    ft.Row([btn_play, btn_play_slow,
-                            autoplay_button(nav.page)],
-                           tight=True, spacing=0)],
+            ft.Row([progress_label, round_label, autoplay_button(nav.page)],
                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             seg_mode,
             ft.Container(prompt, padding=ft.Padding.symmetric(vertical=8)),
             notes_col, hint_row,
+            icons_row,
             answer, feedback, btn_wrong, own_answer,
             action_area,
         ],
-        spacing=8,
+        # enge Abstände: mit allen Symbolen darf der Prüfen-Button bei
+        # eingeblendeter Tastatur nicht unter den Rand rutschen
+        spacing=6,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         scroll=ft.ScrollMode.AUTO,
     )

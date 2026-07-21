@@ -41,6 +41,33 @@ def _save_note_dialog(page: ft.Page, data, tf_draft: ft.TextField,
     ))
 
 
+def _edit_note_dialog(page: ft.Page, data, note: Note, on_saved) -> None:
+    """Überschrift und Text einer gespeicherten Notiz nachträglich ändern."""
+    tf_title = ft.TextField(label="Überschrift", value=note.title)
+    tf_text = ft.TextField(label="Text", value=note.text,
+                           multiline=True, min_lines=4, max_lines=10)
+
+    def save(e):
+        title = (tf_title.value or "").strip()
+        if not title:
+            tf_title.error_text = "Überschrift darf nicht leer sein."
+            page.update()
+            return
+        note.title = title
+        note.text = tf_text.value or ""
+        save_notes(data)
+        page.pop_dialog()
+        on_saved()
+
+    page.show_dialog(ft.AlertDialog(
+        title=ft.Text("Notiz bearbeiten"),
+        content=ft.Column([tf_title, tf_text], tight=True, spacing=12,
+                          width=400, scroll=ft.ScrollMode.AUTO),
+        actions=[ft.TextButton("Abbrechen", on_click=lambda e: page.pop_dialog()),
+                 ft.FilledButton("Speichern", on_click=save)],
+    ))
+
+
 def _confirm_delete_dialog(page: ft.Page, data, note: Note,
                            on_deleted) -> None:
     def delete(e):
@@ -100,6 +127,11 @@ def notes_view(nav) -> ft.Control:
                     ft.Text(note.title, weight=ft.FontWeight.BOLD, expand=True),
                     ft.Text(_short_date(note.created), size=12,
                             color=ft.Colors.OUTLINE),
+                    ft.IconButton(
+                        ft.Icons.EDIT_OUTLINED, tooltip="Notiz bearbeiten",
+                        on_click=lambda e, n=note: _edit_note_dialog(
+                            page, data, n, refresh),
+                    ),
                     ft.IconButton(
                         ft.Icons.DELETE_OUTLINE, tooltip="Notiz löschen",
                         on_click=lambda e, n=note: _confirm_delete_dialog(

@@ -75,16 +75,21 @@ def test_main_views_build(store_with_edge_cases, tmp_path):
 
 
 def test_word_list_panel_groups_selection(store_with_edge_cases):
-    """Auswahllisten-Wortübersicht: Überschrift der Ursprungsliste erscheint;
-    der Alphabet-Umschalter sortiert flach über alle Listen."""
-    from mathainoa1.models import SelectionList
+    """Auswahllisten-Wortübersicht: die Wörter stehen unter der Überschrift
+    ihrer jeweiligen Ursprungsliste — auch bei Karten aus mehreren Listen."""
+    from mathainoa1.models import SelectionList, VocabCard, VocabList
     from mathainoa1.ui.views import wordlist
     store, vlist = store_with_edge_cases
+    other = VocabList(name="Zweite Liste", cards=[
+        VocabCard(front="η θάλασσα", back="Meer", article="η",
+                  word_type="Nomen")])
+    store.save_user_list(other)
+    cards = list(vlist.cards) + list(other.cards)
     sel = SelectionList(name="Meine Auswahl",
-                        card_ids=[c.id for c in vlist.cards])
+                        card_ids=[c.id for c in cards])
     store.save_selection(sel)
     nav = _fake_nav()
-    panel = wordlist.word_list_panel(nav.page, vlist.cards, {},
+    panel = wordlist.word_list_panel(nav.page, store.cards_for(sel.id), {},
                                      store=store, source_id=sel.id)
 
     def texts(ctrl, out):
@@ -100,7 +105,12 @@ def test_word_list_panel_groups_selection(store_with_edge_cases):
 
     found: list[str] = []
     texts(panel, found)
-    assert vlist.name in found  # Überschrift „Liste X“ über der Gruppe
+    # beide Ursprungslisten-Überschriften erscheinen, jede Karte unter ihrer
+    assert vlist.name in found and "Zweite Liste" in found
+    # das Wort der zweiten Liste steht NACH deren Überschrift
+    idx_head = found.index("Zweite Liste")
+    idx_word = next(i for i, t in enumerate(found) if "θάλασσα" in t)
+    assert idx_word > idx_head
 
 
 def test_word_list_panel_alpha_sort(store_with_edge_cases):

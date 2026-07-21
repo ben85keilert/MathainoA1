@@ -614,10 +614,7 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
             error.value = "Bitte einen Namen eingeben."
             page.update()
             return
-        if not selected_ids:
-            error.value = "Bitte mindestens eine Karte auswählen."
-            page.update()
-            return
+        # 0 Karten sind erlaubt — man darf eine Auswahl auch ganz leeren
         sel.name = name
         sel.card_ids = [c.id for c in selected_cards()]
         store.save_selection(sel)
@@ -971,9 +968,9 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
         w = getattr(page, "width", None) or 420
         first_w = max(120, 0.30 * w)
         cols = [("Deutsch", 150), ("Plural", 90), ("Artikel", 70),
-                ("Typ", 100), ("Hinweis GR", 130), ("Hinweis DE", 130),
-                ("Notiz GR", 130), ("Notiz DE", 130), ("Formen", 170),
-                ("2. Stamm", 110)]
+                ("Typ", 100), ("Formen", 170), ("2. Stamm", 110),
+                ("Hinweis GR", 130), ("Hinweis DE", 130),
+                ("Notiz GR", 130), ("Notiz DE", 130)]
         max_k = len(cols) - 1
         k = min(max(view_state.get("col_offset", 0), 0), max_k)
         view_state["col_offset"] = k
@@ -1010,7 +1007,9 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
         # Pfeile in einer eigenen Zeile über der Kopfzeile: der Hinweistext
         # ist flexibel (expand) und macht Platz — die Pfeile können so auf
         # keiner Fensterbreite abgeschnitten werden (das Blättern blieb
-        # sonst nach einigen Spalten stecken)
+        # sonst nach einigen Spalten stecken). Sobald die letzte Spalte
+        # sichtbar ist, endet das Blättern — danach kommt ja nichts mehr.
+        at_end = k + len(visible) - 1 >= max_k
         pager = ft.Row(
             [ft.Text("Antippen einer Zeile öffnet die Karte · "
                      "◀ ▶ blättert durch die Spalten.", size=12,
@@ -1020,7 +1019,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
                            on_click=turn(-1), disabled=k == 0),
              ft.IconButton(ft.Icons.CHEVRON_RIGHT, icon_size=20,
                            tooltip="Nächste Spalte",
-                           on_click=turn(1), disabled=k >= max_k)],
+                           on_click=turn(1), disabled=at_end)],
             spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
         header = ft.Row(
@@ -1031,8 +1030,8 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
 
         def values(c: VocabCard) -> tuple:
             return (c.back, c.plural, c.article or "", c.word_type,
-                    c.hints_gr, c.hints_de, c.notes_gr, c.notes_de,
-                    forms_to_text(c.forms), c.stem2)
+                    forms_to_text(c.forms), c.stem2,
+                    c.hints_gr, c.hints_de, c.notes_gr, c.notes_de)
 
         rows = []
         for i, c in enumerate(shown_cards()):
@@ -1256,19 +1255,41 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
 
     def add_to_selection_selected(e):
         sels = sorted(store.selections.values(), key=lambda x: x.name)
-        if not sels:
-            snack("Noch keine Auswahlliste vorhanden — erst eine anlegen "
-                  "(Vokabelverwaltung → Neue Auswahlliste).")
-            return
+        NEW = "__new__"
         dd = ft.Dropdown(
-            label="Auswahlliste", value=sels[0].id,
-            options=[ft.DropdownOption(key=x.id, text=x.name) for x in sels],
+            label="Auswahlliste",
+            value=(sels[0].id if sels else NEW),
+            options=[ft.DropdownOption(key=x.id, text=x.name) for x in sels]
+            + [ft.DropdownOption(key=NEW, text="➕ Neue Auswahlliste…")],
         )
+        tf_name = ft.TextField(label="Name der neuen Auswahlliste",
+                               visible=not sels)
+        error = ft.Text("", color=ft.Colors.ERROR, size=13)
+
+        def on_select(e=None):
+            tf_name.visible = dd.value == NEW
+            page.update()
+
+        # Flet-0.85-Dropdowns feuern on_select (kein on_change)
+        dd.on_select = on_select
 
         def ok(e):
+            cards = selected_cards()
+            if dd.value == NEW:
+                name = (tf_name.value or "").strip()
+                if not name:
+                    error.value = "Bitte einen Namen eingeben."
+                    page.update()
+                    return
+                sel = SelectionList(name=name,
+                                    card_ids=[c.id for c in cards])
+                store.save_selection(sel)
+                page.pop_dialog()
+                snack(f"Auswahlliste „{name}“ mit {len(cards)} "
+                      "Karten angelegt.")
+                return
             sel = store.selections[dd.value]
-            new = [c.id for c in selected_cards()
-                   if c.id not in sel.card_ids]
+            new = [c.id for c in cards if c.id not in sel.card_ids]
             sel.card_ids.extend(new)
             store.save_selection(sel)
             page.pop_dialog()
@@ -1276,7 +1297,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList) -> ft.Control:
 
         page.show_dialog(ft.AlertDialog(
             title=ft.Text(f"{len(selected)} Karten zur Auswahlliste"),
-            content=dd,
+            content=ft.Column([dd, tf_name, error], tight=True, spacing=10),
             actions=[ft.TextButton("Abbrechen",
                                    on_click=lambda e: page.pop_dialog()),
                      ft.FilledButton("Hinzufügen", on_click=ok)],

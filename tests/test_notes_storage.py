@@ -48,6 +48,37 @@ def test_unknown_keys_ignored(tmp_path, monkeypatch):
     assert data.notes[0].created == ""
 
 
+def test_edit_note_dialog_saves(tmp_path, monkeypatch):
+    """Gespeicherte Notizen sind bearbeitbar: Dialog ändert Titel und Text."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    data = NotesData(notes=[Note(title="Alt", text="x",
+                                 created="2026-07-21T10:15:00")])
+    save_notes(data)
+    from mathainoa1.ui.views.notes import _edit_note_dialog
+
+    dialogs = []
+    page = SimpleNamespace(update=lambda: None,
+                           show_dialog=lambda d: dialogs.append(d),
+                           pop_dialog=lambda: None, run_task=lambda f: None)
+    refreshed = []
+    _edit_note_dialog(page, data, data.notes[0], lambda: refreshed.append(1))
+    dlg = dialogs[0]
+    tf_title, tf_text = dlg.content.controls
+    tf_title.value = "Neu"
+    tf_text.value = "geänderter Text"
+    dlg.actions[1].on_click(None)  # Speichern
+    loaded = load_notes()
+    assert loaded.notes[0].title == "Neu"
+    assert loaded.notes[0].text == "geänderter Text"
+    assert refreshed
+    # leere Überschrift wird abgelehnt (Notiz bleibt unverändert)
+    _edit_note_dialog(page, data, data.notes[0], lambda: None)
+    dlg2 = dialogs[1]
+    dlg2.content.controls[0].value = "  "
+    dlg2.actions[1].on_click(None)
+    assert load_notes().notes[0].title == "Neu"
+
+
 def test_notes_view_builds(tmp_path, monkeypatch):
     """Headless-Smoke-Test wie in test_views: View baut ohne Fenster."""
     monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
