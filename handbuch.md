@@ -76,21 +76,33 @@ ein fertiger Chatbot-Prompt, der aus einer Liste griechischer Wörter
 
 ## Audio (Aussprache)
 
-Die App spricht jedes griechische Wort selbst — über die
-**Sprachausgabe des Geräts** (Systemstimme). Alles läuft lokal auf dem
-Gerät: kein Internet nötig, es werden keine Daten übertragen.
+Die App spricht jedes griechische Wort selbst. In den **Einstellungen**
+(Zahnrad) stehen zwei Wege zur Wahl:
+
+- **Systemstimme (Standard)**: spricht offline über die Sprachausgabe
+  des Geräts — es werden keine Daten übertragen. Auf Android ist die
+  griechische Stimme meist schon dabei; unter Windows das Sprachpaket
+  „Ελληνικά" (mit Text-in-Sprache) installieren. Fehlt die Stimme,
+  zeigt das Antippen einen Hinweis.
+- **Google (online)**: holt das Audio von Google-Servern — dabei werden
+  der gesprochene Text und die IP-Adresse übertragen (Details in der
+  [Datenschutzerklärung](DATENSCHUTZ.md)). Danach liegt die Aufnahme im
+  lokalen Cache und spielt offline. Für Geräte ohne griechische
+  Systemstimme (z.B. Linux).
+
+Bedienung:
 
 - **Lautsprecher-Symbol an jeder Karte** in den Listenansichten:
   **kurz antippen** spielt normal, **lang drücken** langsam (zum
   Nachsprechen). Im Vokabeltraining erscheinen Lautsprecher- und
   Langsam-Symbol unter der Karte — aber erst, wenn die griechische
   Seite sichtbar ist, damit die Antwort nicht verraten wird.
-- Voraussetzung ist eine **installierte griechische Stimme**. Windows:
-  Einstellungen → Zeit und Sprache → Sprache → „Ελληνικά“ hinzufügen
-  (mit Text-in-Sprache). Fehlt die Stimme, zeigt das Antippen einen
-  entsprechenden Hinweis.
-- **Android**: Die Systemstimme ist dort noch nicht angebunden — die
-  Sprachausgabe gibt es unter Android in einer späteren Version.
+- Nur im Google-Modus: **„Audio vorbereiten"** im Listenmenü (⋮, auch
+  bei Buchlisten) lädt alle Wörter einer Liste auf einmal in den
+  Cache — praktisch vor einer Reise, damit die ganze Liste offline
+  anhörbar ist (~100 Wörter in 1–2 Minuten, etwa 1–1,5 MB). Wird ein
+  Wort geändert, entsteht beim nächsten Abspielen automatisch neues
+  Audio; veraltetes Audio kann es nicht geben.
 
 **Auto-Play:** In allen drei Trainings sitzt oben rechts ein
 Lautsprecher-Umschalter. Ist er an, wird automatisch vorgelesen, sobald
@@ -101,10 +113,11 @@ der Lösung. **Nomen- und Verbtraining sprechen die echte Lösungsform**
 ein Lautsprecher-Symbol neben der aufgedeckten Lösung. Die Einstellung
 bleibt gespeichert.
 
-Fehlt die griechische Stimme, scheitert Auto-Play lautlos; manuelles
-Antippen zeigt einen kurzen Hinweis. Klammern und Alternativen werden
-beim Sprechen bereinigt: „αγαπ(ά)ω“ wird als „αγαπάω“ gesprochen,
-„και / κι“ als „και“, Zusätze wie „(ΕΕ)“ entfallen.
+Scheitert die Wiedergabe (fehlende Stimme bzw. im Google-Modus kein
+Internet), bleibt Auto-Play lautlos; manuelles Antippen zeigt einen
+kurzen Hinweis. Klammern und Alternativen werden beim Sprechen
+bereinigt: „αγαπ(ά)ω“ wird als „αγαπάω“ gesprochen, „και / κι“ als
+„και“, Zusätze wie „(ΕΕ)“ entfallen.
 
 ## Wie kommt die Statistik zustande?
 

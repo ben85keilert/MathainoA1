@@ -9,10 +9,13 @@ from __future__ import annotations
 import flet as ft
 
 from mathainoa1.storage.settings import (
+    TTS_GOOGLE,
+    TTS_SYSTEM,
     AppSettings,
     load_app_settings,
     save_app_settings,
 )
+from mathainoa1.ui.audio import set_tts_engine
 
 # Auswählbare Akzentfarben (Schlüssel wird in AppSettings.seed gespeichert)
 SEED_COLORS: dict[str, tuple[str, str]] = {
@@ -129,6 +132,34 @@ def settings_view(nav) -> ft.Control:
 
     sw_check.on_change = on_check
 
+    # --- Sprachausgabe: Weg wählen ---
+    rg_tts = ft.RadioGroup(
+        value=(s.tts_engine if s.tts_engine in (TTS_SYSTEM, TTS_GOOGLE)
+               else TTS_SYSTEM),
+        content=ft.Column([
+            ft.Radio(value=TTS_SYSTEM, label="Systemstimme (Standard)"),
+            ft.Text("Spricht offline über die Sprachausgabe des Geräts — "
+                    "es werden keine Daten übertragen. Braucht eine "
+                    "installierte griechische Stimme (Android: meist schon "
+                    "dabei; Windows: Sprachpaket „Ελληνικά“ hinzufügen). "
+                    "Nicht verfügbar in der Entwicklungs-Vorschau und "
+                    "unter Linux.", size=13, italic=True),
+            ft.Radio(value=TTS_GOOGLE, label="Google (online)"),
+            ft.Text("Holt das Audio von Google-Servern — dabei werden der "
+                    "gesprochene Text und die IP-Adresse an Google (USA) "
+                    "übertragen. Danach liegt das Audio im lokalen Cache "
+                    "und spielt offline. Für Geräte ohne griechische "
+                    "Systemstimme; „Audio vorbereiten“ im Listenmenü lädt "
+                    "ganze Listen vor.", size=13, italic=True),
+        ], spacing=4),
+    )
+
+    def on_tts(e):
+        set_tts_engine(rg_tts.value or TTS_SYSTEM)
+        s.tts_engine = rg_tts.value or TTS_SYSTEM
+
+    rg_tts.on_change = on_tts
+
     def _h(text: str) -> ft.Text:
         return ft.Text(text, size=16, weight=ft.FontWeight.BOLD)
 
@@ -159,6 +190,9 @@ def settings_view(nav) -> ft.Control:
                     "an = rundes Häkchen rechts daneben (spart Platz bei "
                     "eingeblendeter Tastatur).", size=13, italic=True),
             sw_check,
+            ft.Divider(),
+            _h("Sprachausgabe"),
+            rg_tts,
         ],
         spacing=12,
         scroll=ft.ScrollMode.AUTO,

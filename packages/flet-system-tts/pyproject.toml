@@ -1,0 +1,25 @@
+[project]
+name = "flet-system-tts"
+version = "0.1.0"
+description = "Flet-Erweiterung: Sprachausgabe über die Systemstimme des Geräts (flutter_tts)"
+requires-python = ">=3.12"
+dependencies = [
+    "flet>=0.85,<0.86",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Flache Struktur wie bei flet-audio: das Python-Paket plus der
+# Flutter-Quellbaum unter flutter/ — flet build erkennt installierte
+# Pakete mit flutter/-Verzeichnis und kompiliert deren Dart-Teil in
+# den App-Client.
+[tool.setuptools.packages.find]
+include = ["flet_system_tts", "flutter.flet_system_tts"]
+
+[tool.setuptools.package-data]
+"flutter.flet_system_tts" = [
+    "pubspec.yaml",
+    "lib/**",
+]

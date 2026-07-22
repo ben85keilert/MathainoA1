@@ -357,25 +357,36 @@ def help_view(nav, store=None) -> ft.Control:
     ])
 
     audio = _chapter(nav, "Audio (Aussprache)", ft.Icons.VOLUME_UP, [
-        _p("Die App spricht jedes griechische Wort selbst — über die "
-           "Sprachausgabe des Geräts (Systemstimme). Alles läuft lokal: "
-           "kein Internet nötig, es werden keine Daten übertragen."),
+        _p("Die App spricht jedes griechische Wort selbst. In den "
+           "Einstellungen (Zahnrad) stehen zwei Wege zur Wahl:"),
+        _bullets([
+            "Systemstimme (Standard): spricht offline über die "
+            "Sprachausgabe des Geräts — es werden keine Daten übertragen. "
+            "Auf Android ist die griechische Stimme meist schon dabei; "
+            "unter Windows das Sprachpaket „Ελληνικά“ (mit "
+            "Text-in-Sprache) installieren. Fehlt die Stimme, zeigt das "
+            "Antippen einen Hinweis.",
+            "Google (online): holt das Audio von Google-Servern — dabei "
+            "werden der Text und die IP-Adresse übertragen. Danach liegt "
+            "die Aufnahme im lokalen Cache und spielt offline. Für "
+            "Geräte ohne griechische Systemstimme.",
+        ]),
+        _p("Bedienung in allen Listen und Trainings:"),
         _bullets([
             "Lautsprecher-Symbol an jeder Karte: kurz antippen spielt "
             "normal, lang drücken langsam (zum Nachsprechen). Im "
             "Vokabeltraining gibt es dafür zwei Symbole unter der Karte — "
             "sie erscheinen erst, wenn die griechische Seite sichtbar ist.",
-            "Voraussetzung ist eine installierte griechische Stimme. "
-            "Windows: Einstellungen → Zeit und Sprache → Sprache → "
-            "„Ελληνικά“ hinzufügen (mit Text-in-Sprache). Fehlt die "
-            "Stimme, zeigt das Antippen einen entsprechenden Hinweis.",
             "Auto-Play: In allen drei Trainings schaltet das "
             "Lautsprecher-Symbol oben rechts um, ob automatisch "
             "vorgelesen wird, sobald der griechische Text erscheint. "
             "Nomen- und Verbtraining sprechen dabei die echte "
             "Lösungsform, z.B. „θα γράψετε“ oder „τους δρόμους“.",
-            "Unter Android ist die Systemstimme noch nicht angebunden — "
-            "die Sprachausgabe gibt es dort in einer späteren Version.",
+            "Nur im Google-Modus: „Audio vorbereiten“ im Listenmenü (⋮) "
+            "lädt alle Wörter einer Liste auf einmal in den Cache — "
+            "praktisch vor einer Reise (~100 Wörter in 1–2 Minuten, "
+            "etwa 1–1,5 MB). „Audio löschen“ in der Mehrfachauswahl "
+            "erneuert kaputte Aufnahmen.",
         ]),
     ])
 

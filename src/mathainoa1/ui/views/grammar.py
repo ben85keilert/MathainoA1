@@ -633,7 +633,7 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
 
     make_tasks(settings) erzeugt die Aufgaben für "Neue Runde".
     Die aufgedeckte Lösungsform (task.expected, z.B. "θα γράψετε" oder
-    "τους μικρούς δρόμους") lässt sich anhören — die Systemstimme spricht
+    "τους μικρούς δρόμους") lässt sich anhören — die Sprachausgabe spricht
     auch gebeugte Formen, nicht nur die Grundform.
     """
     progress_label = ft.Text("", size=13)

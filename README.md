@@ -13,9 +13,12 @@ Statistik einfließt) stehen im [Handbuch](handbuch.md).
 ## Voraussetzungen
 
 - Python >= 3.12
-- Für die Sprachausgabe: eine installierte griechische Systemstimme
-  (Windows: Einstellungen → Zeit und Sprache → Sprache → „Ελληνικά“
-  mit Text-in-Sprache hinzufügen; Linux: espeak-ng)
+- Sprachausgabe: standardmäßig spricht die **Systemstimme des Geräts**
+  (eigene Flet-Extension [`packages/flet-system-tts`](packages/flet-system-tts)
+  um flutter_tts) — sie funktioniert nur in per `flet build` gebauten
+  Apps und nicht unter Linux. Im Dev-Betrieb (`flet run`) bzw. auf
+  Geräten ohne griechische Stimme in den App-Einstellungen auf
+  „Google (online)“ umschalten (gTTS + lokaler Cache).
 
 ## Installation
 
@@ -28,11 +31,11 @@ pip install -r requirements-dev.txt
 pip install -r requirements.txt
 ```
 
-Alternativ über die Projektdefinition selbst:
-
-```bash
-pip install -e ".[dev]"
-```
+Hinweis: `pip install -e .` funktioniert **nicht** — die lokale
+Extension `flet-system-tts` ist für pip nur über den relativen Pfad in
+den requirements-Dateien auflösbar (`flet build` nutzt stattdessen
+`[tool.uv.sources]` aus `pyproject.toml`). Immer aus dem
+Repo-Stammverzeichnis installieren.
 
 ## Starten
 
@@ -43,6 +46,12 @@ flet run
 # Live-Vorschau auf einem Android-Gerät (Flet-App aus dem Play Store nötig):
 flet run --android
 ```
+
+Die vorgebauten Dev-Clients von `flet run` / `flet run --android`
+enthalten die `flet-system-tts`-Extension **nicht** — die Systemstimme
+lässt sich nur in einer per `flet build apk` gebauten App testen. Im
+Dev-Betrieb dafür in den App-Einstellungen die Sprachausgabe auf
+„Google (online)“ stellen.
 
 **Windows-Hinweis:** Die `.venv`-Aktivierungsskripte setzen `PYTHONUTF8=1`,
 da `flet run --android` sonst beim Anzeigen des QR-Codes/Links mit
@@ -91,9 +100,10 @@ git push --tags
 - **Datenschutzerklärung**: In der Play Console eine öffentlich
   erreichbare URL hinterlegen — z.B. die GitHub-Ansicht von
   [DATENSCHUTZ.md](DATENSCHUTZ.md).
-- **Datensicherheits-Formular**: „Es werden keine Nutzerdaten erhoben
-  oder weitergegeben“ — die App speichert alles lokal und überträgt
-  nichts (siehe [Datenschutz](#datenschutz)).
+- **Datensicherheits-Formular**: Es werden keine Nutzerdaten erhoben;
+  im optionalen Google-Modus der Sprachausgabe wird der Wort-Text (mit
+  IP-Adresse) an Google übertragen — als optionale Weitergabe
+  deklarieren (siehe [Datenschutz](#datenschutz)).
 - **Zielgruppe**: nicht an Kinder gerichtet (Lern-App für Erwachsene).
 
 ## Vokabellisten
@@ -105,11 +115,14 @@ im gitignorierten Ordner `private/` und kommen nie ins Repository.
 
 ## Datenschutz
 
-Die App erhebt und überträgt keine Daten: kein Konto, kein Tracking,
-keine Verbindung zu externen Servern. Lernfortschritt, Notizen, Listen
-und Einstellungen liegen ausschließlich lokal auf dem Gerät; die
-Sprachausgabe nutzt die Systemstimme des Geräts (offline). Details in
-der [Datenschutzerklärung](DATENSCHUTZ.md).
+Die App erhebt keine Daten: kein Konto, kein Tracking, keine
+Analyse-Dienste. Lernfortschritt, Notizen, Listen und Einstellungen
+liegen ausschließlich lokal auf dem Gerät. Die Sprachausgabe nutzt
+standardmäßig die Systemstimme des Geräts (offline, keine
+Übertragung); nur der optional wählbare Google-Modus überträgt beim
+Laden eines Worts den Text und die IP-Adresse an Google und cacht das
+Audio danach lokal. Details in der
+[Datenschutzerklärung](DATENSCHUTZ.md).
 
 ## Lizenz
 

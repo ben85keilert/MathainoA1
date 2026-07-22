@@ -54,7 +54,7 @@ jobs:
       - name: Tests laufen lassen
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -r requirements-dev.txt
           pytest -q
 
       # Android-Gradle-Builds laufen am zuverlässigsten auf JDK 17

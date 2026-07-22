@@ -6,9 +6,18 @@ requires-python = ">=3.12"
 license = { file = "LICENSE" }
 dependencies = [
     "flet>=0.85,<0.86",
-    "pyttsx3>=2.99,<3",
+    "flet-audio>=0.85,<0.86",
+    "flet-system-tts",
+    "gTTS>=2.5,<3",
     "fpdf2>=2.8,<3",
 ]
+
+# flet build löst Abhängigkeiten mit uv auf — der lokale Pfad zur
+# Extension kommt daher hierher. Für pip (Tests, lokale Installation)
+# steht derselbe Pfad relativ in requirements.txt; ein nacktes
+# "pip install -e ." funktioniert NICHT (pip kennt uv-Sources nicht).
+[tool.uv.sources]
+flet-system-tts = { path = "packages/flet-system-tts" }
 
 [project.optional-dependencies]
 dev = [
@@ -18,6 +27,13 @@ dev = [
 
 # --- Packaging (flet build apk / macos / ...) ---
 [tool.flet]
+# "flet run" lädt sich unter Linux standardmäßig den schlanken "light"-
+# Desktop-Client, dem u.a. flet-audio (audioplayers) fehlt — der
+# Google-Audioweg bliebe stumm. "full" erzwingt den vollständigen Client
+# (einmaliger Download beim ersten "flet run" danach). Betrifft nur den
+# Dev-Loop, nicht "flet build". Die flet-system-tts-Erweiterung steckt in
+# KEINEM vorgebauten Client — Systemstimme nur in gebauten Apps.
+desktop_flavor = "full"
 # lateinische Schreibweise: sicher für Build-/Dateinamen beim APK-Bau
 product = "Mathaino - Griechisch A1"
 org = "de.benkeilert"
@@ -47,6 +63,9 @@ exclude = [
     "tests",
     "temp",
     "*.pdf",
+    # Extension-Quelle wird als Abhängigkeit installiert (uv.sources) —
+    # nicht zusätzlich als App-Asset mitschleppen
+    "packages",
 ]
 
 [build-system]
@@ -58,3 +77,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# mathainoa1 wird nicht mehr pip-installiert (lokale Extension macht
+# "pip install -e ." unmöglich) — src/ direkt in den Importpfad
+pythonpath = ["src"]

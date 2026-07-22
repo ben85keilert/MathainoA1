@@ -10,10 +10,13 @@ Kontakt: über die Projektseite
 
 ## Das Wichtigste in Kürze
 
-Die App erhebt, sammelt und überträgt **keine personenbezogenen
-Daten**. Es gibt kein Nutzerkonto, keine Werbung, kein Tracking, keine
-Analyse- oder Absturzberichts-Dienste und keine Verbindung zu externen
-Servern. Die App benötigt und nutzt keine Internetverbindung.
+Die App erhebt und sammelt **keine personenbezogenen Daten**. Es gibt
+kein Nutzerkonto, keine Werbung, kein Tracking und keine Analyse- oder
+Absturzberichts-Dienste. In der Standardeinstellung stellt die App
+keine Verbindung zu externen Servern her und benötigt kein Internet.
+Einzige Ausnahme ist der **optionale Google-Modus der Sprachausgabe**,
+der nur nach aktiver Auswahl in den Einstellungen genutzt wird (siehe
+unten).
 
 ## Lokal auf dem Gerät gespeicherte Daten
 
@@ -25,7 +28,10 @@ Damit die App funktioniert, speichert sie folgende Daten
 - **Eigene Vokabellisten und Auswahllisten**, die selbst angelegt oder
   importiert wurden.
 - **Notizen**, die im Notizbereich der App geschrieben wurden.
-- **Einstellungen** (Design, Trainings-Standardwerte, Auto-Play).
+- **Einstellungen** (Design, Trainings-Standardwerte, Auto-Play,
+  Sprachausgabe-Weg).
+- Im Google-Modus der Sprachausgabe: der **lokale Audio-Cache**
+  (MP3-Dateien der bereits geladenen Wörter).
 
 Diese Daten verlassen das Gerät zu keinem Zeitpunkt. Sie lassen sich
 über die App-Funktionen (z.B. Lernstand zurücksetzen, Listen und
@@ -35,11 +41,24 @@ erzeugt und an dem selbst gewählten Ort gespeichert.
 
 ## Sprachausgabe
 
-Die Aussprache griechischer Wörter erzeugt die **Sprachausgabe des
-Betriebssystems** (Systemstimme) direkt auf dem Gerät. Dabei findet
-keine Übertragung an externe Server statt. (Bis Version 0.2 nutzte die
-App hierfür die Google-Sprachausgabe gTTS; diese Anbindung wurde
-entfernt.)
+Für die Aussprache griechischer Wörter bietet die App zwei Wege, die
+in den Einstellungen gewählt werden:
+
+- **Systemstimme (Standardeinstellung):** Die Sprachausgabe des
+  Betriebssystems erzeugt das Audio direkt auf dem Gerät. Dabei findet
+  keine Übertragung an externe Server statt.
+- **Google (online, optional):** Wird dieser Modus in den Einstellungen
+  aktiv ausgewählt, holt die App das Audio beim ersten Abspielen eines
+  Worts vom Google-Übersetzer-Sprachdienst. Dabei werden der
+  **gesprochene Wort-Text** sowie technisch bedingt die **IP-Adresse**
+  des Geräts an Server der Google LLC (USA) übertragen; es gelten die
+  [Datenschutzhinweise von Google](https://policies.google.com/privacy).
+  Google LLC ist unter dem EU-US Data Privacy Framework zertifiziert.
+  Rechtsgrundlage ist die aktive Auswahl dieser Funktion (Art. 6 Abs. 1
+  lit. a/b DSGVO). Die erzeugte Aufnahme wird danach **lokal auf dem
+  Gerät gecacht** — bereits geladene Wörter spielen offline, ohne
+  erneute Übertragung. Lerninhalte über die einzelnen Wörter hinaus,
+  Notizen oder Lernstände werden nie übertragen.
 
 ## Berechtigungen
 

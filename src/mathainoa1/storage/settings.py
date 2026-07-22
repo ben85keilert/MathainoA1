@@ -12,6 +12,10 @@ from mathainoa1.logic.conjugation import ConjugationSettings
 from mathainoa1.logic.declension import DeclensionSettings
 from mathainoa1.logic.session import TrainingSettings
 
+# Sprachausgabe-Wege (AppSettings.tts_engine)
+TTS_SYSTEM = "system"  # Systemstimme des Geräts (flet-system-tts, offline)
+TTS_GOOGLE = "google"  # gTTS-MP3 von Google-Servern, lokal gecacht
+
 
 @dataclass
 class AppSettings:
@@ -31,6 +35,10 @@ class AppSettings:
     # Wort-Audio automatisch abspielen, sobald im Training die
     # griechische Seite sichtbar wird (Umschalter in den Trainings-Views)
     autoplay_audio: bool = False
+    # Sprachausgabe-Weg: TTS_SYSTEM = Systemstimme des Geräts (offline,
+    # keine Übertragung), TTS_GOOGLE = gTTS online holen + lokal cachen
+    # (für Geräte ohne griechische Systemstimme, z.B. Linux)
+    tts_engine: str = TTS_SYSTEM
     # Prüfen beim Schreiben: False = "Prüfen"-Button mittig unter dem
     # Antwortfeld (Standard), True = rundes Häkchen rechts daneben
     check_beside_field: bool = False
@@ -64,6 +72,11 @@ def app_data_dir() -> Path:
 
 def user_vocab_dir() -> Path:
     return app_data_dir() / "vocab"
+
+
+def tts_cache_dir() -> Path:
+    """MP3-Cache des Google-Wegs, nach Text-Hash benannt (storage/tts.py)."""
+    return app_data_dir() / "tts"
 
 
 def book_vocab_dir() -> Path:

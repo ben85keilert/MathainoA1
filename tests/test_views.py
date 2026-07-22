@@ -183,9 +183,12 @@ def test_selection_editor_groups_and_sorts(store_with_edge_cases, tmp_path):
         progress.close()
 
 
-def test_list_view_select_mode(store_with_edge_cases):
+def test_list_view_select_mode(store_with_edge_cases, monkeypatch):
     """Markiermodus: Umschalter aktiviert die Mehrfachauswahl-Zeile."""
+    from mathainoa1.storage.settings import TTS_SYSTEM
     store, vlist = store_with_edge_cases
+    # nicht die echte Einstellungs-Datei des Rechners lesen
+    monkeypatch.setattr(manager, "tts_engine", lambda: TTS_SYSTEM)
     nav = _fake_nav()
     view = manager.list_view(nav, store, vlist)
 
@@ -209,6 +212,35 @@ def test_list_view_select_mode(store_with_edge_cases):
     btn.on_click(None)  # Markiermodus an — baut die Auswahl-Kacheln
     assert find_icon_button(view, "Markieren beenden") is not None
     assert find_icon_button(view, "Markierte löschen…") is not None
+    # "Audio löschen" gehört zum gTTS-Cache — nur im Google-Modus sichtbar
+    assert find_icon_button(view, "Audio löschen (wird neu erzeugt)") is None
+
+
+def test_list_view_select_mode_google_audio(store_with_edge_cases,
+                                            monkeypatch):
+    """Im Google-Modus erscheint der Cache-Button „Audio löschen“."""
+    from mathainoa1.storage.settings import TTS_GOOGLE
+    store, vlist = store_with_edge_cases
+    monkeypatch.setattr(manager, "tts_engine", lambda: TTS_GOOGLE)
+    nav = _fake_nav()
+    view = manager.list_view(nav, store, vlist)
+
+    def find_icon_button(ctrl, tooltip):
+        import flet as ft
+        if isinstance(ctrl, ft.IconButton) and ctrl.tooltip == tooltip:
+            return ctrl
+        for attr in ("controls", "content", "title"):
+            sub = getattr(ctrl, attr, None)
+            subs = sub if isinstance(sub, list) else [sub]
+            for s in subs:
+                if isinstance(s, ft.Control):
+                    hit = find_icon_button(s, tooltip)
+                    if hit is not None:
+                        return hit
+        return None
+
+    find_icon_button(view, "Wörter markieren (Mehrfachauswahl)").on_click(None)
+    assert find_icon_button(view, "Audio löschen (wird neu erzeugt)") is not None
 
 
 def test_verb_preview_sample_no_crash(store_with_edge_cases):
