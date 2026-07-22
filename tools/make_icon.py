@@ -1,3 +1,5 @@
+
+
 """Erzeugt die App-Icons für „Μαθαίνω A1".
 
 Reproduzierbar mit Pillow: griechisch-blauer Verlauf, weißes „μ" (erster
