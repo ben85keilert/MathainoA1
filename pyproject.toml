@@ -12,12 +12,12 @@ dependencies = [
     "fpdf2>=2.8,<3",
 ]
 
-# flet build löst Abhängigkeiten mit uv auf — der lokale Pfad zur
-# Extension kommt daher hierher. Für pip (Tests, lokale Installation)
-# steht derselbe Pfad relativ in requirements.txt; ein nacktes
-# "pip install -e ." funktioniert NICHT (pip kennt uv-Sources nicht).
-[tool.uv.sources]
-flet-system-tts = { path = "packages/flet-system-tts" }
+# Lokale Extension: flet build kennt "flet-system-tts" über
+# [tool.flet.dev_packages] (unten) — flet-cli schreibt die Abhängigkeit
+# beim Build in eine absolute file://-Referenz um. Für pip (Tests,
+# lokale Installation) steht derselbe Pfad relativ in requirements.txt;
+# ein nacktes "pip install -e ." funktioniert NICHT (pip würde das
+# Paket auf PyPI suchen).
 
 [project.optional-dependencies]
 dev = [
@@ -27,6 +27,11 @@ dev = [
 
 # --- Packaging (flet build apk / macos / ...) ---
 [tool.flet]
+# lateinische Schreibweise: sicher für Build-/Dateinamen beim APK-Bau
+product = "Mathaino - Griechisch A1"
+org = "de.benkeilert"
+company = "Benjamin Ebert"
+
 # "flet run" lädt sich unter Linux standardmäßig den schlanken "light"-
 # Desktop-Client, dem u.a. flet-audio (audioplayers) fehlt — der
 # Google-Audioweg bliebe stumm. "full" erzwingt den vollständigen Client
@@ -34,10 +39,16 @@ dev = [
 # Dev-Loop, nicht "flet build". Die flet-system-tts-Erweiterung steckt in
 # KEINEM vorgebauten Client — Systemstimme nur in gebauten Apps.
 desktop_flavor = "full"
-# lateinische Schreibweise: sicher für Build-/Dateinamen beim APK-Bau
-product = "Mathaino - Griechisch A1"
-org = "de.benkeilert"
-company = "Benjamin Ebert"
+
+# serious_python installiert standardmäßig nur fertige Wheels
+# (--only-binary :all:) — das lokale Extension-Verzeichnis muss aus der
+# Quelle gebaut werden dürfen
+source_packages = ["flet-system-tts"]
+
+# Lokale Pakete: Name -> Pfad relativ zum App-Verzeichnis; flet build
+# ersetzt den Dependency-Eintrag durch "name @ file://<absolut>"
+[tool.flet.dev_packages]
+flet-system-tts = "packages/flet-system-tts"
 
 # App-Icon: assets/icon.png (vollflächig) + assets/icon_android.png
 # (Adaptive-Vordergrund). Generiert mit tools/make_icon.py.
@@ -63,7 +74,7 @@ exclude = [
     "tests",
     "temp",
     "*.pdf",
-    # Extension-Quelle wird als Abhängigkeit installiert (uv.sources) —
+    # Extension-Quelle wird als Abhängigkeit installiert (dev_packages) —
     # nicht zusätzlich als App-Asset mitschleppen
     "packages",
 ]
