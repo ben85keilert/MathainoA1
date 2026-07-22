@@ -77,23 +77,20 @@ ein fertiger Chatbot-Prompt, der aus einer Liste griechischer Wörter
 ## Audio (Aussprache)
 
 Die App spricht jedes griechische Wort selbst — über die
-Google-Sprachausgabe (gTTS). Es muss nichts eingerichtet oder
-importiert werden:
+**Sprachausgabe des Geräts** (Systemstimme). Alles läuft lokal auf dem
+Gerät: kein Internet nötig, es werden keine Daten übertragen.
 
 - **Lautsprecher-Symbol an jeder Karte** in den Listenansichten:
   **kurz antippen** spielt normal, **lang drücken** langsam (zum
   Nachsprechen). Im Vokabeltraining erscheinen Lautsprecher- und
   Langsam-Symbol unter der Karte — aber erst, wenn die griechische
   Seite sichtbar ist, damit die Antwort nicht verraten wird.
-- Beim **ersten Abspielen** eines Worts braucht es kurz Internet
-  (~1 Sekunde). Danach ist die Aufnahme lokal gespeichert und spielt
-  sofort — auch offline. Wird ein Wort geändert, entsteht beim nächsten
-  Abspielen automatisch neues Audio; veraltetes Audio kann es nicht
-  geben.
-- **„Audio vorbereiten“** im Listenmenü (⋮, auch bei Buchlisten) lädt
-  alle Wörter einer Liste auf einmal in den Speicher — praktisch vor
-  einer Reise, damit die ganze Liste offline anhörbar ist (~100 Wörter
-  in 1–2 Minuten, etwa 1–1,5 MB).
+- Voraussetzung ist eine **installierte griechische Stimme**. Windows:
+  Einstellungen → Zeit und Sprache → Sprache → „Ελληνικά“ hinzufügen
+  (mit Text-in-Sprache). Fehlt die Stimme, zeigt das Antippen einen
+  entsprechenden Hinweis.
+- **Android**: Die Systemstimme ist dort noch nicht angebunden — die
+  Sprachausgabe gibt es unter Android in einer späteren Version.
 
 **Auto-Play:** In allen drei Trainings sitzt oben rechts ein
 Lautsprecher-Umschalter. Ist er an, wird automatisch vorgelesen, sobald
@@ -104,7 +101,7 @@ der Lösung. **Nomen- und Verbtraining sprechen die echte Lösungsform**
 ein Lautsprecher-Symbol neben der aufgedeckten Lösung. Die Einstellung
 bleibt gespeichert.
 
-Ist gerade kein Internet da, scheitert Auto-Play lautlos; manuelles
+Fehlt die griechische Stimme, scheitert Auto-Play lautlos; manuelles
 Antippen zeigt einen kurzen Hinweis. Klammern und Alternativen werden
 beim Sprechen bereinigt: „αγαπ(ά)ω“ wird als „αγαπάω“ gesprochen,
 „και / κι“ als „και“, Zusätze wie „(ΕΕ)“ entfallen.

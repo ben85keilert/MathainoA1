@@ -6,6 +6,8 @@ dessen Inhalt beim Navigieren ausgetauscht wird.
 
 from __future__ import annotations
 
+import shutil
+
 import flet as ft
 
 from mathainoa1 import APP_NAME
@@ -146,6 +148,10 @@ def main(page: ft.Page) -> None:
     page.window.width = 420
     page.window.height = 780
     apply_app_theme(page, load_app_settings())
+    # Altbestand aufräumen: der MP3-Cache der früheren Google-Sprachausgabe
+    # (bis v0.2) wird seit der Umstellung auf die Systemstimme nicht mehr
+    # gebraucht
+    shutil.rmtree(app_data_dir() / "tts", ignore_errors=True)
     store = ContentStore(book_vocab_dir(), user_vocab_dir())
     store.load_all()
     progress = ProgressStore(app_data_dir() / "progress.db")

@@ -6,8 +6,7 @@ requires-python = ">=3.12"
 license = { file = "LICENSE" }
 dependencies = [
     "flet>=0.85,<0.86",
-    "flet-audio>=0.85,<0.86",
-    "gTTS>=2.5,<3",
+    "pyttsx3>=2.99,<3",
     "fpdf2>=2.8,<3",
 ]
 
@@ -23,13 +22,6 @@ dev = [
 product = "Mathaino - Griechisch A1"
 org = "de.benkeilert"
 company = "Benjamin Ebert"
-
-# "flet run" lädt sich unter Linux standardmäßig den schlanken "light"-
-# Desktop-Client, dem u.a. flet-audio (audioplayers) fehlt — Audio bliebe
-# stumm. "full" erzwingt den vollständigen Client (einmaliger Download
-# beim ersten "flet run" danach). Betrifft nur den Dev-Loop, nicht
-# "flet build".
-desktop_flavor = "full"
 
 # App-Icon: assets/icon.png (vollflächig) + assets/icon_android.png
 # (Adaptive-Vordergrund). Generiert mit tools/make_icon.py.

@@ -13,6 +13,9 @@ Statistik einfließt) stehen im [Handbuch](handbuch.md).
 ## Voraussetzungen
 
 - Python >= 3.12
+- Für die Sprachausgabe: eine installierte griechische Systemstimme
+  (Windows: Einstellungen → Zeit und Sprache → Sprache → „Ελληνικά“
+  mit Text-in-Sprache hinzufügen; Linux: espeak-ng)
 
 ## Installation
 
@@ -71,17 +74,27 @@ data/vocab/   # Vokabellisten je Kapitel (JSON)
 tests/        # pytest-Tests
 ```
 
-## Android-APK bauen
+## Release bauen (APK + AAB)
 
-Der Workflow [`build-apk.yml`](.github/workflows/build-apk.yml) baut bei
-jedem Push nach `main` sowie bei `v*`-Tags automatisch eine APK
-(`flet build apk`) und lädt sie als Workflow-Artefakt hoch. Bei einem
-Tag-Push wird zusätzlich ein GitHub-Release mit der APK angelegt:
+Der Workflow [`release.yml`](.github/workflows/release.yml) baut bei
+einem Versions-Tag (`v*`) oder manuell (workflow_dispatch) APK und AAB,
+lädt beide als Workflow-Artefakte hoch und legt beim Tag-Push ein
+GitHub-Release an. Der Tag muss zur Version in `pyproject.toml` passen:
 
 ```bash
-git tag v0.1.0
+git tag v0.3.0
 git push --tags
 ```
+
+### Play-Store-Veröffentlichung (Checkliste)
+
+- **Datenschutzerklärung**: In der Play Console eine öffentlich
+  erreichbare URL hinterlegen — z.B. die GitHub-Ansicht von
+  [DATENSCHUTZ.md](DATENSCHUTZ.md).
+- **Datensicherheits-Formular**: „Es werden keine Nutzerdaten erhoben
+  oder weitergegeben“ — die App speichert alles lokal und überträgt
+  nichts (siehe [Datenschutz](#datenschutz)).
+- **Zielgruppe**: nicht an Kinder gerichtet (Lern-App für Erwachsene).
 
 ## Vokabellisten
 
@@ -89,6 +102,14 @@ Die App wird **ohne Vokabellisten ausgeliefert** — eigene Listen kommen
 per Import (CSV/JSON-Datei oder „Als Text importieren") in die App; die
 passenden Chatbot-Prompts stehen in der App-Hilfe. Lokale Listen liegen
 im gitignorierten Ordner `private/` und kommen nie ins Repository.
+
+## Datenschutz
+
+Die App erhebt und überträgt keine Daten: kein Konto, kein Tracking,
+keine Verbindung zu externen Servern. Lernfortschritt, Notizen, Listen
+und Einstellungen liegen ausschließlich lokal auf dem Gerät; die
+Sprachausgabe nutzt die Systemstimme des Geräts (offline). Details in
+der [Datenschutzerklärung](DATENSCHUTZ.md).
 
 ## Lizenz
 

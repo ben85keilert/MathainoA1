@@ -1,12 +1,8 @@
-"""Sprachausgabe in der UI: ein gemeinsamer Player für alle Buttons.
+"""Sprachausgabe in der UI: Systemstimme des Geräts, komplett offline.
 
-Wiedergabe läuft über den gTTS-Cache (storage/tts.py): Cache-Treffer
-spielen sofort und offline, sonst wird die MP3 im Hintergrund geholt
-(braucht Internet) und danach abgespielt.
-
-Einziges Modul mit flet-audio-Kontakt. Der Import ist abgesichert, damit
-die App (und pytest) auch ohne installiertes flet-audio funktioniert —
-Abspielen tut dann schlicht nichts.
+Gesprochen wird über storage/tts.py (pyttsx3). Das blockierende
+speak() läuft in einem Thread (asyncio.to_thread); ein neuer Text
+bricht die laufende Wiedergabe ab und verdrängt noch wartende.
 """
 
 from __future__ import annotations
@@ -15,101 +11,60 @@ import asyncio
 
 import flet as ft
 
-from mathainoa1.storage.settings import (
-    load_app_settings,
-    save_app_settings,
-    tts_cache_dir,
-)
-from mathainoa1.storage.tts import TtsCache, TtsFetchError, speakable
+from mathainoa1.storage.settings import load_app_settings, save_app_settings
+from mathainoa1.storage.tts import SystemTts, TtsError, speakable
 
-try:
-    import flet_audio as fa
-except ImportError:  # Paket fehlt (z.B. Test-Umgebung)
-    fa = None
-
-# Langsam-Wiedergabe zum Nachsprechen; audioplayers erlaubt 0.5–2.0
-SLOW_RATE = 0.65
-
-_cache: TtsCache | None = None
-# Texte, deren Abruf gerade läuft — schützt vor Doppel-Taps
-_fetching: set[str] = set()
+# Ein gemeinsames Engine-Objekt für alle Buttons
+_tts: SystemTts | None = None
+# Zähler der Abspielwünsche: nur der jüngste darf noch sprechen
+_gen = 0
 
 
-def tts_cache() -> TtsCache:
-    global _cache
-    if _cache is None:
-        _cache = TtsCache(tts_cache_dir())
-    return _cache
-
-
-def _install_autoplay(page: ft.Page, uri: str, rate: float):
-    """Frisches Audio-Control mit src+autoplay einhängen und altes entfernen.
-
-    Workaround für den flet-audio-Regressionsbug ab 0.82 (flet-Issue #6265):
-    ein separater `await player.play()` auf ein bestehendes Control lädt die
-    Quelle nie ("on_loaded" feuert nicht) und läuft in den 30-s-Timeout
-    "Future not completed" — reproduzierbar auf Desktop UND Android. Ein neu
-    erzeugtes Audio mit `src`/`playback_rate` schon im Konstruktor plus
-    `autoplay=True` spielt beim Einhängen selbst ab, ohne den kaputten
-    play()-Aufruf. Laut flet-Doku wird autoplay auf Desktop und Mobile
-    unterstützt (nur Web-Chrome/Edge nicht). Weil autoplay nur beim Anlegen
-    auslöst, wird pro Wiedergabe ein neues Control gesetzt und das alte
-    entfernt (sonst sammeln sie sich an)."""
-    for s in [s for s in page.services if isinstance(s, fa.Audio)]:
-        page.services.remove(s)
-    p = fa.Audio(src=uri, playback_rate=rate, autoplay=True,
-                 release_mode=fa.ReleaseMode.RELEASE)
-    page.services.append(p)
-    page.update()
-    return p
+def system_tts() -> SystemTts:
+    global _tts
+    if _tts is None:
+        _tts = SystemTts()
+    return _tts
 
 
 def play_text(page: ft.Page, text: str, slow: bool = False,
               notify_errors: bool = True) -> None:
     """Spricht einen griechischen Text; sync aufrufbar aus jedem on_click.
 
-    Cache-Treffer spielen sofort; sonst wird die MP3 erst im Hintergrund
-    geholt (gTTS, braucht Internet). slow=True verlangsamt die Wiedergabe
-    (zum Nachsprechen) — dieselbe Datei, nur mit reduzierter playback_rate.
-    Fehler (offline, Drosselung) zeigen eine SnackBar, außer
-    notify_errors=False (Auto-Play soll lautlos scheitern).
+    slow=True verlangsamt das Sprechtempo (zum Nachsprechen). Fehler
+    (keine griechische Stimme, Engine nicht verfügbar) zeigen eine
+    SnackBar, außer notify_errors=False (Auto-Play soll lautlos
+    scheitern).
     """
-    if fa is None:
-        return
     spoken = speakable(text)
     if not spoken:
         return
 
     async def run():
-        if spoken in _fetching:
-            return
-        cache = tts_cache()
-        if not cache.has(spoken):
-            _fetching.add(spoken)
-            try:
-                await asyncio.to_thread(cache.fetch, spoken)
-            except TtsFetchError:
-                if notify_errors:
-                    page.show_dialog(ft.SnackBar(ft.Text(
-                        "Kein Internet — Audio nicht verfügbar.")))
-                return
-            finally:
-                _fetching.discard(spoken)
-        # file://-URL (nicht rohe Bytes, nicht nackter Pfad): das
-        # audioplayers-Plugin reicht den src-String direkt an GStreamers
-        # playbin (uri=...) weiter, das eine gültige URI *mit Schema*
-        # verlangt. as_uri() liefert "file:///..." — gültig auf Desktop
-        # und Android. Wiedergabe per autoplay statt play(), siehe
-        # _install_autoplay().
-        uri = cache.path_for(spoken).as_uri()
-        _install_autoplay(page, uri, SLOW_RATE if slow else 1.0)
+        global _gen
+        _gen += 1
+        my = _gen
+        tts = system_tts()
+        tts.stop()
+
+        def work():
+            if my != _gen:
+                return  # inzwischen kam ein neuerer Text — nicht mehr sprechen
+            tts.speak(spoken, slow)
+
+        try:
+            await asyncio.to_thread(work)
+        except TtsError as exc:
+            if notify_errors:
+                page.show_dialog(ft.SnackBar(ft.Text(str(exc))))
 
     page.run_task(run)
 
 
 def maybe_autoplay(page: ft.Page, text: str) -> None:
     """Spricht den Text automatisch, wenn Auto-Play an ist — lautlos bei
-    Fehlern (offline soll nicht jede Karte eine Meldung zeigen)."""
+    Fehlern (eine fehlende Stimme soll nicht jede Karte eine Meldung
+    zeigen lassen)."""
     if autoplay_enabled():
         play_text(page, text, notify_errors=False)
 

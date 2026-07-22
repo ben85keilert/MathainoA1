@@ -66,11 +66,6 @@ def user_vocab_dir() -> Path:
     return app_data_dir() / "vocab"
 
 
-def tts_cache_dir() -> Path:
-    """MP3-Cache der Sprachausgabe, nach Text-Hash benannt (storage/tts.py)."""
-    return app_data_dir() / "tts"
-
-
 def book_vocab_dir() -> Path:
     """Mitgelieferte Buchlisten: Assets der gepackten App oder Repo-Ordner."""
     assets = os.environ.get("FLET_ASSETS_DIR")

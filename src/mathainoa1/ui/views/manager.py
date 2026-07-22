@@ -6,7 +6,6 @@ Eigene Listen werden mit Namen angelegt (manuell oder per Import).
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 import flet as ft
@@ -25,8 +24,6 @@ from mathainoa1.models import (
 from mathainoa1.storage import content, pdf_export
 from mathainoa1.storage.content import ContentStore
 from mathainoa1.storage.progress import ProgressStore
-from mathainoa1.storage.tts import TtsFetchError, speakable
-from mathainoa1.ui.audio import tts_cache
 from mathainoa1.ui.views.trainer import edit_notes_dialog
 from mathainoa1.ui.views.wordlist import (
     alpha_key,
@@ -210,8 +207,8 @@ def manager_view(nav, store: ContentStore,
                          ft.FilledButton("Löschen", on_click=do)],
             ))
 
-        # exakt dieselben Optionen wie bei Vokabellisten; Export und Audio
-        # arbeiten auf den aufgelösten Karten (cards_for löst die
+        # exakt dieselben Optionen wie bei Vokabellisten; der Export
+        # arbeitet auf den aufgelösten Karten (cards_for löst die
         # referenzierten IDs in echte Karten auf)
         trailing = ft.PopupMenuButton(items=[
             ft.PopupMenuItem(content="Umbenennen", icon=ft.Icons.EDIT,
@@ -220,10 +217,6 @@ def manager_view(nav, store: ContentStore,
             ft.PopupMenuItem(content="Exportieren…",
                              icon=ft.Icons.DOWNLOAD,
                              on_click=lambda e, s=sel: export_dialog(
-                                 s.name, store.cards_for(s.id))),
-            ft.PopupMenuItem(content="Audio vorbereiten",
-                             icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
-                             on_click=lambda e, s=sel: prepare_audio_dialog(
                                  s.name, store.cards_for(s.id))),
             ft.PopupMenuItem(content="Löschen", icon=ft.Icons.DELETE,
                              on_click=delete),
@@ -251,26 +244,18 @@ def manager_view(nav, store: ContentStore,
                                  icon=ft.Icons.DOWNLOAD,
                                  on_click=lambda e, l=vlist: export_dialog(
                                      l.name, l.cards)),
-                ft.PopupMenuItem(content="Audio vorbereiten",
-                                 icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
-                                 on_click=lambda e, l=vlist: prepare_audio_dialog(
-                                     l.name, l.cards)),
                 ft.PopupMenuItem(content="Löschen", icon=ft.Icons.DELETE,
                                  on_click=lambda e, l=vlist: delete_dialog(l)),
             ])
         else:
             # Buchlisten: nicht editierbar (kein Umbenennen/Löschen), aber
-            # Export und Audio-Vorbereitung sind auch für sie sinnvoll
+            # der Export ist auch für sie sinnvoll
             trailing = ft.Row([
                 ft.Icon(ft.Icons.LOCK_OUTLINE, tooltip="Buchliste (nicht editierbar)"),
                 ft.PopupMenuButton(items=[
                     ft.PopupMenuItem(content="Exportieren…",
                                      icon=ft.Icons.DOWNLOAD,
                                      on_click=lambda e, l=vlist: export_dialog(
-                                         l.name, l.cards)),
-                    ft.PopupMenuItem(content="Audio vorbereiten",
-                                     icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
-                                     on_click=lambda e, l=vlist: prepare_audio_dialog(
                                          l.name, l.cards)),
                 ]),
             ], tight=True, spacing=0)
@@ -529,78 +514,6 @@ def manager_view(nav, store: ContentStore,
                 btn_file,
             ],
         ))
-
-    def prepare_audio_dialog(name: str, cards: list[VocabCard]):
-        """Lädt das Audio aller Wörter einer Liste (oder Auswahlliste)
-        vorab in den Cache — danach komplett offline anhörbar.
-
-        Kleine Pause zwischen den Abrufen (Google drosselt sonst); nach
-        3 Fehlern in Folge wird abgebrochen (offline nicht durch die
-        ganze Liste laufen).
-        """
-        texts = list(dict.fromkeys(
-            t for t in (speakable(c.front) for c in cards) if t))
-        cache = tts_cache()
-        todo = [t for t in texts if not cache.has(t)]
-        already = len(texts) - len(todo)
-
-        bar = ft.ProgressBar(value=0.0)
-        status = ft.Text(f"{already} von {len(texts)} bereits vorhanden.",
-                         size=13)
-        btn_action = ft.TextButton("Abbrechen")
-        state = {"cancel": False, "done": False}
-
-        def close_or_cancel(e):
-            if state["done"]:
-                page.pop_dialog()
-            else:
-                state["cancel"] = True
-
-        btn_action.on_click = close_or_cancel
-
-        async def run():
-            ok, errors, streak = 0, 0, 0
-            for i, text in enumerate(todo):
-                if state["cancel"] or streak >= 3:
-                    break
-                status.value = f"Lade {i + 1} von {len(todo)}: {text}"
-                bar.value = i / max(1, len(todo))
-                page.update()
-                try:
-                    await asyncio.to_thread(cache.fetch, text)
-                    ok += 1
-                    streak = 0
-                except TtsFetchError:
-                    errors += 1
-                    streak += 1
-                await asyncio.sleep(0.3)
-            state["done"] = True
-            bar.value = 1.0
-            if streak >= 3:
-                status.value = (f"Abgebrochen — kein Internet? "
-                                f"{ok} neu geladen, {errors} Fehler.")
-            elif state["cancel"]:
-                status.value = f"Abgebrochen — {ok} neu geladen."
-            else:
-                status.value = (f"Fertig: {ok} neu geladen, "
-                                f"{already + ok} von {len(texts)} im Cache"
-                                + (f", {errors} Fehler." if errors else "."))
-            btn_action.text = "Schließen"
-            page.update()
-
-        page.show_dialog(ft.AlertDialog(
-            title=ft.Text(f"Audio vorbereiten — {name}"),
-            content=ft.Column([bar, status], tight=True, spacing=12,
-                              width=420),
-            actions=[btn_action],
-        ))
-        if todo:
-            page.run_task(run)
-        else:
-            state["done"] = True
-            bar.value = 1.0
-            status.value = f"Alle {len(texts)} Wörter sind schon im Cache."
-            btn_action.text = "Schließen"
 
     refresh()
     # Rundes Such-Symbol unten links (unten rechts kollidiert mit den
@@ -1592,20 +1505,6 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
 
         pick_list_dialog(f"{len(selected)} Karten kopieren", targets, do)
 
-    def delete_audio_selected(e):
-        # Gecachte MP3s der markierten Wörter löschen — beim nächsten
-        # Abspielen wird frisches Audio geholt (so lässt sich kaputtes
-        # Audio korrigieren)
-        cache = tts_cache()
-        n = 0
-        for c in selected_cards():
-            path = cache.path_for(speakable(c.front))
-            if path.exists():
-                path.unlink()
-                n += 1
-        snack(f"{n} Audio-Dateien gelöscht — beim nächsten Abspielen "
-              "wird das Audio neu erzeugt.")
-
     def add_to_selection_selected(e):
         sels = sorted(store.selections.values(), key=lambda x: x.name)
         NEW = "__new__"
@@ -1666,9 +1565,6 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         buttons = [
             act_btn(ft.Icons.PLAYLIST_ADD, "Zur Auswahlliste hinzufügen…",
                     add_to_selection_selected),
-            act_btn(ft.Icons.VOLUME_OFF,
-                    "Audio löschen (wird neu erzeugt)",
-                    delete_audio_selected),
             act_btn(ft.Icons.CONTENT_COPY, "In andere Liste kopieren…",
                     copy_selected),
         ]

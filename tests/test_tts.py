@@ -1,7 +1,14 @@
 import pytest
 
 from mathainoa1.storage import tts
-from mathainoa1.storage.tts import TtsCache, TtsFetchError, speakable
+from mathainoa1.storage.tts import (
+    NO_VOICE_HINT,
+    SLOW_FACTOR,
+    SystemTts,
+    TtsError,
+    find_greek_voice,
+    speakable,
+)
 
 
 def test_speakable_alternatives_and_parens():
@@ -31,63 +38,128 @@ def test_speakable_article_variants():
     assert speakable("τα λέμε / γεια σου") == "τα λέμε"
 
 
-def test_path_for_stable_and_normalized(tmp_path):
-    cache = TtsCache(tmp_path)
-    p1 = cache.path_for("ο δρόμος")
-    assert p1 == cache.path_for("ο δρόμος")  # stabil
-    assert p1 == cache.path_for("  ο  δρόμος ")  # Whitespace normalisiert
-    assert p1 != cache.path_for("η γυναίκα")
-    assert p1.suffix == ".mp3" and p1.parent == tmp_path
-    assert not cache.has("ο δρόμος")
-    p1.write_bytes(b"mp3")
-    assert cache.has("ο δρόμος")
+class FakeVoice:
+    def __init__(self, id, name="", languages=None):
+        self.id = id
+        self.name = name
+        self.languages = languages or []
 
 
-class FakeGTTS:
-    """Ersatz für gtts.gTTS in Tests — schreibt Fake-MP3-Bytes."""
-
-    calls: list[str] = []
-    fail = False
-
-    def __init__(self, text, lang="el"):
-        self.text = text
-        FakeGTTS.calls.append(text)
-
-    def save(self, path):
-        if FakeGTTS.fail:
-            raise RuntimeError("kein Netz")
-        with open(path, "wb") as f:
-            f.write(b"ID3fake-" + self.text.encode())
+def test_find_greek_voice_by_languages():
+    voices = [
+        FakeVoice("v1", "Anna", ["de_DE"]),
+        # eSpeak-Stil: Bytes mit Prioritäts-Präfix
+        FakeVoice("v2", "greek", [b"\x05el"]),
+    ]
+    assert find_greek_voice(voices) == "v2"
+    # macOS-Stil: Sprachcode als String
+    assert find_greek_voice([FakeVoice("m1", "Melina", ["el_GR"])]) == "m1"
 
 
-@pytest.fixture
-def fake_gtts(monkeypatch):
-    FakeGTTS.calls = []
-    FakeGTTS.fail = False
-    monkeypatch.setattr(tts, "gTTS", FakeGTTS)
-    return FakeGTTS
+def test_find_greek_voice_by_name_or_id():
+    # SAPI nennt die Sprache nur im Anzeigenamen/der Registry-ID
+    sapi = FakeVoice(
+        r"HKEY...\TTS_MS_EL-GR_STEFANOS_11.0",
+        "Microsoft Stefanos - Greek (Greece)")
+    assert find_greek_voice([FakeVoice("v1", "Microsoft Hedda - German"),
+                             sapi]) == sapi.id
+    # eSpeak-Kurzform: ID ist schlicht "el"
+    assert find_greek_voice([FakeVoice("de"), FakeVoice("el")]) == "el"
 
 
-def test_fetch_writes_and_caches(tmp_path, fake_gtts):
-    cache = TtsCache(tmp_path / "tts")
-    p = cache.fetch("ο δρόμος")
-    assert p.read_bytes().startswith(b"ID3fake-")
-    assert cache.has("ο δρόμος")
-    # zweiter Abruf trifft den Cache — kein weiterer gTTS-Aufruf
-    cache.fetch("ο δρόμος")
-    assert fake_gtts.calls == ["ο δρόμος"]
+def test_find_greek_voice_none_and_no_false_positives():
+    # "Elsa"/"Elena" enthalten "el", sind aber keine griechischen Stimmen
+    voices = [FakeVoice("v1", "Microsoft Elsa - Italian (Italy)"),
+              FakeVoice("v2", "Elena", ["es_ES"])]
+    assert find_greek_voice(voices) is None
+    assert find_greek_voice([]) is None
 
 
-def test_fetch_error_leaves_no_leftovers(tmp_path, fake_gtts):
-    fake_gtts.fail = True
-    cache = TtsCache(tmp_path)
-    with pytest.raises(TtsFetchError):
-        cache.fetch("ο δρόμος")
-    assert not cache.has("ο δρόμος")
-    assert list(tmp_path.glob("*.tmp")) == []  # atomar: kein Rest
+class FakeEngine:
+    """Ersatz für die pyttsx3-Engine in Tests."""
+
+    def __init__(self, voices, rate=200, fail_on_say=False):
+        self.voices = voices
+        self.props = {"rate": rate}
+        self.said: list[tuple[str, int]] = []
+        self.fail_on_say = fail_on_say
+        self.stopped = 0
+
+    def getProperty(self, name):
+        return self.voices if name == "voices" else self.props.get(name)
+
+    def setProperty(self, name, value):
+        self.props[name] = value
+
+    def say(self, text):
+        if self.fail_on_say:
+            raise RuntimeError("Treiber kaputt")
+        self.said.append((text, self.props["rate"]))
+
+    def runAndWait(self):
+        pass
+
+    def stop(self):
+        self.stopped += 1
 
 
-def test_fetch_without_gtts_package(tmp_path, monkeypatch):
-    monkeypatch.setattr(tts, "gTTS", None)
-    with pytest.raises(TtsFetchError):
-        TtsCache(tmp_path).fetch("ο δρόμος")
+class FakePyttsx3:
+    """Ersatz für das pyttsx3-Modul: init() liefert vorbereitete Engines."""
+
+    def __init__(self, *engines):
+        self.engines = list(engines)
+        self.inits = 0
+
+    def init(self):
+        self.inits += 1
+        return self.engines.pop(0)
+
+
+GREEK = FakeVoice("el", "greek", [b"\x05el"])
+
+
+def test_speak_selects_voice_and_rates(monkeypatch):
+    engine = FakeEngine([FakeVoice("de", "german"), GREEK], rate=200)
+    fake = FakePyttsx3(engine)
+    monkeypatch.setattr(tts, "pyttsx3", fake)
+    t = SystemTts()
+    t.speak("ο δρόμος")
+    t.speak("η γυναίκα", slow=True)
+    assert engine.props["voice"] == "el"
+    assert engine.said == [("ο δρόμος", 200),
+                           ("η γυναίκα", int(200 * SLOW_FACTOR))]
+    # Engine wird wiederverwendet, nicht pro Aufruf neu erzeugt
+    assert fake.inits == 1
+
+
+def test_speak_without_greek_voice(monkeypatch):
+    monkeypatch.setattr(
+        tts, "pyttsx3", FakePyttsx3(FakeEngine([FakeVoice("de", "german")])))
+    with pytest.raises(TtsError, match="griechische Stimme"):
+        SystemTts().speak("ο δρόμος")
+    assert "Ελληνικά" in NO_VOICE_HINT
+
+
+def test_speak_without_pyttsx3(monkeypatch):
+    monkeypatch.setattr(tts, "pyttsx3", None)
+    with pytest.raises(TtsError):
+        SystemTts().speak("ο δρόμος")
+
+
+def test_broken_engine_reinitializes(monkeypatch):
+    broken = FakeEngine([GREEK], fail_on_say=True)
+    fresh = FakeEngine([GREEK])
+    fake = FakePyttsx3(broken, fresh)
+    monkeypatch.setattr(tts, "pyttsx3", fake)
+    t = SystemTts()
+    with pytest.raises(TtsError):
+        t.speak("ο δρόμος")
+    # kaputte Engine wurde verworfen — nächster Aufruf initialisiert neu
+    t.speak("ο δρόμος")
+    assert fake.inits == 2
+    assert fresh.said == [("ο δρόμος", 200)]
+
+
+def test_stop_without_engine_is_noop(monkeypatch):
+    monkeypatch.setattr(tts, "pyttsx3", None)
+    SystemTts().stop()  # darf nicht werfen

@@ -209,7 +209,6 @@ def test_list_view_select_mode(store_with_edge_cases):
     btn.on_click(None)  # Markiermodus an — baut die Auswahl-Kacheln
     assert find_icon_button(view, "Markieren beenden") is not None
     assert find_icon_button(view, "Markierte löschen…") is not None
-    assert find_icon_button(view, "Audio löschen (wird neu erzeugt)") is not None
 
 
 def test_verb_preview_sample_no_crash(store_with_edge_cases):

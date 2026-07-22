@@ -358,29 +358,24 @@ def help_view(nav, store=None) -> ft.Control:
 
     audio = _chapter(nav, "Audio (Aussprache)", ft.Icons.VOLUME_UP, [
         _p("Die App spricht jedes griechische Wort selbst — über die "
-           "Google-Sprachausgabe (gTTS). Es muss nichts eingerichtet oder "
-           "importiert werden:"),
+           "Sprachausgabe des Geräts (Systemstimme). Alles läuft lokal: "
+           "kein Internet nötig, es werden keine Daten übertragen."),
         _bullets([
             "Lautsprecher-Symbol an jeder Karte: kurz antippen spielt "
             "normal, lang drücken langsam (zum Nachsprechen). Im "
             "Vokabeltraining gibt es dafür zwei Symbole unter der Karte — "
             "sie erscheinen erst, wenn die griechische Seite sichtbar ist.",
-            "Beim ersten Abspielen eines Worts braucht es kurz Internet "
-            "(~1 Sekunde); danach ist das Audio lokal gespeichert und "
-            "spielt sofort — auch offline.",
-            "Wird ein Wort geändert, entsteht beim nächsten Abspielen "
-            "automatisch neues Audio — es kann nie veraltetes Audio geben.",
-            "„Audio vorbereiten“ im Listenmenü (⋮) lädt alle Wörter einer "
-            "Liste auf einmal — praktisch vor einer Reise, damit alles "
-            "offline verfügbar ist (~100 Wörter in 1–2 Minuten, etwa "
-            "1–1,5 MB).",
+            "Voraussetzung ist eine installierte griechische Stimme. "
+            "Windows: Einstellungen → Zeit und Sprache → Sprache → "
+            "„Ελληνικά“ hinzufügen (mit Text-in-Sprache). Fehlt die "
+            "Stimme, zeigt das Antippen einen entsprechenden Hinweis.",
             "Auto-Play: In allen drei Trainings schaltet das "
             "Lautsprecher-Symbol oben rechts um, ob automatisch "
             "vorgelesen wird, sobald der griechische Text erscheint. "
             "Nomen- und Verbtraining sprechen dabei die echte "
             "Lösungsform, z.B. „θα γράψετε“ oder „τους δρόμους“.",
-            "Ist gerade kein Internet da, scheitert Auto-Play lautlos; "
-            "manuelles Antippen zeigt einen kurzen Hinweis.",
+            "Unter Android ist die Systemstimme noch nicht angebunden — "
+            "die Sprachausgabe gibt es dort in einer späteren Version.",
         ]),
     ])
 
