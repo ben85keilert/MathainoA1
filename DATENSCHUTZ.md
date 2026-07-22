@@ -5,8 +5,8 @@ Stand: Juli 2026
 ## Verantwortlicher
 
 Benjamin Ebert
-Kontakt: über die Projektseite
-<https://github.com/ben85keilert/MathainoA1> (Issues)
+E-Mail: <spiros.ebert@pm.me>
+Projektseite: <https://github.com/ben85keilert/MathainoA1> (Issues)
 
 ## Das Wichtigste in Kürze
 

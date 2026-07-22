@@ -405,6 +405,32 @@ def help_view(nav, store=None) -> ft.Control:
         ]),
     ])
 
+    DATENSCHUTZ_URL = ("https://github.com/ben85keilert/MathainoA1/"
+                       "blob/main/DATENSCHUTZ.md")
+
+    def open_privacy(e):
+        async def run():
+            await ft.UrlLauncher().launch_url(DATENSCHUTZ_URL)
+        nav.page.run_task(run)
+
+    # Google Play verlangt den Datenschutz-Link auch innerhalb der App
+    datenschutz = _chapter(nav, "Datenschutz", ft.Icons.PRIVACY_TIP_OUTLINED, [
+        _p("Die App erhebt keine Daten: kein Konto, kein Tracking, keine "
+           "Analyse-Dienste. Lernstand, Listen, Notizen und Einstellungen "
+           "bleiben lokal auf diesem Gerät."),
+        _bullets([
+            "Sprachausgabe „Systemstimme“ (Standard): läuft komplett "
+            "offline — es werden keine Daten übertragen.",
+            "Sprachausgabe „Google (online)“ (nur nach aktiver Auswahl in "
+            "den Einstellungen): beim Laden eines Worts werden der Text "
+            "und die IP-Adresse an Google übertragen; danach liegt das "
+            "Audio im lokalen Cache und spielt offline.",
+        ]),
+        ft.Row([ft.OutlinedButton(
+            "Datenschutzerklärung öffnen", icon=ft.Icons.OPEN_IN_NEW,
+            on_click=open_privacy)]),
+    ])
+
     def show_about(e):
         try:
             flet_version = metadata.version("flet")
@@ -445,7 +471,7 @@ def help_view(nav, store=None) -> ft.Control:
                "Verben …) findest du über das Buchsymbol oben in der "
                "Leiste."),
             trainings, wertung, leitner, editing, wortsuche, prompts,
-            audio, about_row,
+            audio, datenschutz, about_row,
         ],
         spacing=4,
         scroll=ft.ScrollMode.AUTO,

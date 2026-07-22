@@ -1,6 +1,6 @@
 [project]
 name = "mathainoa1"
-version = "0.2.0"
+version = "0.3.0"
 description = "Μαθαίνω — Griechisch A1: Lern-App für Griechisch (Vokabeln & Grammatik)"
 requires-python = ">=3.12"
 license = { file = "LICENSE" }
