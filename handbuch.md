@@ -1,12 +1,66 @@
-# Μαθαίνω — Griechisch A1 · Handbuch
+# Μαθαίνω — Griechisch · Handbuch
 
-Μαθαίνω („ich lerne“) ist eine Lern-App für Griechisch auf Niveau A1:
-Vokabeltraining mit Karteikarten oder Tippen, dazu Grammatiktrainer für
-Deklination und Konjugation. Dieses Handbuch wird nach und nach ergänzt —
-die wichtigsten Punkte stehen auch in der App unter dem ?-Symbol oben
-rechts. Grammatik-Übersichtstabellen (Alphabet, Artikel, Deklinationen,
-Verben, Adjektive, Zahlen, Pronomen, Fragewörter + Präpositionen) öffnet
-das Buchsymbol daneben.
+Μαθαίνω („ich lerne“) ist eine Lern-App für Griechisch (Niveau A1, mit
+Vorbereitung auf A2): Vokabeltraining mit Karteikarten oder Tippen, dazu
+Grammatiktrainer für Deklination und Konjugation. Dieses Handbuch wird
+nach und nach ergänzt — die wichtigsten Punkte stehen auch in der App
+unter dem ?-Symbol oben rechts. Grammatik-Übersichtstabellen (Alphabet,
+Artikel, Deklinationen, Verben, Adjektive, Zahlen, Pronomen, Fragewörter
++ Präpositionen) öffnet das Buchsymbol daneben.
+
+## Stufen (A1/A2)
+
+In den **Einstellungen** (Zahnrad) lässt sich die sichtbare **Stufe**
+umschalten: **A1** zeigt nur A1-Listen, **A2** zeigt A1- **und**
+A2-Listen (der A1-Wortschatz bleibt auf A2 relevant). Eigene Listen
+ohne Stufe sind in beiden Modi immer sichtbar — nach dem Update
+verschwindet also nichts. Die Stufe einer eigenen Liste wird beim
+Anlegen oder über „Umbenennen“ in der Vokabelverwaltung gesetzt.
+
+Der Filter wirkt in Training, Verwaltung und Statistik; Auswahllisten
+(★) werden nie gefiltert, und der Lernfortschritt ist stufenübergreifend
+(er hängt an der Karte, nicht an der Stufe). Hinweis: A1-Listen können
+für A2 unvollständig sein (z.B. fehlen Vokativ oder Aoristformen) —
+solche Karten lassen sich später über den Reimport einer korrigierten
+Textanalyse anreichern.
+
+## Erweiterte Funktionen
+
+Unter **Einstellungen → Erweiterte Funktionen** lassen sich
+Zusatzfunktionen für Fortgeschrittene einzeln zuschalten (Standard:
+aus). Eingeschaltete Funktionen erscheinen als eigene Karte im
+Hauptmenü und gelten für alle Stufen gemeinsam. Aktuell verfügbar:
+die **Textanalyse** (siehe unten).
+
+## Textanalyse (erweiterte Funktion)
+
+Die Textanalyse bringt komplette Analysen griechischer Texte in die
+App — erstellt von einem Chatbot nach der mitgelieferten
+**Arbeitsanweisung III** („Prompt kopieren“ in der Textanalyse-Ansicht):
+
+1. Prompt kopieren und zusammen mit einem griechischen Text an einen
+   Chatbot geben. Der Chatbot liefert **eine JSON-Datei** mit allen
+   Abschnitten der Analyse.
+2. In der Textanalyse-Ansicht **importieren** (Datei oder „Als Text
+   importieren“). Die App legt die Analyse an und erzeugt daraus
+   automatisch **zwei Vokabellisten**: „…– Vokabeln“ (Hauptvokabular)
+   und „…– Etymologie“ (Zusatzwörter aus Kognaten und Synonymen,
+   gebündelt nach Analysewort, ohne Dubletten).
+3. Jede Analyse ist komplett einsehbar: **Originaltext** (mit
+   Sprachausgabe-Button, langes Drücken = langsam), **inhaltliche
+   Übersetzung**, **Wort-für-Wort-Segmente**, **Vokabeln**, **Phrasen**
+   und die **Etymologieliste**.
+4. Vokabeln mit Etymologie-Eintrag zeigen im Training (auf der
+   griechischen Seite) und in den Wortübersichten einen
+   **Info-Button** (ⓘ) mit Wortherkunft, Kognaten und Synonymen.
+
+**Korrektur per Reimport:** Eine korrigierte Analyse-Datei mit
+derselben `id` (oder demselben Titel) **ersetzt** die Analyse. Die
+Vokabellisten werden dabei abgeglichen: bestehende Karten werden
+aktualisiert und behalten ihren Lernstand, neue Wörter kommen dazu,
+**nicht mehr enthaltene Wörter werden gelöscht** (die Analyse ist die
+Quelle der Wahrheit). Beim Löschen einer Analyse fragt die App, ob die
+erzeugten Listen mitgelöscht werden sollen.
 
 ## So wertet die Abfrage
 
@@ -35,8 +89,11 @@ das Buchsymbol daneben.
   Bedarf in die Zusatzfelder (Akkusativ/Genitiv Singular/Plural).
 - **Verben**: unregelmäßiges Präsens als 6 Formen mit Komma
   (1sg, 2sg, 3sg, 1pl, 2pl, 3pl), „-“ = regelmäßiger Slot, z.B.
-  „πάω, πας, πάει, πάμε, πάτε, πάνε“. 2. Stamm (Futur/να-Form) als
-  einzelner Stamm („γραψ-“) oder ebenfalls 6 Formen.
+  „πάω, πας, πάει, πάμε, πάτε, πάνε“. 2. Stamm (Futur/να-Form, Aorist
+  Aktiv) als einzelner Stamm („γραψ-“) oder ebenfalls 6 Formen.
+  Zusätzlich (A2-Vorbereitung, vorerst nur Speicherung/Anzeige):
+  **Aorist Passiv** im gleichen Format und ein unregelmäßiges
+  **Perfekt-Partizip** (z.B. „γραμμένος“).
 - Mehrere richtige Formen mit „/“ trennen (z.B. „2pl=είστε/είσαστε“),
   optionale Wortteile in Klammern („αγαπ(ά)ω“).
 - **Adjektive**: nur ein unregelmäßiges Femininum eintragen.
@@ -66,7 +123,7 @@ automatisch erkannt). Die CSV braucht eine Kopfzeile mit diesen
 Spalten (nur `front` und `back` sind Pflicht):
 
 ```
-front,back,plural,article,word_type,hints_gr,hints_de,notes_gr,notes_de,forms,stem2
+front,back,plural,article,word_type,hints_gr,hints_de,notes_gr,notes_de,forms,stem2,aorist_passive,participle
 ```
 
 Die Spalte `forms` nimmt unregelmäßige Formen als `schlüssel=form; …`
@@ -180,3 +237,18 @@ falschen Antworten.
 Deklinations- und Konjugationsrunden zeigen am Ende zusätzlich ihr eigenes
 Rundenergebnis (x von y richtig); das ist unabhängig von der dauerhaften
 Vokabelstatistik.
+
+### Statistik exportieren
+
+Über das Download-Symbol oben in der Statistik-Ansicht lassen sich die
+Statistikdaten exportieren — „Als Text“ (Zwischenablage) oder als Datei:
+
+- **CSV**: eine Zeile pro Karte aller sichtbaren Listen (auch
+  untrainierte Karten, dann mit leeren Fortschrittsspalten) mit den
+  Spalten `liste, front, back, word_type, box, correct, wrong, streak,
+  last_seen, due`.
+- **JSON**: dieselben Kartendaten plus eine Zusammenfassung pro Liste
+  (Kartenzahl, trainiert, sicher, Boxen-Verteilung).
+
+Der Export enthält genau die Listen, die die Statistik gerade anzeigt —
+die eingestellte Stufe wirkt also auch hier.

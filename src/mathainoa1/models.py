@@ -117,10 +117,16 @@ class VocabCard:
     # Unregelmäßige Formen für Deklination/Konjugation, z.B.
     # {"gen_pl": "γυναικών"} oder {"2sg": "πας"}; siehe FORM_KEYS.
     forms: dict[str, str] = field(default_factory=dict)
-    # 2. Stamm (Futur/να-Form) bei Verben: einzelner Stamm (z.B. "γράψ-")
-    # ODER 6 Personenformen kommagetrennt (1sg..3pl), Varianten mit "/".
-    # Vorerst nur Speicherung — Trainingslogik folgt später.
+    # 2. Stamm (Futur/να-Form, Aorist Aktiv) bei Verben: einzelner Stamm
+    # (z.B. "γράψ-") ODER 6 Personenformen kommagetrennt (1sg..3pl),
+    # Varianten mit "/". Vorerst nur Speicherung — Trainingslogik folgt später.
     stem2: str = ""
+    # Aorist Passiv (3. Stamm) bei Verben, gleiches Format wie stem2
+    # (z.B. "γραφτ-"). Vorerst nur Speicherung/Anzeige (A2-Vorbereitung).
+    aorist_passive: str = ""
+    # Unregelmäßiges Perfekt-Partizip (z.B. "γραμμένος"), nur wenn es vom
+    # regelmäßigen Muster abweicht. Nur Speicherung/Anzeige.
+    participle: str = ""
 
     def greek(self, with_article: bool) -> str:
         """Die erwartete griechische Form, je nach Artikel-Einstellung.

@@ -17,6 +17,7 @@ from mathainoa1.storage.settings import (
     load_app_settings,
     user_vocab_dir,
 )
+from mathainoa1.ui.features import enabled_features
 from mathainoa1.ui.views import grammar, manager, stats, trainer
 from mathainoa1.ui.views.settings import apply_app_theme, settings_view
 
@@ -111,8 +112,8 @@ def home_view(nav: Navigator, store: ContentStore, progress: ProgressStore) -> f
             opacity=1.0 if builder else 0.55,
         )
 
-    menu = ft.Column(
-        [
+    def build_menu() -> list[ft.Control]:
+        cards = [
             item(ft.Icons.STYLE, "Vokabeltraining",
                  "Karteikarten oder Tippen, nach Liste und Worttyp",
                  lambda n: trainer.setup_view(n, store, progress)),
@@ -128,17 +129,29 @@ def home_view(nav: Navigator, store: ContentStore, progress: ProgressStore) -> f
             item(ft.Icons.INSIGHTS, "Statistik",
                  "Fortschritt und Problemwörter",
                  lambda n: stats.stats_view(n, store, progress)),
-        ],
-        spacing=8,
-        scroll=ft.ScrollMode.AUTO,
-    )
+        ]
+        for f in enabled_features(load_app_settings()):
+            cards.append(item(
+                f.icon, f.title, f.subtitle,
+                lambda n, f=f: f.build(n, store, progress)))
+        return cards
+
+    menu = ft.Column(build_menu(), spacing=8, scroll=ft.ScrollMode.AUTO)
     # Rundes Zahnrad unten rechts öffnet die Einstellungen
     settings_fab = ft.FloatingActionButton(
         icon=ft.Icons.SETTINGS, mini=True, bottom=16, right=16,
         tooltip="Einstellungen",
         on_click=lambda e: nav.go("Einstellungen", settings_view(nav)),
     )
-    return ft.Stack([menu, settings_fab], expand=True)
+    root = ft.Stack([menu, settings_fab], expand=True)
+
+    def refresh_menu():
+        # In den Einstellungen umgeschaltete Features beim Zurücknavigieren
+        # ein-/ausblenden (Navigator._show ruft on_reappear auf)
+        menu.controls = build_menu()
+
+    root.on_reappear = refresh_menu
+    return root
 
 
 def main(page: ft.Page) -> None:

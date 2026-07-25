@@ -1,5 +1,5 @@
-"""Μαθαίνω — Griechisch A1: Lern-App für Griechisch (Vokabeln & Grammatik)."""
+"""Μαθαίνω — Griechisch: Lern-App für Griechisch (Vokabeln & Grammatik)."""
 
-APP_NAME = "Μαθαίνω — Griechisch A1"
+APP_NAME = "Μαθαίνω — Griechisch"
 # Bei Änderung auch version in pyproject.toml nachziehen
-__version__ = "0.3.0"
+__version__ = "0.4.0"

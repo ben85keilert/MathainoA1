@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 
 import flet as ft
 
@@ -147,6 +148,29 @@ def play_text(page: ft.Page, text: str, slow: bool = False,
     scheitern).
     """
     spoken = speakable(text)
+    if not spoken:
+        return
+
+    async def run():
+        if tts_engine() == TTS_GOOGLE:
+            await _speak_google(page, spoken, slow, notify_errors)
+        else:
+            await _speak_system(page, spoken, slow, notify_errors)
+
+    page.run_task(run)
+
+
+def play_long_text(page: ft.Page, text: str, slow: bool = False,
+                   notify_errors: bool = True) -> None:
+    """Spricht einen längeren Fließtext (z.B. Originaltext einer
+    Textanalyse) — ohne die speakable()-Kürzungen von play_text, die für
+    Vokabel-Vorderseiten gedacht sind (Abschneiden an "/", Klammern).
+
+    Die Systemstimme spricht beliebig lange Texte; gTTS zerlegt lange
+    Texte intern selbst und liefert eine MP3, die im Cache landet
+    (erste Wiedergabe dauert dann etwas).
+    """
+    spoken = re.sub(r"\s+", " ", text or "").strip()
     if not spoken:
         return
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from mathainoa1.logic.conjugation import ConjugationSettings
@@ -42,6 +42,12 @@ class AppSettings:
     # Prüfen beim Schreiben: False = "Prüfen"-Button mittig unter dem
     # Antwortfeld (Standard), True = rundes Häkchen rechts daneben
     check_beside_field: bool = False
+    # Sichtbare Stufe: "A1" | "A2". A2 zeigt auch A1-Listen; Listen ohne
+    # Stufe (book=None, alle eigenen) sind immer sichtbar.
+    level: str = "A1"
+    # Eingeschaltete erweiterte Funktionen (Schlüssel aus ui/features.FEATURES).
+    # Unbekannte Schlüssel (z.B. entfernte Features) werden ignoriert.
+    enabled_features: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)

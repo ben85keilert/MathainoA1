@@ -7,13 +7,14 @@ import flet as ft
 from mathainoa1.logic.answer_check import Result
 from mathainoa1.logic.session import TrainingSession, TrainingSettings, filter_cards
 from mathainoa1.models import WORD_TYPES, VocabCard
-from mathainoa1.storage.content import ContentStore
+from mathainoa1.storage.content import ContentStore, filter_level
 from mathainoa1.storage.progress import ProgressStore, max_box_for_mode
 from mathainoa1.storage.settings import (
     load_app_settings,
     load_default_settings,
     save_default_settings,
 )
+from mathainoa1.storage.textanalyse import etymology_for
 from mathainoa1.ui.audio import (
     autoplay_button,
     maybe_autoplay,
@@ -107,8 +108,10 @@ def typing_controls(tf_answer: ft.TextField, check) -> list[ft.Control]:
 def setup_view(nav, store: ContentStore, progress: ProgressStore,
                preselect_id: str | None = None) -> ft.Control:
     s = load_default_settings()
-    lists = sorted(store.lists.values(),
-                   key=lambda l: (l.chapter is None, l.chapter or 0, l.name))
+    lists = filter_level(
+        sorted(store.lists.values(),
+               key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
+        load_app_settings().level)
     selections = sorted(store.selections.values(), key=lambda x: x.name)
     if not lists:
         return ft.Text("Keine Vokabellisten gefunden.")
@@ -383,7 +386,19 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     btn_play_slow = ft.IconButton(
         ft.Icons.SLOW_MOTION_VIDEO, tooltip="Langsam — zum Nachsprechen",
         on_click=lambda e: play_text(nav.page, shown["card"].front, slow=True))
-    icons_row = ft.Row([btn_play, btn_play_slow, btn_edit],
+
+    def show_word_info(e):
+        entry = etymology_for(shown["card"]) if shown["card"] else None
+        if entry is None:
+            return
+        # Lazy-Import: das Feature-Modul nur laden, wenn es gebraucht wird
+        from mathainoa1.ui.views.textanalyse import etymology_dialog
+        etymology_dialog(nav.page, entry)
+
+    btn_info = ft.IconButton(ft.Icons.INFO_OUTLINE,
+                             tooltip="Wortherkunft & Synonyme",
+                             on_click=show_word_info)
+    icons_row = ft.Row([btn_play, btn_play_slow, btn_info, btn_edit],
                        alignment=ft.MainAxisAlignment.CENTER, spacing=0)
 
     def update_audio_row():
@@ -392,6 +407,9 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         card = shown["card"]
         on = session.prompt_side(card) == "gr" or revealed["answered"]
         btn_play.visible = btn_play_slow.visible = on
+        # Info-Button unter derselben Bedingung (griechische Seite sichtbar),
+        # und nur wenn es zum Wort einen Etymologie-Eintrag gibt
+        btn_info.visible = on and etymology_for(card) is not None
 
     def refresh_notes():
         card = shown["card"]

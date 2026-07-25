@@ -23,6 +23,24 @@ from mathainoa1.models import (
 )
 
 
+# Stufen in aufsteigender Reihenfolge; die Stufen-Einstellung zeigt eine
+# Liste, wenn ihre Stufe <= der eingestellten ist (A2 sieht also auch A1).
+LEVELS = ["A1", "A2"]
+
+
+def filter_level(lists, level: str) -> list[VocabList]:
+    """Filtert Listen nach der eingestellten Stufe.
+
+    Listen ohne Stufe (book=None, alle eigenen) sind immer sichtbar;
+    unbekannte Stufenwerte verhalten sich wie die höchste Stufe.
+    """
+    if level not in LEVELS:
+        return list(lists)
+    rank = LEVELS.index(level)
+    return [l for l in lists
+            if l.book not in LEVELS or LEVELS.index(l.book) <= rank]
+
+
 def load_list(path: Path) -> VocabList:
     with open(path, encoding="utf-8") as f:
         return VocabList.from_dict(json.load(f))
@@ -259,7 +277,8 @@ class ContentStore:
 # --- Import / Export ---
 
 CSV_FIELDS = ["front", "back", "plural", "article", "word_type",
-              "hints_gr", "hints_de", "notes_gr", "notes_de", "forms", "stem2"]
+              "hints_gr", "hints_de", "notes_gr", "notes_de", "forms", "stem2",
+              "aorist_passive", "participle"]
 
 
 def export_csv(vlist: VocabList) -> str:
@@ -334,11 +353,12 @@ def import_csv(name: str, text: str, chapter: int | None = None) -> VocabList:
                 row["forms"] = parse_forms_text(row["forms"])
             except ValueError:
                 del row["forms"]  # kaputte Angabe lieber ignorieren als abbrechen
-        if "stem2" in row:
-            try:
-                row["stem2"] = parse_stem2_text(row["stem2"])
-            except ValueError:
-                del row["stem2"]
+        for stem_field in ("stem2", "aorist_passive"):
+            if stem_field in row:
+                try:
+                    row[stem_field] = parse_stem2_text(row[stem_field])
+                except ValueError:
+                    del row[stem_field]
         cards.append(VocabCard(**row))
     return VocabList(name=name, chapter=chapter, cards=cards)
 

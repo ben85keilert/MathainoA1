@@ -13,6 +13,7 @@ import flet as ft
 from mathainoa1.logic.answer_check import normalize, strip_accents
 from mathainoa1.models import WORD_TYPES, VocabCard
 from mathainoa1.storage.progress import MAX_BOX, CardProgress
+from mathainoa1.storage.textanalyse import etymology_for
 from mathainoa1.ui.audio import play_text
 
 BOX_COLORS = [ft.Colors.RED, ft.Colors.ORANGE, ft.Colors.AMBER,
@@ -91,7 +92,19 @@ def card_tiles(cards: list[VocabCard], on_click=None, on_delete=None,
             p = all_progress.get(c.id)
             box = p.box if p and p.seen else 0
             leading = ft.Icon(ft.Icons.CIRCLE, size=14, color=box_color(box))
-        trailing_items: list[ft.Control] = [
+        trailing_items: list[ft.Control] = []
+        entry = etymology_for(c)  # None, wenn Feature Textanalyse aus
+        if entry is not None:
+            def show_info(e, entry=entry):
+                # Lazy-Import: wordlist darf keine View-Module importieren
+                from mathainoa1.ui.views.textanalyse import etymology_dialog
+                etymology_dialog(e.control.page, entry)
+
+            trailing_items.append(ft.IconButton(
+                ft.Icons.INFO_OUTLINE, tooltip="Wortherkunft & Synonyme",
+                on_click=show_info,
+            ))
+        trailing_items.append(
             ft.GestureDetector(
                 content=ft.Container(
                     ft.Icon(ft.Icons.VOLUME_UP, color=ft.Colors.PRIMARY),
@@ -102,7 +115,7 @@ def card_tiles(cards: list[VocabCard], on_click=None, on_delete=None,
                 on_long_press_start=lambda e, c=c: play_text(
                     e.control.page, c.front, slow=True),
             ),
-        ]
+        )
         if on_delete:
             trailing_items.append(ft.IconButton(
                 ft.Icons.DELETE_OUTLINE, tooltip="Löschen",

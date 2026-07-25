@@ -309,3 +309,167 @@ def test_settings_view_builds_and_applies_theme(tmp_path, monkeypatch):
     apply_app_theme(nav.page, AppSettings(theme="dark", seed="green"))
     assert nav.page.theme_mode == ft.ThemeMode.DARK
     assert nav.page.theme is not None
+
+
+# --- Erweiterte Funktionen (Feature-Framework) und Textanalyse --------------
+
+def _collect_texts_and_tooltips(ctrl, out):
+    import flet as ft
+    if isinstance(ctrl, ft.Text) and ctrl.value:
+        out.append(ctrl.value)
+    if getattr(ctrl, "tooltip", None):
+        out.append(ctrl.tooltip)
+    if getattr(ctrl, "label", None) and isinstance(ctrl.label, str):
+        out.append(ctrl.label)
+    for attr in ("controls", "content", "title", "subtitle"):
+        sub = getattr(ctrl, attr, None)
+        subs = sub if isinstance(sub, list) else [sub]
+        for s in subs:
+            import flet as ft
+            if isinstance(s, ft.Control):
+                _collect_texts_and_tooltips(s, out)
+
+
+def test_settings_view_features_section(tmp_path, monkeypatch):
+    """Die Sektion „Erweiterte Funktionen“ zeigt je Feature einen Schalter —
+    bzw. den Platzhalter, wenn die Registry leer ist."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.ui import features
+    from mathainoa1.ui.views import settings as settings_mod
+
+    nav = _fake_nav()
+    found: list[str] = []
+    _collect_texts_and_tooltips(settings_mod.settings_view(nav), found)
+    assert "Erweiterte Funktionen" in found
+    assert "Textanalyse" in found  # Schalter des registrierten Features
+    assert "Stufe" in found  # Stufen-Sektion vorhanden
+
+    monkeypatch.setattr(features, "FEATURES", [])
+    monkeypatch.setattr(settings_mod, "FEATURES", [])
+    found = []
+    _collect_texts_and_tooltips(settings_mod.settings_view(nav), found)
+    assert any("Noch keine Zusatzfunktionen" in t for t in found)
+
+
+def test_home_menu_shows_enabled_feature(store_with_edge_cases, tmp_path,
+                                         monkeypatch):
+    """Home-Menü: Feature-Karte erscheint nach dem Aktivieren über
+    on_reappear (Zurücknavigieren), ohne Neustart."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.storage.settings import AppSettings, save_app_settings
+    from mathainoa1.ui import app as app_mod
+
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "home.db")
+    try:
+        home = app_mod.home_view(nav, store, progress)
+        found: list[str] = []
+        _collect_texts_and_tooltips(home, found)
+        assert "Vokabeltraining" in found and "Textanalyse" not in found
+
+        s = AppSettings()
+        s.enabled_features = ["textanalyse"]
+        save_app_settings(s)
+        assert callable(home.on_reappear)
+        home.on_reappear()
+        found = []
+        _collect_texts_and_tooltips(home, found)
+        assert "Textanalyse" in found
+    finally:
+        progress.close()
+
+
+def _sample_analysis_json():
+    import json
+    return json.dumps({
+        "title": "Testtext",
+        "original_text": "Χθες έγινε σεισμός.",
+        "translation": "Gestern gab es ein Erdbeben.",
+        "segments": [{"gr": "Χθες", "de": "gestern"}],
+        "vocab": [{"front": "ο σεισμός", "back": "Erdbeben",
+                   "article": "ο", "word_type": "Nomen"}],
+        "phrases": [{"gr": "έγινε σεισμός", "de": "es gab ein Erdbeben"}],
+        "etymology": [{
+            "word": "ο σεισμός",
+            "breakdown": [{"element": "σει-", "meaning": "schütteln"}],
+            "total": "das Schütteln → Erdbeben",
+            "semantics": "Vom altgriechischen σείω.",
+            "cognates": {"identical": [{"word": "σείω",
+                                        "meaning": "schütteln"}]},
+            "synonyms": [{"word": "η δόνηση", "nuance": "auch technisch"}],
+            "extra_vocab": [{"front": "η δόνηση", "back": "Erschütterung",
+                             "article": "η", "word_type": "Nomen"}],
+        }],
+    }, ensure_ascii=False)
+
+
+def test_textanalyse_views_build(store_with_edge_cases, tmp_path, monkeypatch):
+    """Gesamtschau, Detailansicht und Etymologie-Dialog bauen fehlerfrei —
+    leer und mit importierter Analyse."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.storage import textanalyse as ta
+    from mathainoa1.ui.views import textanalyse as ta_view
+
+    ta.invalidate_cache()
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "ta.db")
+    try:
+        ta_view.overview_view(nav, store, progress)  # leer
+
+        astore = ta.AnalysisStore(ta.analyses_dir(), store)
+        analysis, _stats = astore.import_analysis(_sample_analysis_json())
+        overview = ta_view.overview_view(nav, store, progress)
+        found: list[str] = []
+        _collect_texts_and_tooltips(overview, found)
+        assert "Testtext" in found
+
+        detail = ta_view.detail_view(nav, astore, store, progress, analysis)
+        found = []
+        _collect_texts_and_tooltips(detail, found)
+        assert "Originaltext & Übersetzung" in found
+        assert "Etymologie" in found
+
+        dialogs = []
+        nav.page.show_dialog = lambda d: dialogs.append(d)
+        ta_view.etymology_dialog(nav.page, analysis.etymology[0])
+        assert dialogs
+    finally:
+        ta.invalidate_cache()
+        progress.close()
+
+
+def test_trainer_info_button_visible_with_feature(store_with_edge_cases,
+                                                  tmp_path, monkeypatch):
+    """Der Info-Button erscheint im Training auf der griechischen Seite,
+    wenn das Feature aktiv ist und die Karte einen Etymologie-Eintrag hat."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.logic.session import TrainingSession, TrainingSettings
+    from mathainoa1.storage import textanalyse as ta
+    from mathainoa1.storage.settings import AppSettings, save_app_settings
+
+    ta.invalidate_cache()
+    store, _vlist = store_with_edge_cases
+    astore = ta.AnalysisStore(ta.analyses_dir(), store)
+    astore.import_analysis(_sample_analysis_json())
+    s = AppSettings()
+    s.enabled_features = ["textanalyse"]
+    save_app_settings(s)
+    ta.invalidate_cache()
+
+    card = store.lists[
+        [l.id for l in store.lists.values()
+         if l.name == "Testtext – Vokabeln"][0]].cards[0]
+    session = TrainingSession(
+        [card], TrainingSettings(mode="flashcard", direction="gr_de"), {})
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "tr.db")
+    try:
+        view = trainer.run_view(nav, store, progress, session)
+        found: list[str] = []
+        _collect_texts_and_tooltips(view, found)
+        assert "Wortherkunft & Synonyme" in found
+    finally:
+        ta.invalidate_cache()
+        progress.close()

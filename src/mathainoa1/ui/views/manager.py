@@ -23,11 +23,12 @@ from mathainoa1.models import (
     verb_forms_to_text,
 )
 from mathainoa1.storage import content, pdf_export
-from mathainoa1.storage.content import ContentStore
+from mathainoa1.storage.content import ContentStore, filter_level
 from mathainoa1.storage.progress import ProgressStore
-from mathainoa1.storage.settings import TTS_GOOGLE
+from mathainoa1.storage.settings import TTS_GOOGLE, load_app_settings
 from mathainoa1.storage.tts import TtsFetchError, speakable
 from mathainoa1.ui.audio import tts_cache, tts_engine
+from mathainoa1.ui.dialogs import plaintext_dialog
 from mathainoa1.ui.views.trainer import edit_notes_dialog
 from mathainoa1.ui.views.wordlist import (
     alpha_key,
@@ -43,6 +44,16 @@ from mathainoa1.ui.views.wordlist import (
 ARTICLES = ["", "ο", "η", "το", "οι", "τα"]
 
 
+def _level_dropdown(value: str | None) -> ft.Dropdown:
+    """Stufen-Auswahl für eigene Listen: leer = keine Stufe (immer
+    sichtbar), sonst A1/A2 (siehe content.filter_level)."""
+    return ft.Dropdown(
+        label="Stufe", value=value or "",
+        options=[ft.DropdownOption(key="", text="Keine (immer sichtbar)")]
+        + [ft.DropdownOption(key=lv, text=lv) for lv in content.LEVELS],
+    )
+
+
 def google_audio() -> bool:
     """Ob der Google-Weg (gTTS + Cache) aktiv ist — nur dann ergeben
     „Audio vorbereiten“ und „Audio löschen“ Sinn; die Systemstimme
@@ -54,6 +65,7 @@ EXPORT_COLUMNS = [
     ("front", "Griechisch"), ("back", "Deutsch"), ("plural", "Plural"),
     ("article", "Artikel"), ("word_type", "Worttyp"),
     ("forms", "Formen"), ("stem2", "2. Stamm"),
+    ("aorist_passive", "Aorist Passiv"), ("participle", "Partizip Perfekt"),
     ("hints_gr", "Hinweis GR"), ("hints_de", "Hinweis DE"),
     ("notes_gr", "Notiz GR"), ("notes_de", "Notiz DE"),
 ]
@@ -67,12 +79,14 @@ def _export_value(card: VocabCard, key: str) -> str:
 
 def rename_dialog(page: ft.Page, store: ContentStore, vlist: VocabList,
                   on_saved=None) -> None:
-    """Dialog zum Umbenennen einer (editierbaren) Liste."""
+    """Dialog zum Umbenennen einer (editierbaren) Liste — inkl. Stufe."""
     tf = ft.TextField(label="Name", value=vlist.name, autofocus=True)
+    dd_level = _level_dropdown(vlist.book)
 
     def save(e):
         if tf.value.strip():
             vlist.name = tf.value.strip()
+            vlist.book = dd_level.value or None
             store.save_user_list(vlist)
             page.pop_dialog()
             if on_saved:
@@ -80,7 +94,7 @@ def rename_dialog(page: ft.Page, store: ContentStore, vlist: VocabList,
 
     page.show_dialog(ft.AlertDialog(
         title=ft.Text("Liste umbenennen"),
-        content=tf,
+        content=ft.Column([tf, dd_level], tight=True, spacing=12),
         actions=[ft.TextButton("Abbrechen", on_click=lambda e: page.pop_dialog()),
                  ft.FilledButton("Speichern", on_click=save)],
     ))
@@ -113,8 +127,6 @@ def manager_view(nav, store: ContentStore,
     picker = ft.FilePicker()
     if picker not in page.services:
         page.services.append(picker)
-    clipboard = ft.Clipboard()
-    page.services.append(clipboard)
     body = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO)
     state = {"sort_mode": False}  # Listen-Reihenfolge per ↑/↓ ändern
 
@@ -135,12 +147,16 @@ def manager_view(nav, store: ContentStore,
         refresh()
 
     def refresh():
-        ordered = store.ordered_lists()
+        # Stufenfilter — im Sortiermodus bewusst ungefiltert, sonst würden
+        # ausgeblendete Listen beim Speichern aus list_order.json fallen
+        ordered = (store.ordered_lists() if state["sort_mode"] else
+                   filter_level(store.ordered_lists(),
+                                load_app_settings().level))
         sort_btn = ft.IconButton(
             icon=ft.Icons.CHECK if state["sort_mode"] else ft.Icons.SWAP_VERT,
             icon_color=ft.Colors.PRIMARY if state["sort_mode"] else None,
             tooltip=("Sortieren beenden" if state["sort_mode"]
-                     else "Reihenfolge ändern"),
+                     else "Reihenfolge ändern (zeigt alle Stufen)"),
             on_click=toggle_sort,
         )
         rows: list[ft.Control] = [
@@ -289,7 +305,8 @@ def manager_view(nav, store: ContentStore,
             content=ft.ListTile(
                 leading=ft.Icon(ft.Icons.LIST_ALT),
                 title=ft.Text(vlist.name),
-                subtitle=ft.Text(f"{len(vlist.cards)} Karten"),
+                subtitle=ft.Text(f"{len(vlist.cards)} Karten"
+                                 + (f" · {vlist.book}" if vlist.book else "")),
                 trailing=trailing,
                 on_click=lambda e, l=vlist: nav.go(
                     l.name, list_view(nav, store, l, progress)),
@@ -304,18 +321,19 @@ def manager_view(nav, store: ContentStore,
 
     def new_list_dialog(e):
         tf_name = ft.TextField(label="Name", autofocus=True)
+        dd_level = _level_dropdown(None)
         def create(e):
             name = (tf_name.value or "").strip()
             if not name:
                 return
-            vlist = VocabList(name=name)
+            vlist = VocabList(name=name, book=dd_level.value or None)
             store.save_user_list(vlist)
             close_dialog()
             refresh()
             nav.go(vlist.name, list_view(nav, store, vlist, progress))
         page.show_dialog(ft.AlertDialog(
             title=ft.Text("Neue Liste"),
-            content=ft.Column([tf_name], tight=True, spacing=12),
+            content=ft.Column([tf_name, dd_level], tight=True, spacing=12),
             actions=[ft.TextButton("Abbrechen", on_click=close_dialog),
                      ft.FilledButton("Anlegen", on_click=create)],
         ))
@@ -402,31 +420,6 @@ def manager_view(nav, store: ContentStore,
         store.save_user_list(vlist)
         refresh()
 
-    def copy_text(text: str):
-        async def do():
-            await clipboard.set(text)
-        page.run_task(do)
-
-    def plaintext_dialog(title: str, text: str):
-        """Exporttext anzeigen: markierbar plus Kopieren-Button."""
-        def copy(e):
-            copy_text(text)
-            page.pop_dialog()
-            page.show_dialog(ft.SnackBar(ft.Text(
-                "Export in die Zwischenablage kopiert.")))
-        page.show_dialog(ft.AlertDialog(
-            title=ft.Text(title, size=16),
-            content=ft.Column(
-                [ft.Text(text, size=12, selectable=True)],
-                scroll=ft.ScrollMode.AUTO, width=420, height=440,
-            ),
-            actions=[
-                ft.TextButton("Kopieren", icon=ft.Icons.COPY, on_click=copy),
-                ft.TextButton("Schließen",
-                              on_click=lambda e: page.pop_dialog()),
-            ],
-        ))
-
     def export_dialog(name: str, cards: list[VocabCard]):
         """Export als CSV, JSON oder PDF — mit Spaltenauswahl per Checkbox.
 
@@ -487,7 +480,7 @@ def manager_view(nav, store: ContentStore,
             if f is None or fmt == "pdf":
                 return
             page.pop_dialog()
-            plaintext_dialog(f"{name}.{fmt}", build_text(fmt, f))
+            plaintext_dialog(page, f"{name}.{fmt}", build_text(fmt, f))
 
         async def as_file(e):
             fmt = current_format()
@@ -713,8 +706,10 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
     sel_boxes: set[int] = set(range(0, 6))
 
     tf_name = ft.TextField(label="Name der Auswahlliste", value=sel.name)
-    lists = sorted(store.lists.values(),
-                   key=lambda l: (l.chapter is None, l.chapter or 0, l.name))
+    lists = filter_level(
+        sorted(store.lists.values(),
+               key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
+        load_app_settings().level)
     dd_list = ft.Dropdown(
         label="Liste", value=lists[0].id,
         options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists],
@@ -1050,9 +1045,20 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
         helper="Stamm mit Akzent → θα γράψω; ohne Akzent → endbetont "
                "(κοιμηθ- → θα κοιμηθώ). Unregelmäßig: 6 Formen wie oben.",
     )
+    tf_aorist_passive = ft.TextField(
+        label="Aorist Passiv (3. Stamm)",
+        hint_text="z.B. γραφτ- — oder 6 Formen mit Komma",
+        helper="Gleiches Format wie der 2. Stamm. Vorerst nur Anzeige "
+               "(A2-Vorbereitung).",
+    )
+    tf_participle = ft.TextField(
+        label="Perfekt-Partizip (unregelmäßig)",
+        hint_text="z.B. γραμμένος",
+        helper="Nur ausfüllen, wenn es vom regelmäßigen Muster abweicht.",
+    )
     verb_section = ft.Column(
         [ft.Text("Konjugation", size=13, weight=ft.FontWeight.BOLD),
-         tf_present, tf_stem2],
+         tf_present, tf_stem2, tf_aorist_passive, tf_participle],
         spacing=10, visible=False,
     )
     tf_fem = ft.TextField(label="Femininum (unregelmäßig)",
@@ -1101,6 +1107,8 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
             tf.value = c.forms.get(key, "") if c else ""
         tf_present.value = verb_forms_to_text(c.forms) if c else ""
         tf_stem2.value = c.stem2 if c else ""
+        tf_aorist_passive.value = c.aorist_passive if c else ""
+        tf_participle.value = c.participle if c else ""
         tf_fem.value = c.forms.get("fem", "") if c else ""
         error.value = ""
         if c is None:
@@ -1112,8 +1120,8 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
     def is_blank() -> bool:
         return not (tf_front.value or "").strip() and not (tf_back.value or "").strip()
 
-    def collect_forms() -> tuple[dict[str, str], str]:
-        """Formen und 2. Stamm je Worttyp aus den Feldern einsammeln.
+    def collect_forms() -> tuple[dict[str, str], str, str]:
+        """Formen, 2. Stamm und Aorist Passiv je Worttyp einsammeln.
 
         Worttyp-Wechsel räumt fremde Schlüssel auf (analog zum
         Artikel-Nulling). ValueError bei ungültiger Eingabe.
@@ -1126,13 +1134,14 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
             old = state["card"].forms if state["card"] else {}
             if old.get("nom_pl"):
                 forms["nom_pl"] = old["nom_pl"]
-            return forms, ""
+            return forms, "", ""
         if wt == "Verb":
             return (parse_verb_forms_text(tf_present.value or ""),
-                    parse_stem2_text(tf_stem2.value or ""))
+                    parse_stem2_text(tf_stem2.value or ""),
+                    parse_stem2_text(tf_aorist_passive.value or ""))
         if wt == "Adjektiv":
             fem = (tf_fem.value or "").strip()
-            return ({"fem": fem} if fem else {}), ""
+            return ({"fem": fem} if fem else {}), "", ""
         if wt == "Sonstiges":
             # alle Felder sichtbar -> auch alle Eingaben übernehmen
             forms = {k: v for k in NOUN_EDITOR_KEYS
@@ -1140,8 +1149,9 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
             if (fem := (tf_fem.value or "").strip()):
                 forms["fem"] = fem
             forms.update(parse_verb_forms_text(tf_present.value or ""))
-            return forms, parse_stem2_text(tf_stem2.value or "")
-        return {}, ""
+            return (forms, parse_stem2_text(tf_stem2.value or ""),
+                    parse_stem2_text(tf_aorist_passive.value or ""))
+        return {}, "", ""
 
     def apply_to(c: VocabCard) -> bool:
         front = (tf_front.value or "").strip()
@@ -1151,7 +1161,7 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
             page.update()
             return False
         try:
-            forms, stem2 = collect_forms()
+            forms, stem2, aorist_passive = collect_forms()
         except ValueError as exc:
             error.value = str(exc)
             page.update()
@@ -1169,6 +1179,10 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
         c.hints_de = (tf_hints_de.value or "").strip()
         c.forms = forms
         c.stem2 = stem2
+        c.aorist_passive = aorist_passive
+        verb_like = dd_type.value in ("Verb", "Sonstiges")
+        c.participle = ((tf_participle.value or "").strip()
+                        if verb_like else "")
         c.chapter = vlist.chapter
         return True
 
@@ -1296,6 +1310,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         first_w = max(120, 0.30 * w)
         cols = [("Deutsch", 150), ("Plural", 90), ("Artikel", 70),
                 ("Typ", 100), ("Formen", 170), ("2. Stamm", 110),
+                ("Aorist Passiv", 110), ("Partizip", 110),
                 ("Hinweis GR", 130), ("Hinweis DE", 130),
                 ("Notiz GR", 130), ("Notiz DE", 130)]
         max_k = len(cols) - 1
@@ -1358,6 +1373,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         def values(c: VocabCard) -> tuple:
             return (c.back, c.plural, c.article or "", c.word_type,
                     forms_to_text(c.forms), c.stem2,
+                    c.aorist_passive, c.participle,
                     c.hints_gr, c.hints_de, c.notes_gr, c.notes_de)
 
         rows = []

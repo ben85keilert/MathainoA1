@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import flet as ft
 
+from mathainoa1.storage.content import LEVELS
 from mathainoa1.storage.settings import (
     TTS_GOOGLE,
     TTS_SYSTEM,
@@ -16,6 +17,7 @@ from mathainoa1.storage.settings import (
     save_app_settings,
 )
 from mathainoa1.ui.audio import set_tts_engine
+from mathainoa1.ui.features import FEATURES
 
 # Auswählbare Akzentfarben (Schlüssel wird in AppSettings.seed gespeichert)
 SEED_COLORS: dict[str, tuple[str, str]] = {
@@ -160,11 +162,57 @@ def settings_view(nav) -> ft.Control:
 
     rg_tts.on_change = on_tts
 
+    # --- Stufe: sichtbare Vokabellisten (A1/A2) ---
+    seg_level = ft.SegmentedButton(
+        selected=[s.level if s.level in LEVELS else LEVELS[0]],
+        segments=[ft.Segment(value=lv, label=ft.Text(lv)) for lv in LEVELS],
+    )
+
+    def on_level(e):
+        sel = seg_level.selected
+        s.level = next(iter(sel)) if isinstance(sel, (list, set, tuple)) else sel
+        save_app_settings(s)
+
+    seg_level.on_change = on_level
+
+    # --- Erweiterte Funktionen: einzeln zuschaltbare Features ---
+    def feature_switch(f) -> ft.Switch:
+        sw = ft.Switch(label=f.title, value=f.key in s.enabled_features)
+
+        def on_toggle(e, f=f, sw=sw):
+            enabled = set(s.enabled_features)
+            (enabled.add if sw.value else enabled.discard)(f.key)
+            # Registry-Reihenfolge statt Einschalt-Reihenfolge speichern
+            s.enabled_features = [x.key for x in FEATURES if x.key in enabled]
+            save_app_settings(s)
+            # Gecachte Feature-Zustände (z.B. Etymologie-Index) auffrischen
+            from mathainoa1.storage.textanalyse import invalidate_cache
+            invalidate_cache()
+
+        sw.on_change = on_toggle
+        return sw
+
+    feature_rows: list[ft.Control] = []
+    for f in FEATURES:
+        feature_rows.append(feature_switch(f))
+        feature_rows.append(ft.Text(f.subtitle, size=13, italic=True))
+    if not feature_rows:
+        feature_rows.append(ft.Text(
+            "Noch keine Zusatzfunktionen verfügbar — weitere folgen in "
+            "künftigen Versionen.", size=13, italic=True))
+
     def _h(text: str) -> ft.Text:
         return ft.Text(text, size=16, weight=ft.FontWeight.BOLD)
 
     return ft.Column(
         [
+            _h("Stufe"),
+            ft.Text("Filtert, welche Vokabellisten in Training, Verwaltung "
+                    "und Statistik erscheinen. A2 zeigt auch A1-Listen. "
+                    "Eigene Listen ohne Stufe sind immer sichtbar.",
+                    size=13, italic=True),
+            seg_level,
+            ft.Divider(),
             _h("Ansicht"),
             ft.Text("Design", size=13),
             seg_theme,
@@ -193,6 +241,12 @@ def settings_view(nav) -> ft.Control:
             ft.Divider(),
             _h("Sprachausgabe"),
             rg_tts,
+            ft.Divider(),
+            _h("Erweiterte Funktionen"),
+            ft.Text("Zusatzfunktionen für Fortgeschrittene. Eingeschaltete "
+                    "Funktionen erscheinen als eigene Karte im Hauptmenü "
+                    "und gelten für alle Stufen.", size=13, italic=True),
+            *feature_rows,
         ],
         spacing=12,
         scroll=ft.ScrollMode.AUTO,

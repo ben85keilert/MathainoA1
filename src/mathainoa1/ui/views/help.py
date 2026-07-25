@@ -55,6 +55,10 @@ REGELN FÜR DIE SPALTEN
       z.B. für βλέπω: "δω, δεις, δει, δούμε, δείτε, δουν/δούνε".
     - weglassen nur, wenn der Futurstamm dem Präsens entspricht und
       unbekannt ist, oder bei Fixformen (κοστίζει, θα δούμε).
+11. aorist_passive: der Aorist Passiv (3. Stamm) im gleichen Format wie
+    stem2 — angeben, wenn bekannt (nicht aus dem Aktiv berechenbar).
+    participle: das Perfekt-Partizip nur bei unregelmäßiger Form
+    (z.B. γραμμένος). Beide Spalten sonst leer lassen.
 
 BEISPIELZEILEN (je Worttyp; regelmäßige Wörter brauchen keine forms)
 "ο δρόμος","Straße","-οι","ο","Nomen",,,,,,
@@ -354,6 +358,43 @@ def help_view(nav, store=None) -> ft.Control:
             ],
             wrap=True, spacing=8,
         ),
+        _p("Mit der erweiterten Funktion „Textanalyse“ (Einstellungen → "
+           "Erweiterte Funktionen) gibt es zusätzlich einen dritten "
+           "Prompt für komplette Textanalysen — direkt in der "
+           "Textanalyse-Ansicht über „Prompt kopieren“."),
+    ])
+
+    stufen = _chapter(nav, "Stufen & erweiterte Funktionen",
+                      ft.Icons.TUNE, [
+        ft.Text("Stufe (A1/A2)", size=14, weight=ft.FontWeight.BOLD),
+        _bullets([
+            "In den Einstellungen umschaltbar: A1 zeigt nur A1-Listen, "
+            "A2 zeigt A1- und A2-Listen. Eigene Listen ohne Stufe sind "
+            "immer sichtbar.",
+            "Die Stufe einer eigenen Liste wird beim Anlegen oder über "
+            "„Umbenennen“ in der Vokabelverwaltung gesetzt.",
+            "Der Lernfortschritt hängt an der Karte und gilt "
+            "stufenübergreifend.",
+        ]),
+        ft.Text("Erweiterte Funktionen", size=14, weight=ft.FontWeight.BOLD),
+        _bullets([
+            "Zusatzfunktionen für Fortgeschrittene — in den Einstellungen "
+            "einzeln zuschaltbar (Standard: aus); eingeschaltete "
+            "erscheinen als eigene Karte im Hauptmenü.",
+            "Textanalyse: importiert komplette Chatbot-Analysen "
+            "griechischer Texte (Originaltext mit Sprachausgabe, "
+            "Übersetzung, Wort-für-Wort, Vokabellisten, Etymologie) und "
+            "zeigt im Training einen Info-Button mit Wortherkunft und "
+            "Synonymen. Details im Handbuch.",
+        ]),
+        ft.Text("Statistik exportieren", size=14, weight=ft.FontWeight.BOLD),
+        _bullets([
+            "Download-Symbol oben in der Statistik: exportiert eine Zeile "
+            "pro Karte (Liste, Box, richtig/falsch, zuletzt trainiert) "
+            "als CSV oder JSON — als Text in die Zwischenablage oder als "
+            "Datei. JSON enthält zusätzlich eine Zusammenfassung pro "
+            "Liste.",
+        ]),
     ])
 
     audio = _chapter(nav, "Audio (Aussprache)", ft.Icons.VOLUME_UP, [
@@ -441,8 +482,9 @@ def help_view(nav, store=None) -> ft.Control:
             content=ft.Column(
                 [
                     ft.Text(f"Version {__version__}", size=14),
-                    ft.Text("Lern-App für Griechisch (Niveau A1): "
-                            "Vokabeln, Deklination und Konjugation.", size=14),
+                    ft.Text("Lern-App für Griechisch (Niveau A1, mit "
+                            "A2-Vorbereitung): Vokabeln, Deklination und "
+                            "Konjugation.", size=14),
                     ft.Divider(),
                     ft.Text("Lizenz: MIT — © 2026 Benjamin Ebert", size=13),
                     ft.Text("Quellcode:\n"
@@ -471,7 +513,7 @@ def help_view(nav, store=None) -> ft.Control:
                "Verben …) findest du über das Buchsymbol oben in der "
                "Leiste."),
             trainings, wertung, leitner, editing, wortsuche, prompts,
-            audio, datenschutz, about_row,
+            stufen, audio, datenschutz, about_row,
         ],
         spacing=4,
         scroll=ft.ScrollMode.AUTO,

@@ -26,7 +26,7 @@ from mathainoa1.logic.declension import (
     DeclensionSession,
     DeclensionSettings,
 )
-from mathainoa1.storage.content import ContentStore
+from mathainoa1.storage.content import ContentStore, filter_level
 from mathainoa1.storage.progress import ProgressStore
 from mathainoa1.storage.settings import (
     load_app_settings,
@@ -166,8 +166,10 @@ def _grouped_word_rows(nav, store: ContentStore, source_id: str,
 def setup_view(nav, store: ContentStore, progress: ProgressStore,
                preselect_id: str | None = None) -> ft.Control:
     s = load_declension_settings()
-    lists = sorted(store.lists.values(),
-                   key=lambda l: (l.chapter is None, l.chapter or 0, l.name))
+    lists = filter_level(
+        sorted(store.lists.values(),
+               key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
+        load_app_settings().level)
     selections = sorted(store.selections.values(), key=lambda x: x.name)
     if not lists:
         return ft.Text("Keine Vokabellisten gefunden.")
@@ -398,8 +400,10 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
 def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                            preselect_id: str | None = None) -> ft.Control:
     s = load_conjugation_settings()
-    lists = sorted(store.lists.values(),
-                   key=lambda l: (l.chapter is None, l.chapter or 0, l.name))
+    lists = filter_level(
+        sorted(store.lists.values(),
+               key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
+        load_app_settings().level)
     selections = sorted(store.selections.values(), key=lambda x: x.name)
     if not lists:
         return ft.Text("Keine Vokabellisten gefunden.")
