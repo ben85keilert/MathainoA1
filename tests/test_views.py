@@ -499,3 +499,62 @@ def test_result_view_lists_correct_answers(store_with_edge_cases, tmp_path):
         assert wrong_card.front in found and right_card.front in found
     finally:
         progress.close()
+
+
+def test_edit_notes_dialog_offers_full_editor(store_with_edge_cases):
+    """„Alles bearbeiten" im Notiz-Dialog: nur bei eigenen Listen, öffnet
+    den vollen Karteneditor und übernimmt eben getippte Notizen."""
+    import flet as ft
+
+    store, vlist = store_with_edge_cases
+    card = vlist.cards[0]
+    nav = _fake_nav()
+    dialogs = []
+    nav.page.show_dialog = lambda d: dialogs.append(d)
+    nav.page.pop_dialog = lambda: None
+    trainer.edit_notes_dialog(nav.page, store, card)
+    assert len(dialogs) == 1
+
+    def find_button(ctrl, label):
+        if isinstance(ctrl, ft.TextButton) and ctrl.content == label:
+            return ctrl
+        for attr in ("controls", "content", "title", "actions"):
+            sub = getattr(ctrl, attr, None)
+            subs = sub if isinstance(sub, list) else [sub]
+            for s in subs:
+                if isinstance(s, ft.Control):
+                    hit = find_button(s, label)
+                    if hit is not None:
+                        return hit
+        return None
+
+    btn = find_button(dialogs[0], "Alles bearbeiten")
+    assert btn is not None
+    # Notiz eintippen, dann wechseln: voller Editor öffnet, Notiz gespeichert
+    notes_field = dialogs[0].content.controls[0]
+    notes_field.value = "Merksatz"
+    btn.on_click(None)
+    assert len(dialogs) == 2  # Karteneditor als zweiter Dialog
+    assert card.notes_gr == "Merksatz"
+
+
+def test_edit_notes_dialog_no_full_editor_for_book_cards(tmp_path):
+    """Buchkarten (nicht editierbare Liste): kein „Alles bearbeiten"."""
+    import flet as ft
+    import json
+
+    book_dir = tmp_path / "book"
+    book_dir.mkdir()
+    card = VocabCard(front="ο δρόμος", back="Straße", word_type="Nomen")
+    vlist = VocabList(name="Buchliste", cards=[card])
+    (book_dir / "b.json").write_text(
+        json.dumps(vlist.to_dict(), ensure_ascii=False), encoding="utf-8")
+    store = ContentStore(book_dir, tmp_path / "user")
+    store.load_all()
+    book_card = store.all_cards()[0]
+    nav = _fake_nav()
+    dialogs = []
+    nav.page.show_dialog = lambda d: dialogs.append(d)
+    trainer.edit_notes_dialog(nav.page, store, book_card)
+    texts = [getattr(a, "content", None) for a in dialogs[0].actions]
+    assert "Alles bearbeiten" not in texts

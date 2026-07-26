@@ -305,6 +305,9 @@ def help_view(nav, store=None) -> ft.Control:
             "Mehrere richtige Formen mit „/“ trennen, z.B. "
             "„2pl=είστε/είσαστε“ oder „δουν/δούνε“.",
             "Optionale Wortteile in Klammern schreiben, z.B. „αγαπ(ά)ω“.",
+            "Aus der Abfrage heraus: Der Stift öffnet den Notiz-Dialog — "
+            "„Alles bearbeiten“ springt von dort in die vollständige "
+            "Kartenbearbeitung (nicht bei Buchlisten).",
             "Adjektive: nur ein unregelmäßiges Femininum eintragen "
             "(z.B. „γλυκιά“).",
             "Worttyp „Sonstiges“ zeigt im Editor alle Felder.",

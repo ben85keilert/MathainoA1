@@ -65,24 +65,46 @@ def edit_notes_dialog(page: ft.Page, store: ContentStore, card: VocabCard,
     tf_hints_gr = ft.TextField(label="Hinweis (griechische Seite)", value=card.hints_gr)
     tf_hints_de = ft.TextField(label="Hinweis (deutsche Seite)", value=card.hints_de)
 
-    def save(e):
+    def apply_notes():
         store.update_notes(
             card,
             (tf_hints_gr.value or "").strip(), (tf_hints_de.value or "").strip(),
             (tf_notes_gr.value or "").strip(), (tf_notes_de.value or "").strip(),
         )
+
+    def save(e):
+        apply_notes()
         page.pop_dialog()
         if on_saved:
             on_saved()
+
+    # "Alles bearbeiten" springt in den vollen Karteneditor — nur bei
+    # Karten aus editierbaren (eigenen) Listen; Buchkarten haben bewusst
+    # nur diesen Notiz-Dialog
+    owner = next((l for l in store.lists.values()
+                  if any(c.id == card.id for c in l.cards)), None)
+    actions: list[ft.Control] = []
+    if owner is not None and owner.editable:
+        def edit_all(e, owner=owner):
+            # eben Getipptes mitnehmen, dann in den vollen Editor wechseln
+            apply_notes()
+            page.pop_dialog()
+            # Lazy-Import: manager importiert diesen Dialog (Importzirkel)
+            from mathainoa1.ui.views.manager import card_editor_dialog
+            card_editor_dialog(page, store, owner, card, on_saved=on_saved)
+
+        actions.append(ft.TextButton("Alles bearbeiten", icon=ft.Icons.EDIT,
+                                     on_click=edit_all))
+    actions += [ft.IconButton(ft.Icons.CLOSE, tooltip="Abbrechen",
+                              on_click=lambda e: page.pop_dialog()),
+                ft.IconButton(ft.Icons.SAVE, tooltip="Speichern", on_click=save)]
 
     page.show_dialog(ft.AlertDialog(
         title=ft.Text(f"Notizen zu „{card.front}“"),
         content=ft.Column([tf_notes_gr, tf_notes_de, tf_hints_gr, tf_hints_de],
                           tight=True, spacing=12, width=400,
                           scroll=ft.ScrollMode.AUTO),
-        actions=[ft.IconButton(ft.Icons.CLOSE, tooltip="Abbrechen",
-                               on_click=lambda e: page.pop_dialog()),
-                 ft.IconButton(ft.Icons.SAVE, tooltip="Speichern", on_click=save)],
+        actions=actions,
     ))
 
 

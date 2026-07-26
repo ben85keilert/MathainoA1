@@ -115,6 +115,10 @@ erzeugten Listen mitgelöscht werden sollen.
 - **Adjektive**: nur ein unregelmäßiges Femininum eintragen.
 - Im Editor sind nur die zum Worttyp passenden Felder sichtbar;
   „Sonstiges“ zeigt alle Felder.
+- Auch **aus der Abfrage heraus** erreichbar: Der Stift öffnet den
+  Notiz-Dialog; dort springt **„Alles bearbeiten“** direkt in die
+  vollständige Kartenbearbeitung (bereits Getipptes wird übernommen).
+  Bei Buchlisten-Karten gibt es weiterhin nur den Notiz-Dialog.
 
 ### Beispiele je Worttyp
 
