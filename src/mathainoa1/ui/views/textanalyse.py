@@ -109,8 +109,12 @@ REGELN
    "aorist_passive" = Aorist Passiv im gleichen Format (immer angeben,
    er ist nicht aus dem Aktiv berechenbar), "participle" = Perfekt-
    Partizip nur bei Unregelmäßigkeit (z.B. "γραμμένος").
-6. Alternativen mit " / " trennen ("και / κι"); optionale Wortteile in
-   runden Klammern nur in Verbformen wie "αγαπ(ά)ω".
+6. Komplette Alternativantworten mit " / " trennen ("και / κι");
+   optionale Wortteile in runde Klammern ("αγαπ(ά)ω", "(Visiten-)Karte").
+   Muss innerhalb eines Satzes genau EINE von mehreren Varianten genannt
+   werden, eckige Klammern verwenden: "Ich spreche [nicht/kein]
+   Chinesisch." bzw. "Πώς [είσαι/είστε];" — kein nacktes "/" mitten im
+   Satz.
 7. etymology: nur für die besprochenen Wörter. "breakdown" ist die
    Wortzerlegung, "total" die Gesamt-Zeile, "semantics" genau eine
    Prosazeile. "cognates" hat genau die drei Gruppen "identical"

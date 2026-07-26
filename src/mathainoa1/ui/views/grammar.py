@@ -206,6 +206,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
     )
     seg_cases = ft.SegmentedButton(
         allow_multiple_selection=True,
+        allow_empty_selection=True,  # sonst rote Flet-Meldung beim Abwählen
         show_selected_icon=True,
         selected=[c for c in s.cases if c in CASE_NAMES] or ["acc"],
         segments=[
@@ -217,6 +218,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
     )
     seg_numbers = ft.SegmentedButton(
         allow_multiple_selection=True,
+        allow_empty_selection=True,
         show_selected_icon=True,
         selected=[n for n in s.numbers if n in NUMBER_NAMES] or ["sg"],
         segments=[
@@ -347,6 +349,11 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         tasks = decl.generate_tasks(store.cards_for(settings.list_id), settings)
         if not tasks:
             error_text.value = "Keine passenden Aufgaben für diese Auswahl gefunden."
+            if settings.cases == ["nom"] and settings.numbers == ["sg"]:
+                # Nominativ Singular steht schon in der Aufgabe und wird
+                # nie abgefragt — diese Kombination ist immer leer
+                error_text.value = ("Nominativ wird nur im Plural abgefragt — "
+                                    "bitte Plural dazuwählen.")
             nav.page.update()
             return
         save_declension_settings(settings)
@@ -443,6 +450,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
     )
     seg_tenses = ft.SegmentedButton(
         allow_multiple_selection=True,
+        allow_empty_selection=True,  # sonst rote Flet-Meldung beim Abwählen
         show_selected_icon=True,
         selected=[t for t in s.tenses if t in conj.TENSES] or ["present"],
         segments=[
@@ -452,16 +460,19 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
     )
     seg_persons = ft.SegmentedButton(
         allow_multiple_selection=True,
+        allow_empty_selection=True,
         show_selected_icon=True,
         selected=[str(p) for p in s.persons if p in conj.PERSONS] or ["1", "2", "3"],
         segments=[
             ft.Segment(value="1", label=ft.Text("1. Pers.")),
+            # 2. Pl. ist zugleich die höfliche Anrede ("Sie")
             ft.Segment(value="2", label=ft.Text("2. Pers.")),
             ft.Segment(value="3", label=ft.Text("3. Pers.")),
         ],
     )
     seg_numbers = ft.SegmentedButton(
         allow_multiple_selection=True,
+        allow_empty_selection=True,
         show_selected_icon=True,
         selected=[n for n in s.numbers if n in NUMBER_NAMES] or ["sg"],
         segments=[
@@ -847,6 +858,17 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
         )
         for t in stats["wrong_tasks"]
     ]
+    # Darunter auch die richtig gelösten Aufgaben der Runde zeigen
+    correct_items = [
+        ft.ListTile(
+            title=ft.Text(f"{a.task.prompt} → {a.task.expected}"),
+            subtitle=ft.Text(" · ".join(
+                x for x in (a.task.label, a.task.meaning) if x)),
+            leading=ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN),
+        )
+        for a in session.answers[: session.total_first_round]
+        if session.counts_correct(a.result)
+    ]
 
     def again(e):
         nav.stack.pop()  # Ergebnis-View ersetzen statt stapeln
@@ -874,6 +896,8 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
             ft.ProgressBar(value=stats["correct"] / max(1, stats["total"])),
             ft.Text("Falsche Aufgaben:" if wrong_items else "Alles richtig — μπράβο! 🎉"),
             *wrong_items,
+            *([ft.Text("Richtig:")] if correct_items and wrong_items else []),
+            *correct_items,
             ft.Row(
                 [
                     ft.FilledButton("Neue Runde", icon=ft.Icons.REPLAY, on_click=again),

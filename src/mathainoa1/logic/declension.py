@@ -504,7 +504,9 @@ class DeclensionTask:
 
     @property
     def label(self) -> str:
-        return f"{CASE_NAMES[self.case]} {NUMBER_NAMES[self.number]}"
+        # Emoji zur schnellen Erkennung: einer 👤 = Singular, viele 👥 = Plural
+        emoji = "👤" if self.number == "sg" else "👥"
+        return f"{CASE_NAMES[self.case]} {NUMBER_NAMES[self.number]} {emoji}"
 
     def check(self, given: str) -> Result:
         best = Result.WRONG

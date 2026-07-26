@@ -33,6 +33,8 @@ class Navigator:
         self.appbar = ft.AppBar(
             title=ft.Text(APP_NAME),
             actions=[
+                ft.IconButton(ft.Icons.SEARCH, tooltip="Wortsuche",
+                              on_click=self._open_search),
                 ft.IconButton(ft.Icons.STICKY_NOTE_2_OUTLINED, tooltip="Notizen",
                               on_click=self._open_notes),
                 reference_menu_button(self),
@@ -78,6 +80,13 @@ class Navigator:
             return  # Notizen sind schon offen
         self.go("Notizen", notes_view(self))
 
+    def _open_search(self, e=None) -> None:
+        from mathainoa1.ui.views.manager import search_view
+        if self.store is None or (self.stack
+                                  and self.stack[-1][0] == "Wortsuche"):
+            return  # Suche ist schon offen (oder Store noch nicht gesetzt)
+        self.go("Wortsuche", search_view(self, self.store))
+
     def back(self, e=None) -> None:
         if len(self.stack) > 1:
             self.stack.pop()
@@ -85,6 +94,10 @@ class Navigator:
 
     def _show(self) -> None:
         title, content = self.stack[-1]
+        if len(self.stack) == 1:
+            # Startseite: kurzer Titel + aktive Stufe (frisch gelesen —
+            # _show läuft auch beim Zurückkehren aus den Einstellungen)
+            title = f"Μαθαίνω – {load_app_settings().level}"
         self.appbar.title = ft.Text(title)
         self.appbar.leading = (
             ft.IconButton(ft.Icons.ARROW_BACK, on_click=self.back)

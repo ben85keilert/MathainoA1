@@ -1,14 +1,21 @@
 """Antwortprüfung mit Unicode-Normalisierung und Akzent-Toleranz.
 
+Notation (beide Sprachseiten):
+- [a/b]-Gruppen im Satz: genau EINE Variante muss genannt werden —
+  "Ich spreche [nicht/kein] Chinesisch." akzeptiert beide vollständigen
+  Sätze, "Πώς [είσαι/είστε];" ebenso.
+- Text in runden Klammern ist optional: "αγαπ(ά)ω" akzeptiert αγαπάω und
+  αγαπώ, "(Visiten-)Karte" akzeptiert Visitenkarte und Karte (ein
+  Bindestrich am Klammerrand verbindet die Teile).
+- Nacktes "/" auf oberster Ebene trennt komplette Alternativantworten
+  ("και / κι"): jede einzelne zählt als richtig.
+
 Griechisch: Eine Antwort mit falschen/fehlenden Akzenten (τόνος) oder
 falschem Schluss-Sigma ist immer ALMOST — ob das als richtig zählt
 (Toleranz an) oder als Rundenfehler bei neutraler Leitner-Box (Toleranz
 aus), entscheidet die Session.
-Alternativen mit "/" ("και / κι"): jede einzelne zählt als richtig.
-Text in Klammern ist optional: "αγαπ(ά)ω" akzeptiert αγαπάω und αγαπώ.
 Deutsch: Die Rückseite kann Alternativen enthalten ("Gyros, Kreis, Runde",
 "und, auch", "Hallo! Guten Tag!"); jede Alternative wird akzeptiert.
-Text in Klammern gilt als Zusatzinfo und wird ignoriert.
 """
 
 from __future__ import annotations
@@ -47,6 +54,65 @@ def _strip_punct(s: str) -> str:
     return s.strip(_PUNCT + " ")
 
 
+def bracket_variants(text: str) -> list[str]:
+    """Expandiert [a/b]-Gruppen: pro Gruppe muss genau eine Variante
+    genannt werden.
+
+    "Ich spreche [nicht/kein] Chinesisch." -> beide vollständigen Sätze.
+    Mehrere Gruppen werden kartesisch kombiniert; ohne Gruppe kommt der
+    Text unverändert zurück.
+    """
+    groups = re.findall(r"\[([^\]]*)\]", text)
+    if not groups:
+        return [text]
+    template = re.sub(r"\[[^\]]*\]", "\x00", text)
+    choices = [[p.strip() for p in g.split("/") if p.strip()] or [""]
+               for g in groups]
+    variants: list[str] = []
+    for combo in itertools.product(*choices):
+        s = template
+        for part in combo:
+            s = s.replace("\x00", part, 1)
+        s = re.sub(r"\s+", " ", s).strip()
+        if s and s not in variants:
+            variants.append(s)
+    return variants or [text]
+
+
+def _optional_paren_variants(text: str) -> list[str]:
+    """Deutsche Klammern als optionale Wortteile (wie griechisch).
+
+    "(Visiten-)Karte" -> "Visitenkarte" und "Karte" — ein Bindestrich am
+    Klammerrand verbindet die Teile. Klammern MIT Satzzeichen sind reine
+    Zusatzinfo ("Sie (Akk.)", "(wörtl.: …)") und werden wie bisher nur
+    entfernt — ihre Innen-Kommas dürfen keine Schein-Alternativen liefern.
+    """
+    # Zusatzinfo-Klammern (mit Satzzeichen) zuerst komplett entfernen
+    text = re.sub(r"\(([^)]*[,;:.!?…][^)]*)\)", " ", text)
+    groups = re.findall(r"\(([^)]*)\)", text)
+    if not groups:
+        return [re.sub(r"\s+", " ", text).strip()]
+    template = re.sub(r"\([^)]*\)", "\x00", text)
+    variants: list[str] = []
+    for combo in itertools.product(*([g, ""] for g in groups)):
+        s = template
+        for part in combo:
+            # \x01 markiert die Einfügeränder, um verbindende
+            # Bindestriche zu erkennen ("Visiten-" + "Karte")
+            s = s.replace("\x00", f"\x01{part}\x01", 1)
+        # Verbindender Bindestrich am Klammerrand: Teile zusammenziehen,
+        # der Folgebuchstabe wird dabei klein ("Visiten-"+"Karte" ->
+        # "Visitenkarte", nicht "VisitenKarte")
+        s = re.sub(r"-\x01(\w)", lambda m: "\x01" + m.group(1).lower(), s)
+        s = re.sub(r"(?<=\w)\x01-(\w)",
+                   lambda m: "\x01" + m.group(1).lower(), s)
+        s = s.replace("\x01", "")
+        s = re.sub(r"\s+", " ", s).strip()
+        if s and s not in variants:
+            variants.append(s)
+    return variants
+
+
 def greek_variants(expected: str) -> list[str]:
     """Varianten der Vorgabe: jeder Klammerinhalt ist optional.
 
@@ -71,6 +137,19 @@ def greek_variants(expected: str) -> list[str]:
 
 
 def check_greek(expected: str, given: str) -> Result:
+    # [a/b]-Gruppen zuerst zu vollständigen Sätzen expandieren; jede
+    # Expansion wird einzeln geprüft, die beste Wertung gewinnt
+    best = Result.WRONG
+    for variant in bracket_variants(expected):
+        r = _check_greek_alternatives(variant, given)
+        if r == Result.CORRECT:
+            return r
+        if r == Result.ALMOST:
+            best = Result.ALMOST
+    return best
+
+
+def _check_greek_alternatives(expected: str, given: str) -> Result:
     # Alternativen "και / κι": jede einzeln prüfen, die Gesamtform bleibt
     # zusätzlich gültig (falls jemand sie wörtlich abtippt)
     if "/" in expected:
@@ -105,15 +184,24 @@ def _check_greek_single(expected: str, given: str) -> Result:
 
 
 def german_alternatives(back: str) -> list[str]:
-    """Zerlegt die deutsche Rückseite in akzeptierte Einzelantworten."""
-    text = re.sub(r"\([^)]*\)", " ", back)  # Klammern = Zusatzinfo
-    parts = re.split(r"[,/]|(?<=[!?.])\s+", text)
-    alts = [_strip_punct(re.sub(r"\s+", " ", p)) for p in parts]
-    alts = [a for a in alts if a]
-    # zusätzlich die komplette Rückseite als Antwort erlauben
-    full = _strip_punct(re.sub(r"\s+", " ", text))
-    if full and full not in alts:
-        alts.append(full)
+    """Zerlegt die deutsche Rückseite in akzeptierte Einzelantworten.
+
+    [a/b]-Gruppen werden zuerst zu vollständigen Texten expandiert,
+    Klammerinhalte sind optional (mit und ohne zählt); erst danach wird
+    auf Komma, Satzenden und verbleibende Top-Level-"/" gesplittet.
+    """
+    alts: list[str] = []
+    for bracketed in bracket_variants(back):
+        for text in _optional_paren_variants(bracketed):
+            parts = re.split(r"[,/]|(?<=[!?.])\s+", text)
+            for p in parts:
+                a = _strip_punct(re.sub(r"\s+", " ", p))
+                if a and a not in alts:
+                    alts.append(a)
+            # zusätzlich die komplette Variante als Antwort erlauben
+            full = _strip_punct(re.sub(r"\s+", " ", text))
+            if full and full not in alts:
+                alts.append(full)
     return alts
 
 
@@ -144,8 +232,10 @@ def case_ok(expected: str, given: str, german: bool) -> bool:
     if german:
         alts = german_alternatives(expected)
     else:
-        alts = [v for part in ([p.strip() for p in expected.split("/")]
-                               if "/" in expected else [expected])
+        alts = [v
+                for bracketed in bracket_variants(expected)
+                for part in ([p.strip() for p in bracketed.split("/")]
+                             if "/" in bracketed else [bracketed])
                 if part for v in greek_variants(part)]
     return any(strip_accents(_strip_punct(_norm_keep_case(a))) == giv
                for a in alts)

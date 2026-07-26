@@ -607,18 +607,11 @@ def manager_view(nav, store: ContentStore,
             btn_action.text = "Schließen"
 
     refresh()
-    # Rundes Such-Symbol unten links (unten rechts kollidiert mit den
-    # Listen-Bearbeitungssymbolen); bleibt beim Scrollen fix
-    search_fab = ft.FloatingActionButton(
-        icon=ft.Icons.SEARCH, mini=True, bottom=16, left=16,
-        tooltip="Wörter suchen",
-        on_click=lambda e: nav.go("Wortsuche", search_view(nav, store)),
-    )
-    view = ft.Stack([body, search_fab], expand=True)
+    # Wortsuche sitzt global oben in der App-Leiste (Navigator);
     # beim Zurückkehren aus Unterseiten neu aufbauen — dort können
     # Listen/Auswahllisten entstanden oder verändert worden sein
-    view.on_reappear = refresh
-    return view
+    body.on_reappear = refresh
+    return body
 
 
 def search_view(nav, store: ContentStore) -> ft.Control:
@@ -819,8 +812,11 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
                            color=box_color(box_of(c, all_progress)))
 
         # linker Reiter: Karten der gefilterten Liste antippen
+        # key + bgcolor statt selected: harter Austausch ohne die träge
+        # implizite Material-Animation (wie select_tiles in list_view)
         pick_col.controls = [
             ft.ListTile(
+                key=f"pick-{c.id}-{int(c.id in selected_ids)}",
                 dense=True,
                 leading=ft.Icon(
                     ft.Icons.CHECK_CIRCLE if c.id in selected_ids
@@ -830,8 +826,8 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
                 title=ft.Row([box_dot(c), ft.Text(c.front)], spacing=6,
                              vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 subtitle=ft.Text(c.back),
-                selected=c.id in selected_ids,
-                selected_tile_color=ft.Colors.PRIMARY_CONTAINER,
+                bgcolor=(ft.Colors.PRIMARY_CONTAINER
+                         if c.id in selected_ids else None),
                 on_click=lambda e, c=c: toggle(c),
             )
             for c in filtered()
@@ -841,16 +837,19 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
         # („Liste X“-Überschriften), sonst flach alphabetisch bzw. nach
         # Lernstand sortiert.
         def sel_tile(c: VocabCard) -> ft.Control:
+            marked = c.id in to_remove
             return ft.ListTile(
+                # key je Zustand: kein animierter Opacity-/Icon-Übergang
+                key=f"sel-{c.id}-{int(marked)}",
                 dense=True,
                 leading=ft.Icon(
-                    ft.Icons.CANCEL if c.id in to_remove else ft.Icons.CHECK_CIRCLE,
-                    color=ft.Colors.ERROR if c.id in to_remove else ft.Colors.PRIMARY,
+                    ft.Icons.CANCEL if marked else ft.Icons.CHECK_CIRCLE,
+                    color=ft.Colors.ERROR if marked else ft.Colors.PRIMARY,
                 ),
                 title=ft.Row([box_dot(c), ft.Text(c.front)], spacing=6,
                              vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 subtitle=ft.Text(c.back),
-                opacity=0.5 if c.id in to_remove else 1.0,
+                opacity=0.5 if marked else 1.0,
                 on_click=lambda e, c=c: mark_remove(c),
             )
 
@@ -1719,8 +1718,13 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         ], spacing=0)
 
     def select_tiles(cards: list[VocabCard]) -> list[ft.Control]:
+        # key je Karte UND Auswahlzustand: Flutter tauscht die Zeile hart
+        # aus statt Farbe/Icon animiert zu überblenden (fühlte sich auf
+        # dem Handy träge an); bgcolor statt selected_tile_color aus
+        # demselben Grund (kein Material-Farbübergang)
         return [
             ft.ListTile(
+                key=f"pick-{c.id}-{int(c.id in selected)}",
                 dense=True,
                 leading=ft.Icon(
                     ft.Icons.CHECK_BOX if c.id in selected
@@ -1735,8 +1739,8 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
                     spacing=8,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
-                selected=c.id in selected,
-                selected_tile_color=ft.Colors.PRIMARY_CONTAINER,
+                bgcolor=(ft.Colors.PRIMARY_CONTAINER
+                         if c.id in selected else None),
                 on_click=lambda e, c=c: toggle_selected(c),
             )
             for c in cards

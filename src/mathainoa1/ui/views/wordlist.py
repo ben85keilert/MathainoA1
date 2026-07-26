@@ -122,6 +122,10 @@ def card_tiles(cards: list[VocabCard], on_click=None, on_delete=None,
                 on_click=lambda e, c=c: on_delete(c),
             ))
         tiles.append(ft.ListTile(
+            # key gibt der Zeile eine feste Identität — beim Umschalten in
+            # den Markiermodus (andere keys) wird hart getauscht statt
+            # animiert überblendet
+            key=f"tile-{c.id}",
             title=ft.Row(
                 [
                     ft.Text(c.with_plural(c.front), expand=1),

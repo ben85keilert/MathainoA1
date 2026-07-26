@@ -130,7 +130,7 @@ def test_build_task():
     v = verb("μένω", "wohnen")
     task = build_task(v, parse_verb(v), 2, "pl")
     assert task.prompt == "wohnen"
-    assert task.label == "2. Person Plural"
+    assert task.label == "2. Person Plural 👥 (ihr / höfliches Sie)"
     assert task.expected == "μένετε"
 
 
@@ -271,7 +271,7 @@ def test_build_task_future():
     c = fut_verb("γράφω", "γράψ-", "schreiben")
     task = build_task(c, parse_verb(c), 2, "pl", tense="future")
     assert task.expected == "θα γράψετε"
-    assert task.label == "Futur: 2. Person Plural"
+    assert task.label == "Futur: 2. Person Plural 👥 (ihr / höfliches Sie)"
     # mit und ohne "θα" richtig
     assert task.check("θα γράψετε") == Result.CORRECT
     assert task.check("γράψετε") == Result.CORRECT

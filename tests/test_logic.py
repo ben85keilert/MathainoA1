@@ -157,10 +157,15 @@ def test_accent_error_tolerant_counts_correct():
 
 
 def test_accent_error_strict_is_round_error_but_leitner_neutral():
+    # Box-neutral gilt nur für Karten MIT Lernstand — daher mit Progress
+    from mathainoa1.storage.progress import CardProgress
     recorded = []
-    s = TrainingSession([greek_card()], TrainingSettings(
+    card = greek_card()
+    s = TrainingSession([card], TrainingSettings(
         mode="typing", direction="de_gr", word_count=1,
-        accent_tolerant=False), on_result=lambda c, ok: recorded.append(ok))
+        accent_tolerant=False),
+        progress={card.id: CardProgress(card.id, box=2, correct=1)},
+        on_result=lambda c, ok: recorded.append(ok))
     assert s.check_typed("καλημερα") == Result.ALMOST
     # Leitner-neutral: kein on_result-Aufruf (Box weder hoch noch zurück)
     assert recorded == []
@@ -168,6 +173,28 @@ def test_accent_error_strict_is_round_error_but_leitner_neutral():
     assert s.in_repeat_round and not s.finished
     stats = s.stats()
     assert stats["wrong"] == 1 and stats["wrong_cards"] == [s.current]
+
+
+def test_strict_error_on_new_card_goes_to_box_1():
+    """Neue (graue) Karten haben keine Box zu schützen: der strenge
+    Akzent-/Schreibfehler wird normal als falsch verbucht -> Box 1."""
+    from mathainoa1.storage.progress import CardProgress
+    recorded = []
+    s = TrainingSession([greek_card()], TrainingSettings(
+        mode="typing", direction="de_gr", word_count=1,
+        accent_tolerant=False), on_result=lambda c, ok: recorded.append(ok))
+    assert s.check_typed("καλημερα") == Result.ALMOST
+    assert recorded == [False]  # nicht mehr "neu", startet in Box 1
+    # Karte mit Eintrag, aber seen == 0 zählt ebenfalls als neu
+    recorded2 = []
+    card = noun_card()
+    s2 = TrainingSession([card], TrainingSettings(
+        mode="typing", direction="de_gr", word_count=1,
+        case_tolerant=False),
+        progress={card.id: CardProgress(card.id)},
+        on_result=lambda c, ok: recorded2.append(ok))
+    assert s2.check_typed("η αθήνα") == Result.CASE
+    assert recorded2 == [False]
 
 
 def test_filter_cards():
@@ -190,11 +217,16 @@ def noun_card():
 
 
 def test_case_check_greek_noun():
+    from mathainoa1.storage.progress import CardProgress
     recorded = []
-    s = TrainingSession([noun_card()], TrainingSettings(
+    card = noun_card()
+    s = TrainingSession([card], TrainingSettings(
         mode="typing", direction="de_gr", word_count=1,
-        case_tolerant=False), on_result=lambda c, ok: recorded.append(ok))
+        case_tolerant=False),
+        progress={card.id: CardProgress(card.id, box=2, correct=1)},
+        on_result=lambda c, ok: recorded.append(ok))
     # richtig, aber klein geschrieben -> CASE: Rundenfehler, Box neutral
+    # (Box-neutral nur bei Karten mit Lernstand, daher mit Progress)
     assert s.check_typed("η αθήνα") == Result.CASE
     assert recorded == []
     assert s.in_repeat_round and not s.finished
@@ -264,11 +296,99 @@ def test_case_strict_resets_box_when_enabled():
 
 
 def test_strict_errors_box_neutral_by_default():
+    from mathainoa1.storage.progress import CardProgress
     recorded = []
+    card = greek_card()
     s = TrainingSession(
-        [greek_card()],
+        [card],
         TrainingSettings(mode="typing", direction="de_gr", word_count=1,
                          accent_tolerant=False),
+        progress={card.id: CardProgress(card.id, box=3, correct=2)},
         on_result=lambda c, ok: recorded.append(ok))
     assert s.check_typed("καλημερα") == Result.ALMOST
     assert recorded == []  # Default: Box unverändert (kein on_result)
+
+
+# --- [a/b]-Gruppen und optionale deutsche Klammern ---
+
+
+def test_bracket_variants():
+    from mathainoa1.logic.answer_check import bracket_variants
+    assert bracket_variants("Ich spreche [nicht/kein] Chinesisch.") == [
+        "Ich spreche nicht Chinesisch.", "Ich spreche kein Chinesisch."]
+    assert bracket_variants("ohne Gruppe") == ["ohne Gruppe"]
+    # mehrere Gruppen: kartesisch
+    assert len(bracket_variants("[a/b] und [c/d]")) == 4
+
+
+def test_bracket_groups_german():
+    from mathainoa1.logic.answer_check import check_german
+    back = "Ich spreche [nicht/kein] Chinesisch."
+    assert check_german(back, "Ich spreche kein Chinesisch") == Result.CORRECT
+    assert check_german(back, "Ich spreche nicht Chinesisch") == Result.CORRECT
+    assert check_german("Wie geht es [dir/euch/Ihnen]?",
+                        "Wie geht es Ihnen") == Result.CORRECT
+
+
+def test_bracket_groups_greek():
+    from mathainoa1.logic.answer_check import check_greek
+    front = "Πώς [είσαι/είστε];"
+    assert check_greek(front, "Πώς είσαι;") == Result.CORRECT
+    assert check_greek(front, "Πώς είστε;") == Result.CORRECT
+    assert check_greek(front, "Πώς είναι;") == Result.WRONG
+    # Akzentfehler in der Variante bleibt ALMOST
+    assert check_greek(front, "Πως είστε;") == Result.ALMOST
+    # nackter Top-Level-Slash bleibt Alternativen-Trenner
+    assert check_greek("και / κι", "κι") == Result.CORRECT
+
+
+def test_german_parens_optional():
+    from mathainoa1.logic.answer_check import check_german, german_alternatives
+    assert check_german("(Visiten-)Karte", "Karte") == Result.CORRECT
+    assert check_german("(Visiten-)Karte", "Visitenkarte") == Result.CORRECT
+    # Zusatzinfo funktioniert weiter wie bisher
+    assert check_german("Sie (Akk.)", "Sie") == Result.CORRECT
+    # Kommas INNERHALB von Klammern erzeugen keine Schein-Alternativen
+    assert "b" not in german_alternatives("Wort (a, b)")
+
+
+def test_bracket_case_ok():
+    from mathainoa1.logic.answer_check import case_ok
+    assert case_ok("Πώς [είσαι/είστε];", "Πώς είστε;", german=False)
+    assert not case_ok("Πώς [είσαι/είστε];", "πώς είστε;", german=False)
+    assert case_ok("Ich spreche [nicht/kein] Chinesisch.",
+                   "Ich spreche kein Chinesisch", german=True)
+
+
+# --- Kartenauswahl: heute Beantwortetes rückt ans Ende ---
+
+
+def test_select_cards_demotes_answered_today():
+    from datetime import datetime, timedelta
+    from mathainoa1.logic.session import select_cards
+    from mathainoa1.storage.progress import CardProgress
+
+    now = datetime(2026, 7, 26, 12, 0)
+    cards = [VocabCard(front=f"w{i}", back=str(i)) for i in range(4)]
+    fresh, stale, due_card, new_card = cards
+    progress = {
+        # heute richtig beantwortet: Fälligkeit morgen (kleinste Zukunft)
+        fresh.id: CardProgress(fresh.id, box=2, correct=1,
+                               last_seen=now - timedelta(hours=1),
+                               due=now + timedelta(days=1)),
+        # gestern gesehen, Fälligkeit übermorgen
+        stale.id: CardProgress(stale.id, box=3, correct=2,
+                               last_seen=now - timedelta(days=1),
+                               due=now + timedelta(days=2)),
+        # überfällig
+        due_card.id: CardProgress(due_card.id, box=1, wrong=1,
+                                  last_seen=now - timedelta(days=1),
+                                  due=now - timedelta(hours=1)),
+    }
+    # 3 Plätze: fällig + neu + ältere Rest-Karte — die heute beantwortete
+    # (trotz kleinster Fälligkeit) bleibt draußen
+    picked = select_cards(cards, 3, progress, now=now)
+    assert set(p.id for p in picked) == {due_card.id, new_card.id, stale.id}
+    # 4 Plätze: jetzt kommt sie als letzte Priorität doch mit
+    picked = select_cards(cards, 4, progress, now=now)
+    assert set(p.id for p in picked) == {c.id for c in cards}

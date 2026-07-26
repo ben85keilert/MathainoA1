@@ -60,6 +60,12 @@ def select_cards(cards: list[VocabCard], count: int, progress: dict | None = Non
     Reihenfolge der Auswahl wird gemischt, damit alte Fehler zwischen den
     übrigen/neuen Wörtern auftauchen.
 
+    Im Rest-Topf (nicht fällig) rücken Karten, die HEUTE schon beantwortet
+    wurden, ans Ende: Wer mehrere Runden am selben Tag spielt, bekommt
+    gerade richtig beantwortete Wörter (kleinste Zukunfts-Fälligkeit)
+    sonst immer wieder zuerst — sie kommen jetzt erst dran, wenn Fällige,
+    Neue und ältere Karten aufgebraucht sind.
+
     progress: card_id -> CardProgress (siehe storage/progress.py); None = mischen.
     """
     if not progress:
@@ -67,19 +73,23 @@ def select_cards(cards: list[VocabCard], count: int, progress: dict | None = Non
         random.shuffle(pool)
         return pool[:count]
     now = now or datetime.now()
-    due, new, rest = [], [], []
+    due, new, rest, rest_today = [], [], [], []
     for c in cards:
         p = progress.get(c.id)
         if p is None:
             new.append(c)
         elif p.is_due(now):
             due.append((p.due or now, c))
+        elif p.last_seen is not None and p.last_seen.date() == now.date():
+            rest_today.append((p.due, c))
         else:
             rest.append((p.due, c))
     due.sort(key=lambda t: t[0])
     random.shuffle(new)
     rest.sort(key=lambda t: t[0])
-    ordered = [c for _, c in due] + new + [c for _, c in rest]
+    rest_today.sort(key=lambda t: t[0])
+    ordered = ([c for _, c in due] + new + [c for _, c in rest]
+               + [c for _, c in rest_today])
     selected = ordered[:count]
     random.shuffle(selected)
     return selected
@@ -193,6 +203,13 @@ class TrainingSession:
         strict_case = result == Result.CASE
         box_neutral = ((strict_accent and not self.accent_resets_box)
                        or (strict_case and not self.case_resets_box))
+        # "Box-neutral" gibt es nur bei Karten MIT Lernstand — eine neue
+        # Karte hat keine Box zu schützen und würde sonst für immer als
+        # "neu" (grau) gelten. Sie wird normal als falsch verbucht und
+        # startet in Box 1.
+        prev = (self.progress or {}).get(card.id)
+        if box_neutral and (prev is None or not prev.seen):
+            box_neutral = False
         if self.on_result and not self.in_repeat_round and not box_neutral:
             self.on_result(card, self.counts_correct(result))
         if (not self.counts_correct(result) and self.settings.repeat_errors

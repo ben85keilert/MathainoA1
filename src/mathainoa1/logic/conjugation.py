@@ -246,7 +246,13 @@ class ConjugationTask:
 
     @property
     def label(self) -> str:
-        base = f"{self.person}. Person {NUMBER_NAMES[self.number]}"
+        # Emoji zur schnellen Erkennung: einer 👤 = Singular, viele 👥 = Plural.
+        # Die 2. Person Plural ist im Griechischen zugleich die höfliche
+        # Anrede — deshalb der Zusatz (ihr / höfliches Sie).
+        emoji = "👤" if self.number == "sg" else "👥"
+        base = f"{self.person}. Person {NUMBER_NAMES[self.number]} {emoji}"
+        if self.person == 2 and self.number == "pl":
+            base += " (ihr / höfliches Sie)"
         return f"Futur: {base}" if self.tense == "future" else base
 
     def check(self, given: str) -> Result:

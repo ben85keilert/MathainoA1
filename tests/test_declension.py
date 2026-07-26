@@ -300,7 +300,7 @@ def test_build_task_with_article():
     task = build_task(n, parse_noun(n), "acc", "sg")
     assert task.prompt == "ο δρόμος"
     assert task.expected == "τον δρόμο"
-    assert task.label == "Akkusativ Singular"
+    assert task.label == "Akkusativ Singular 👤"
 
 
 def test_build_task_feminine_article_variants():

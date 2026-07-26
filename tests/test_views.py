@@ -473,3 +473,29 @@ def test_trainer_info_button_visible_with_feature(store_with_edge_cases,
     finally:
         ta.invalidate_cache()
         progress.close()
+
+
+def test_result_view_lists_correct_answers(store_with_edge_cases, tmp_path):
+    """Die Ergebnisansicht zeigt unter den Fehlern auch die richtig
+    beantworteten Wörter (grüne Häkchen-Zeilen)."""
+    from mathainoa1.logic.session import TrainingSession, TrainingSettings
+
+    store, vlist = store_with_edge_cases
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "res.db")
+    try:
+        session = TrainingSession(
+            vlist.cards[:2],
+            TrainingSettings(mode="flashcard", word_count=2,
+                             repeat_errors=False))
+        wrong_card, right_card = session.queue[0], session.queue[1]
+        session.mark(False)
+        session.mark(True)
+        assert session.finished
+        view = trainer.result_view(nav, store, progress, session)
+        found: list[str] = []
+        _collect_texts_and_tooltips(view, found)
+        assert "Richtig:" in found
+        assert wrong_card.front in found and right_card.front in found
+    finally:
+        progress.close()

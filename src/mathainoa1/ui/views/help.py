@@ -37,16 +37,22 @@ REGELN FÜR DIE SPALTEN
 5. Griechische Alternativformen mit " / " trennen, z.B. "και / κι" oder
    "τρεις / τρία" — jede Form zählt bei der Abfrage als richtig.
 6. Optionale Wortteile in runde Klammern: Verben auf -άω als "αγαπ(ά)ω"
-   (akzeptiert αγαπάω und αγαπώ); Zusätze wie "η λαϊκή (αγορά)".
-7. Deutsche Alternativen mit Komma oder "/" trennen ("und, auch");
-   Deutsches in Klammern ist Zusatzinfo und muss nicht mitgetippt
-   werden, z.B. "(Visiten-)Karte" oder "Sie (Akk.)".
-8. hints/notes: nur kurze Lernhilfen (z.B. "nur Plural", "mit Akk.",
+   (akzeptiert αγαπάω und αγαπώ); Zusätze wie "η λαϊκή (αγορά)" oder
+   "(Visiten-)Karte" (ein Bindestrich am Klammerrand verbindet).
+   Klammern MIT Satzzeichen sind reine Zusatzinfo und werden bei der
+   Abfrage ignoriert, z.B. "Sie (Akk.)".
+7. Deutsche Alternativen mit Komma oder "/" trennen ("und, auch").
+8. Muss innerhalb eines Satzes genau EINE von mehreren Varianten
+   genannt werden, eckige Klammern verwenden — auf beiden Seiten:
+   "Ich spreche [nicht/kein] Chinesisch." akzeptiert beide Sätze,
+   "Πώς [είσαι/είστε];" ebenso. KEIN nacktes "a / b" mitten im Satz
+   (das würde als zwei Komplett-Alternativen gewertet).
+9. hints/notes: nur kurze Lernhilfen (z.B. "nur Plural", "mit Akk.",
    "wörtl.: …") — keine Verweise auf Buchseiten oder Übungen.
-9. forms nur bei Unregelmäßigkeit: "schlüssel=form; …" mit den
+10. forms nur bei Unregelmäßigkeit: "schlüssel=form; …" mit den
    Schlüsseln acc_sg, gen_sg, acc_pl, gen_pl, fem, 1sg…3pl
    (z.B. "gen_pl=γυναικών").
-10. stem2: der 2. Stamm (Aoriststamm, für θα/να) — bei JEDEM Verb
+11. stem2: der 2. Stamm (Aoriststamm, für θα/να) — bei JEDEM Verb
     angeben, das einen hat (ohne ihn kein Futur-Training):
     - regelmäßig ein Stamm mit Bindestrich; die Betonung entscheidet
       über die Endungen: "γράψ-" → θα γράψω, aber unbetont
@@ -55,7 +61,7 @@ REGELN FÜR DIE SPALTEN
       z.B. für βλέπω: "δω, δεις, δει, δούμε, δείτε, δουν/δούνε".
     - weglassen nur, wenn der Futurstamm dem Präsens entspricht und
       unbekannt ist, oder bei Fixformen (κοστίζει, θα δούμε).
-11. aorist_passive: der Aorist Passiv (3. Stamm) im gleichen Format wie
+12. aorist_passive: der Aorist Passiv (3. Stamm) im gleichen Format wie
     stem2 — angeben, wenn bekannt (nicht aus dem Aktiv berechenbar).
     participle: das Perfekt-Partizip nur bei unregelmäßiger Form
     (z.B. γραμμένος). Beide Spalten sonst leer lassen.
@@ -219,9 +225,15 @@ def help_view(nav, store=None) -> ft.Control:
             "unten).",
             "Satzzeichen am Anfang/Ende (z.B. ; · ! ? . , …) sind egal.",
             "Wortteile in Klammern sind optional: bei „αγαπ(ά)ω“ zählen "
-            "αγαπάω und αγαπώ als richtig.",
+            "αγαπάω und αγαπώ als richtig; bei „(Visiten-)Karte“ zählen "
+            "Visitenkarte und Karte (ein Bindestrich am Klammerrand "
+            "verbindet). Klammern mit Satzzeichen sind reine Zusatzinfo "
+            "(z.B. „Sie (Akk.)“).",
             "Steht auf einer Karte „A / B“ (z.B. „και / κι“), zählt jede "
             "der Alternativen als richtig — auf beiden Sprachseiten.",
+            "Eckige Klammern im Satz: genau eine Variante muss genannt "
+            "werden — „Ich spreche [nicht/kein] Chinesisch.“ akzeptiert "
+            "beide vollständigen Sätze, „Πώς [είσαι/είστε];“ ebenso.",
             "Griechisch: fehlende oder falsche Akzente und ein falsches "
             "Schluss-ς ergeben „Fast!“. Mit „Akzentfehler tolerieren“ zählt "
             "das als richtig.",
@@ -244,7 +256,9 @@ def help_view(nav, store=None) -> ft.Control:
             "nur diesem Fehler ein „Fast“: Sie zählt als Fehler der Runde "
             "und wird in dieser und der nächsten Runde wiederholt — die "
             "Leitner-Box bleibt dabei aber unverändert (weder hoch noch "
-            "zurück).",
+            "zurück). Ausnahme: Neue (graue) Wörter haben noch keine Box "
+            "zu schützen — sie starten bei so einem Fehler ganz normal "
+            "in Box 1.",
             "Groß-/Kleinschreibung wird nur bei Nomen geprüft (z.B. „η "
             "Αθήνα“, deutsch „Straße“), nie bei Phrasen oder anderen "
             "Worttypen.",
@@ -268,6 +282,10 @@ def help_view(nav, store=None) -> ft.Control:
             "Reihenfolge der Fehler; in der nächsten Runde sind sie "
             "garantiert wieder dabei, gemischt zwischen den übrigen und "
             "neuen Wörtern.",
+            "Wörter, die heute schon (richtig) beantwortet wurden, rücken "
+            "bei der Auswahl ans Ende — sie kommen erst wieder dran, wenn "
+            "fällige, neue und ältere Karten aufgebraucht sind. So blockieren "
+            "frisch gekonnte Wörter nicht mehrere Runden am selben Tag.",
             "In der Statistik-Ansicht lässt sich der Lernstand einer "
             "Liste über das Papierkorb-Symbol auf null zurücksetzen.",
         ]),
@@ -433,8 +451,8 @@ def help_view(nav, store=None) -> ft.Control:
 
     wortsuche = _chapter(nav, "Wortsuche", ft.Icons.SEARCH, [
         _bullets([
-            "Erreichbar über das runde Such-Symbol unten links in der "
-            "Vokabelverwaltung.",
+            "Erreichbar über die Lupe oben in der Leiste — von überall "
+            "in der App.",
             "Sucht in allen Listen — Deutsch oder Griechisch tippen; "
             "Groß-/Kleinschreibung und Akzente sind egal.",
             "Steht dasselbe Wort in mehreren Vokabellisten, erscheint es "

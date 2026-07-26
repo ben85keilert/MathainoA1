@@ -617,6 +617,16 @@ def result_view(nav, store: ContentStore, progress: ProgressStore,
         )
         for c in stats["wrong_cards"]
     ]
+    # Darunter auch die richtig beantworteten Wörter der Runde zeigen
+    correct_items = [
+        ft.ListTile(
+            title=ft.Text(a.card.front),
+            subtitle=ft.Text(a.card.back),
+            leading=ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN),
+        )
+        for a in session.answers[: session.total_first_round]
+        if session.counts_correct(a.result)
+    ]
 
     def again(e):
         nav.stack.pop()  # Ergebnis-View ersetzen statt stapeln
@@ -635,6 +645,8 @@ def result_view(nav, store: ContentStore, progress: ProgressStore,
             ft.ProgressBar(value=stats["correct"] / max(1, stats["total"])),
             ft.Text("Falsche Karten:" if wrong_items else "Alles richtig — μπράβο! 🎉"),
             *wrong_items,
+            *([ft.Text("Richtig:")] if correct_items and wrong_items else []),
+            *correct_items,
             ft.Row(
                 [
                     ft.FilledButton("Neue Runde", icon=ft.Icons.REPLAY, on_click=again),

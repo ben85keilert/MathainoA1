@@ -67,19 +67,35 @@ erzeugten Listen mitgelöscht werden sollen.
 - Groß-/Kleinschreibung und mehrfache Leerzeichen sind egal.
 - Satzzeichen am Anfang/Ende (`; · ! ? . , …`) sind egal.
 - **Wortteile in Klammern sind optional**: bei „αγαπ(ά)ω“ zählen αγαπάω
-  und αγαπώ als richtig.
+  und αγαπώ als richtig, bei „(Visiten-)Karte“ Visitenkarte und Karte
+  (ein Bindestrich am Klammerrand verbindet die Teile). Klammern mit
+  Satzzeichen sind reine Zusatzinfo, z.B. „Sie (Akk.)“.
+- **Eckige Klammern im Satz**: genau eine Variante muss genannt werden —
+  „Ich spreche [nicht/kein] Chinesisch.“ akzeptiert beide vollständigen
+  Sätze, „Πώς [είσαι/είστε];“ ebenso. Ein nacktes „A / B“ auf oberster
+  Ebene trennt dagegen komplette Alternativantworten („και / κι“).
 - **Griechisch**: fehlende oder falsche Akzente und ein falsches
   Schluss-ς ergeben „Fast!“. Mit „Akzentfehler tolerieren“ zählt das als
   richtig. Ist die Toleranz **aus**, zählt der Akzentfehler in der Runde
   als Fehler (Fehlerrunde und Rundenergebnis) — die Leitner-Box bleibt
-  dabei aber unverändert: weder hoch noch zurück.
+  dabei aber unverändert: weder hoch noch zurück. Ausnahme: **neue
+  (graue) Wörter** haben noch keine Box zu schützen — sie starten bei so
+  einem Fehler ganz normal in Box 1 und gelten nicht länger als „neu“.
 - **Deutsch**: Enthält die Rückseite mehrere Bedeutungen (getrennt durch
   Komma, „/“ oder als eigene Sätze), genügt eine davon. Text in Klammern
   ist Zusatzinfo und muss nicht mitgetippt werden.
 - Die **Fehlerrunde** am Ende wiederholt alle falschen Karten in der
   Reihenfolge der Fehler und zählt nicht in die Statistik. In der
   **nächsten Runde** kommen die falschen Wörter garantiert wieder mit
-  dazu und werden zwischen die übrigen/neuen Wörter gemischt.
+  dazu und werden zwischen die übrigen/neuen Wörter gemischt. Wörter,
+  die **heute schon richtig beantwortet** wurden, rücken bei der Auswahl
+  dagegen ans Ende — sie kommen erst wieder dran, wenn fällige, neue und
+  ältere Karten aufgebraucht sind.
+- Am Rundenende werden unter den falschen auch die **richtig
+  beantworteten Wörter** aufgelistet.
+- Im Verbtraining ist die **2. Person Plural 👥** zugleich die höfliche
+  Anrede („ihr“ und „Sie“); Singular-/Plural-Fragen sind zusätzlich mit
+  👤 (einer) bzw. 👥 (viele) markiert.
 
 ## Wortlisten bearbeiten
 
