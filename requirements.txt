@@ -3,7 +3,7 @@
 # Hinweis: "pip install -e ." funktioniert NICHT — die lokale Extension
 # flet-system-tts ist für pip nur über den relativen Pfad hier auflösbar
 # (flet build nutzt stattdessen [tool.uv.sources] aus pyproject.toml).
-flet>=0.85,<0.86
+flet>=0.85,<0.87
 flet-audio>=0.85,<0.86
 gTTS>=2.5,<3
 fpdf2>=2.8,<3
