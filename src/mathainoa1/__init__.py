@@ -2,4 +2,4 @@
 
 APP_NAME = "Μαθαίνω — Griechisch"
 # Bei Änderung auch version in pyproject.toml nachziehen
-__version__ = "0.4.2"
+__version__ = "0.5.0"
