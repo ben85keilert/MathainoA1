@@ -10,10 +10,18 @@ die Analyse komplett; die daraus erzeugten Vokabellisten werden dabei so
 gemergt, dass Karten-IDs — und damit der Leitner-Fortschritt — erhalten
 bleiben. Die Analyse ist die Quelle der Wahrheit: Wörter, die in der
 korrigierten Fassung fehlen, werden aus den Listen entfernt.
+
+Daneben das zentrale Lexikon (Feature "lexikon"): eigenständige
+Etymologie-Pakete (Arbeitsanweisung IV) werden wortweise in eine einzige
+Datei gemergt — gleiches Lemma ersetzt den Eintrag (Nachbessern), Neues
+kommt dazu, nichts geht verloren. Der Etymologie-Index speist sich aus
+Lexikon UND Alt-Analysen mit eingebetteter Etymologie; das Lexikon hat
+Vorrang.
 """
 
 from __future__ import annotations
 
+import datetime
 import json
 import re
 import uuid
@@ -21,7 +29,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from mathainoa1.logic.answer_check import normalize, strip_accents
-from mathainoa1.models import WORD_TYPES, VocabCard, VocabList, parse_forms_text, parse_stem2_text
+from mathainoa1.models import (
+    WORD_TYPES,
+    SelectionList,
+    VocabCard,
+    VocabList,
+    parse_forms_text,
+    parse_stem2_text,
+)
 from mathainoa1.storage.content import (
     ContentStore,
     _clean_article,
@@ -30,6 +45,7 @@ from mathainoa1.storage.content import (
 from mathainoa1.storage.settings import app_data_dir, load_app_settings
 
 FEATURE_KEY = "textanalyse"
+LEXIKON_KEY = "lexikon"
 
 # Feste Reihenfolge und Anzeigenamen der Kognaten-Gruppen
 COGNATE_GROUPS = [
@@ -41,6 +57,11 @@ COGNATE_GROUPS = [
 
 def analyses_dir() -> Path:
     return app_data_dir() / "features" / FEATURE_KEY
+
+
+def lexicon_path() -> Path:
+    # Eigener Ordner, damit der Analyse-Glob in _build_index sauber bleibt
+    return app_data_dir() / "features" / LEXIKON_KEY / "lexikon.json"
 
 
 def word_key(text: str) -> str:
@@ -451,6 +472,167 @@ class AnalysisStore:
         invalidate_cache()
 
 
+def parse_lexicon_package(text: str) -> tuple[str, list[EtymologyEntry]]:
+    """JSON-Text eines Etymologie-Pakets (Arbeitsanweisung IV) lesen.
+
+    Akzeptiert auch komplette Analyse-Dateien — übernommen wird nur das
+    Feld "etymology". Rückgabe: (Titel, Einträge); ValueError mit
+    deutscher Meldung bei grundlegenden Problemen.
+    """
+    try:
+        data = json.loads(text.lstrip("﻿"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "Kein gültiges JSON — ist die komplette Datei/Antwort "
+            f"eingefügt? ({exc.msg}, Zeile {exc.lineno})") from exc
+    if not isinstance(data, dict):
+        raise ValueError("Erwartet wird ein JSON-Objekt {…} mit dem "
+                         "Feld \"etymology\".")
+    entries = [e for e in (EtymologyEntry.from_dict(raw)
+                           for raw in (data.get("etymology") or [])
+                           if isinstance(raw, dict))
+               if e.word.strip()]
+    if not entries:
+        raise ValueError("Das Paket enthält keine \"etymology\"-Einträge "
+                         "— falsche Datei?")
+    return str(data.get("title", "")).strip(), entries
+
+
+class LexiconStore:
+    """Zentrales Lexikon: eine Datei, wortweiser Merge, plus Sync der
+    globalen Zusatzwörter-Liste und einer Auswahlliste pro Paket."""
+
+    EXTRA_LIST_NAME = "Lexikon – Zusatzwörter"
+
+    def __init__(self, path: Path, content: ContentStore):
+        self.path = path
+        self.content = content
+        self.entries: list[EtymologyEntry] = []
+        self.extra_list_id: str = ""
+
+    def load(self) -> None:
+        self.entries = []
+        self.extra_list_id = ""
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return
+        if not isinstance(data, dict):
+            return
+        self.entries = [EtymologyEntry.from_dict(e)
+                        for e in (data.get("entries") or [])
+                        if isinstance(e, dict)]
+        self.extra_list_id = str(data.get("extra_list_id", ""))
+
+    def save(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        data = {"schema_version": 1,
+                "extra_list_id": self.extra_list_id,
+                "entries": [e.to_dict() for e in self.entries]}
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    def import_package(self, text: str) -> dict:
+        """Paket einlesen und wortweise mergen.
+
+        Statistik-Schlüssel: new/updated (Lexikon-Einträge),
+        extra_new/extra_updated (Karten der Zusatzwörter-Liste),
+        selection (Name der erzeugten Auswahlliste oder "").
+        """
+        title, new_entries = parse_lexicon_package(text)
+        stats = {"new": 0, "updated": 0,
+                 "extra_new": 0, "extra_updated": 0, "selection": ""}
+        by_key = {word_key(e.word): i for i, e in enumerate(self.entries)}
+        for entry in new_entries:
+            key = word_key(entry.word)
+            if not key:
+                continue
+            pos = by_key.get(key)
+            if pos is None:
+                by_key[key] = len(self.entries)
+                self.entries.append(entry)
+                stats["new"] += 1
+            else:
+                self.entries[pos] = entry  # Nachbessern: Eintrag ersetzen
+                stats["updated"] += 1
+        card_ids = self._sync_extra_list(new_entries, stats)
+        if card_ids:
+            name = (f"Lexikon: {title}" if title else
+                    f"Lexikon-Paket {datetime.date.today().isoformat()}")
+            self.content.save_selection(
+                SelectionList(name=name, card_ids=card_ids))
+            stats["selection"] = name
+        self.save()
+        invalidate_cache()
+        return stats
+
+    def _sync_extra_list(self, new_entries: list[EtymologyEntry],
+                         stats: dict) -> list[str]:
+        """Zusatzwörter des Pakets in die globale Liste einpflegen.
+
+        Additiv (nie löschen), gebündelt in Paket-Reihenfolge, dedupliziert
+        gegen Ursprungswörter und Bestand; gematchte Karten behalten ihre
+        id (Lernstand). Anders als sync_vocab_lists wird der Listenname
+        nicht überschrieben — Umbenennungen des Nutzers bleiben.
+        Rückgabe: Karten-IDs dieses Pakets (für die Auswahlliste).
+        """
+        seen = {word_key(e.word) for e in new_entries}
+        cards: list[VocabCard] = []
+        for entry in new_entries:
+            for v in entry.extra_vocab:
+                card = card_from_entry(v)
+                if card is None:
+                    continue
+                key = word_key(card.front)
+                if key in seen:
+                    continue
+                seen.add(key)
+                cards.append(card)
+        if not cards:
+            return []
+        vlist = self.content.lists.get(self.extra_list_id)
+        if vlist is not None and not vlist.editable:
+            vlist = None
+        if vlist is None:  # noch nie erzeugt oder vom Nutzer gelöscht
+            vlist = VocabList(name=self.EXTRA_LIST_NAME)
+            self.extra_list_id = vlist.id
+        existing: dict[str, VocabCard] = {}
+        for c in vlist.cards:
+            existing.setdefault(word_key(c.front), c)
+        card_ids: list[str] = []
+        for card in cards:
+            old = existing.get(word_key(card.front))
+            if old is not None:
+                if _copy_card_fields(card, old):
+                    stats["extra_updated"] += 1
+                card_ids.append(old.id)
+            else:
+                vlist.cards.append(card)
+                stats["extra_new"] += 1
+                card_ids.append(card.id)
+        self.content.save_user_list(vlist)
+        return card_ids
+
+    def delete_entry(self, word: str) -> bool:
+        """Eintrag entfernen; die Zusatzwörter-Liste bleibt unberührt
+        (eigenständiger Lernstoff)."""
+        key = word_key(word)
+        kept = [e for e in self.entries if word_key(e.word) != key]
+        if len(kept) == len(self.entries):
+            return False
+        self.entries = kept
+        self.save()
+        invalidate_cache()
+        return True
+
+
+def lexicon_store(content: ContentStore) -> LexiconStore:
+    store = LexiconStore(lexicon_path(), content)
+    store.load()
+    return store
+
+
 # --- Feature-Zustand und Etymologie-Index (modulweit gecacht) ---
 #
 # Trainer und Wortlisten fragen pro Karte nach Etymologie-Infos; dafür
@@ -467,18 +649,18 @@ def invalidate_cache() -> None:
 
 
 def feature_enabled() -> bool:
+    # Der ⓘ-Infobutton lebt mit jedem der beiden Schalter
     if _cache["enabled"] is None:
-        _cache["enabled"] = (
-            FEATURE_KEY in load_app_settings().enabled_features)
+        enabled = load_app_settings().enabled_features
+        _cache["enabled"] = (FEATURE_KEY in enabled
+                             or LEXIKON_KEY in enabled)
     return _cache["enabled"]
 
 
 def _build_index() -> dict[str, EtymologyEntry]:
     index: dict[str, EtymologyEntry] = {}
     directory = analyses_dir()
-    if not directory.exists():
-        return index
-    for p in sorted(directory.glob("*.json")):
+    for p in sorted(directory.glob("*.json")) if directory.exists() else []:
         try:
             with open(p, encoding="utf-8") as f:
                 analysis = TextAnalysis.from_dict(json.load(f))
@@ -494,6 +676,24 @@ def _build_index() -> dict[str, EtymologyEntry]:
                 extra_key = word_key(str(v.get("front", "")))
                 if extra_key:
                     index.setdefault(extra_key, entry)
+    # Lexikon zuletzt: die gepflegte Quelle überschreibt Alt-Analysen
+    try:
+        with open(lexicon_path(), encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        data = None
+    if isinstance(data, dict):
+        for raw in data.get("entries") or []:
+            if not isinstance(raw, dict):
+                continue
+            entry = EtymologyEntry.from_dict(raw)
+            key = word_key(entry.word)
+            if key:
+                index[key] = entry
+            for v in entry.extra_vocab:
+                extra_key = word_key(str(v.get("front", "")))
+                if extra_key:
+                    index.setdefault(extra_key, entry)
     return index
 
 
@@ -505,3 +705,13 @@ def etymology_for(card: VocabCard) -> EtymologyEntry | None:
     if _cache["index"] is None:
         _cache["index"] = _build_index()
     return _cache["index"].get(word_key(card.front))
+
+
+def missing_cards(cards: list[VocabCard]) -> list[VocabCard]:
+    """Karten ohne Eintrag in Lexikon/Analysen — Input für den
+    Gap-Export an Arbeitsanweisung IV. Unabhängig vom Feature-Schalter,
+    damit der Export nie fälschlich "alles gedeckt" meldet."""
+    if _cache["index"] is None:
+        _cache["index"] = _build_index()
+    index = _cache["index"]
+    return [c for c in cards if word_key(c.front) not in index]

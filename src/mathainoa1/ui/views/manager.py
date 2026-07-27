@@ -22,7 +22,7 @@ from mathainoa1.models import (
     parse_verb_forms_text,
     verb_forms_to_text,
 )
-from mathainoa1.storage import content, pdf_export
+from mathainoa1.storage import content, pdf_export, textanalyse
 from mathainoa1.storage.content import ContentStore, filter_level
 from mathainoa1.storage.progress import ProgressStore
 from mathainoa1.storage.settings import TTS_GOOGLE, load_app_settings
@@ -75,6 +75,44 @@ def _export_value(card: VocabCard, key: str) -> str:
     if key == "forms":
         return forms_to_text(card.forms)
     return getattr(card, key) or ""
+
+
+def _lexikon_menu_items(page: ft.Page, store: ContentStore, name: str,
+                        cards_provider) -> list[ft.PopupMenuItem]:
+    """Lexikon-Werkzeuge fürs Listen-Menü (nur bei aktivem Feature):
+    Gap-Export der Wörter ohne Lexikon-Eintrag als Input für
+    Arbeitsanweisung IV, plus der globale Paket-Import."""
+    if not textanalyse.feature_enabled():
+        return []
+
+    def export_missing(e):
+        cards = cards_provider()
+        missing = textanalyse.missing_cards(cards)
+        if not missing:
+            page.show_dialog(ft.SnackBar(ft.Text(
+                "Alle Wörter dieser Liste haben schon einen "
+                "Lexikon-Eintrag.")))
+            return
+        csv_text = content.export_csv_columns(
+            missing, ["front", "back", "article", "word_type"])
+        plaintext_dialog(
+            page,
+            f"Fehlende Wort-Infos — {name} "
+            f"({len(missing)} von {len(cards)} ohne Eintrag)",
+            csv_text)
+
+    def import_infos(e):
+        from mathainoa1.ui.views.lexikon import open_import_dialog
+        open_import_dialog(page, textanalyse.lexicon_store(store))
+
+    return [
+        ft.PopupMenuItem(content="Fehlende Wort-Infos exportieren",
+                         icon=ft.Icons.MENU_BOOK_OUTLINED,
+                         on_click=export_missing),
+        ft.PopupMenuItem(content="Wort-Infos importieren",
+                         icon=ft.Icons.MENU_BOOK,
+                         on_click=import_infos),
+    ]
 
 
 def rename_dialog(page: ft.Page, store: ContentStore, vlist: VocabList,
@@ -281,6 +319,8 @@ def manager_view(nav, store: ContentStore,
                                     on_click=lambda e, l=vlist: prepare_audio_dialog(
                                         l.name, l.cards))]
                   if google_audio() else []),
+                *_lexikon_menu_items(page, store, vlist.name,
+                                     lambda l=vlist: l.cards),
                 ft.PopupMenuItem(content="Löschen", icon=ft.Icons.DELETE,
                                  on_click=lambda e, l=vlist: delete_dialog(l)),
             ])
@@ -299,6 +339,8 @@ def manager_view(nav, store: ContentStore,
                                         on_click=lambda e, l=vlist: prepare_audio_dialog(
                                             l.name, l.cards))]
                       if google_audio() else []),
+                    *_lexikon_menu_items(page, store, vlist.name,
+                                         lambda l=vlist: l.cards),
                 ]),
             ], tight=True, spacing=0)
         return ft.Card(
@@ -640,11 +682,23 @@ def search_view(nav, store: ContentStore) -> ft.Control:
             return
         tiles = []
         for vlist, card, in_selections in hits:
-            star = None
+            trailing_items: list[ft.Control] = []
+            entry = textanalyse.etymology_for(card)
+            if entry is not None:
+                def show_info(e, x=entry):
+                    # Lazy-Import wie in wordlist.card_tiles (kein Zyklus)
+                    from mathainoa1.ui.views.textanalyse import (
+                        etymology_dialog,
+                    )
+                    etymology_dialog(page, x)
+
+                trailing_items.append(ft.IconButton(
+                    ft.Icons.INFO_OUTLINE, icon_size=18,
+                    tooltip="Wortherkunft & Synonyme", on_click=show_info))
             if in_selections:
-                star = ft.Icon(
+                trailing_items.append(ft.Icon(
                     ft.Icons.STAR, color=ft.Colors.AMBER, size=18,
-                    tooltip="In Auswahlliste: " + ", ".join(in_selections))
+                    tooltip="In Auswahlliste: " + ", ".join(in_selections)))
             tiles.append(ft.ListTile(
                 dense=True,
                 title=ft.Row(
@@ -654,7 +708,8 @@ def search_view(nav, store: ContentStore) -> ft.Control:
                     vertical_alignment=ft.CrossAxisAlignment.START,
                 ),
                 subtitle=ft.Text(vlist.name, size=12),
-                trailing=star,
+                trailing=(ft.Row(trailing_items, tight=True, spacing=0)
+                          if trailing_items else None),
                 on_click=lambda e, v=vlist, c=card: open_hit(v, c),
             ))
         results.controls = tiles
@@ -1454,6 +1509,35 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
     sort_btn = ft.IconButton(on_click=toggle_sort)
     select_btn = ft.IconButton(ft.Icons.CHECKLIST, on_click=toggle_select)
 
+    def show_word_info(e):
+        # Gesammelter Worthintergrund der Liste in Listenreihenfolge;
+        # Karten, die auf denselben Eintrag zeigen, nur einmal
+        from mathainoa1.ui.views.textanalyse import render_etymology
+        seen: set[str] = set()
+        controls: list[ft.Control] = []
+        for c in vlist.cards:
+            entry = textanalyse.etymology_for(c)
+            if entry is None:
+                continue
+            key = textanalyse.word_key(entry.word)
+            if key in seen:
+                continue
+            seen.add(key)
+            if controls:
+                controls.append(ft.Divider())
+            controls += render_etymology(entry)
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text(f"Worthintergrund — {vlist.name}", size=16),
+            content=ft.Column(controls, scroll=ft.ScrollMode.AUTO,
+                              width=420, height=440),
+            actions=[ft.TextButton("Schließen",
+                                   on_click=lambda e: page.pop_dialog())],
+        ))
+
+    info_btn = ft.IconButton(ft.Icons.MENU_BOOK_OUTLINED, icon_size=20,
+                             tooltip="Worthintergrund dieser Liste",
+                             on_click=show_word_info)
+
     def refresh_header_buttons():
         present = [t for t in WORD_TYPES
                    if any(c.word_type == t for c in vlist.cards)]
@@ -1813,8 +1897,12 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         ft.Tab(label="Karten", icon=ft.Icons.VIEW_AGENDA_OUTLINED),
         ft.Tab(label="Tabelle", icon=ft.Icons.TABLE_ROWS_OUTLINED),
     ])
-    header_row = [ft.Container(tab_bar, expand=True), filter_btn,
-                  alpha_btn, box_sort_btn, select_btn]
+    header_row = [ft.Container(tab_bar, expand=True)]
+    if (textanalyse.feature_enabled()
+            and any(textanalyse.etymology_for(c) is not None
+                    for c in vlist.cards)):
+        header_row.append(info_btn)
+    header_row += [filter_btn, alpha_btn, box_sort_btn, select_btn]
     if vlist.editable:
         header_row.append(sort_btn)
 

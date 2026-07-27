@@ -64,27 +64,6 @@ SCHEMA (Beispiel mit allen Feldern)
   "phrases": [
     {"gr": "έγινε σεισμός", "de": "es gab ein Erdbeben",
      "note": "unpersönliche Konstruktion"}
-  ],
-  "etymology": [
-    {"word": "ο σεισμός",
-     "breakdown": [
-       {"element": "σει-", "meaning": "schütteln (altgr. σείω)"},
-       {"element": "-σμός", "meaning": "Nomensuffix: Vorgang"}
-     ],
-     "total": "das Schütteln → Erdbeben",
-     "semantics": "Vom altgriechischen σείω (schütteln); im Deutschen als seismisch entlehnt.",
-     "cognates": {
-       "identical": [{"word": "σείω", "meaning": "schütteln (gehoben)"}],
-       "related": [{"word": "το σείσμα", "meaning": "Erschütterung"}],
-       "german_latin": [{"word": "seismisch, Seismograph",
-                         "meaning": "über griech. σεισμός"}]
-     },
-     "synonyms": [{"word": "η δόνηση",
-                   "nuance": "Erschütterung — auch technisch"}],
-     "extra_vocab": [
-       {"front": "η δόνηση", "back": "Erschütterung / Vibration",
-        "article": "η", "plural": "-εις", "word_type": "Nomen"}
-     ]}
   ]
 }
 
@@ -115,20 +94,10 @@ REGELN
    werden, eckige Klammern verwenden: "Ich spreche [nicht/kein]
    Chinesisch." bzw. "Πώς [είσαι/είστε];" — kein nacktes "/" mitten im
    Satz.
-7. etymology: nur für die besprochenen Wörter. "breakdown" ist die
-   Wortzerlegung, "total" die Gesamt-Zeile, "semantics" genau eine
-   Prosazeile. "cognates" hat genau die drei Gruppen "identical"
-   (neugriechisch, gleiche Wurzel), "related" (Ableitungen) und
-   "german_latin" (deutsche/lateinische Verwandte). "synonyms" nur
-   lernwürdige Alternativen anderer Wurzel mit Nuance.
-8. extra_vocab: die zusätzlichen neugriechischen Lernwörter aus
-   Kognaten und Synonymen dieses Analyseworts — als Vokabeleinträge im
-   selben Format wie "vocab" (Bedeutung eigenständig prüfen und gängige
-   Zusatzbedeutungen mit " / " ergänzen). KEINE Wörter, die schon in
-   "vocab" stehen; keine altgriechischen Wurzeln, keine deutschen oder
-   lateinischen Wörter. Beim jeweiligen Analysewort lassen — die App
-   übernimmt die Bündelung in dieser Reihenfolge.
-9. KORREKTUR: Wenn du eine frühere Analyse korrigierst, übernimm "id"
+7. KEINE Etymologie in dieser Datei: Wortherkunft, Kognaten, Synonyme
+   und Zusatzwörter liefert die separate Arbeitsanweisung IV (Lexikon
+   der App) — hier weglassen.
+8. KORREKTUR: Wenn du eine frühere Analyse korrigierst, übernimm "id"
    und "title" unverändert aus der alten Datei. Die App ersetzt die
    Analyse dann und erhält den Lernstand der Vokabeln.
 """

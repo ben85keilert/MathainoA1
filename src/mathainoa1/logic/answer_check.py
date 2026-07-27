@@ -16,6 +16,8 @@ falschem Schluss-Sigma ist immer ALMOST — ob das als richtig zählt
 aus), entscheidet die Session.
 Deutsch: Die Rückseite kann Alternativen enthalten ("Gyros, Kreis, Runde",
 "und, auch", "Hallo! Guten Tag!"); jede Alternative wird akzeptiert.
+Kommas zählen beim Vergleich nie als Fehler (beide Sprachseiten); auf der
+deutschen Rückseite trennen sie weiterhin Alternativen.
 """
 
 from __future__ import annotations
@@ -52,6 +54,12 @@ _PUNCT = ";·!?.,…"
 
 def _strip_punct(s: str) -> str:
     return s.strip(_PUNCT + " ")
+
+
+def _drop_commas(s: str) -> str:
+    # Kommas ersatzlos ignorieren: durch Leerzeichen ersetzen und glätten,
+    # damit "danke,gerne" und "danke, gerne" auf dasselbe hinauslaufen
+    return re.sub(r"\s+", " ", s.replace(",", " ")).strip()
 
 
 def bracket_variants(text: str) -> list[str]:
@@ -169,10 +177,12 @@ def _check_greek_single(expected: str, given: str) -> Result:
     best = Result.WRONG
     for i, exp_variant in enumerate(greek_variants(expected)):
         exp, giv = normalize(exp_variant), normalize(given)
-        if exp == giv or _strip_punct(exp) == _strip_punct(giv):
+        exp_p = _drop_commas(_strip_punct(exp))
+        giv_p = _drop_commas(_strip_punct(giv))
+        if exp == giv or exp_p == giv_p:
             return Result.CORRECT
-        exp_s = strip_accents(_strip_punct(exp))
-        giv_s = strip_accents(_strip_punct(giv))
+        exp_s = strip_accents(exp_p)
+        giv_s = strip_accents(giv_p)
         if exp_s == giv_s:
             if i >= 2:
                 # Reduzierte Variante: der Akzent kann durch den weggefallenen
@@ -206,11 +216,11 @@ def german_alternatives(back: str) -> list[str]:
 
 
 def check_german(back: str, given: str) -> Result:
-    giv = _strip_punct(normalize(given))
+    giv = _drop_commas(_strip_punct(normalize(given)))
     if not giv:
         return Result.WRONG
     for alt in german_alternatives(back):
-        if normalize(alt) == giv:
+        if _drop_commas(normalize(alt)) == giv:
             return Result.CORRECT
     return Result.WRONG
 
@@ -228,7 +238,7 @@ def case_ok(expected: str, given: str, german: bool) -> bool:
     Vergleicht akzent- und satzzeichenunabhängig, aber mit erhaltener
     Schreibung — Akzentfehler werden hier also nicht doppelt bestraft.
     """
-    giv = strip_accents(_strip_punct(_norm_keep_case(given)))
+    giv = strip_accents(_drop_commas(_strip_punct(_norm_keep_case(given))))
     if german:
         alts = german_alternatives(expected)
     else:
@@ -237,5 +247,5 @@ def case_ok(expected: str, given: str, german: bool) -> bool:
                 for part in ([p.strip() for p in bracketed.split("/")]
                              if "/" in bracketed else [bracketed])
                 if part for v in greek_variants(part)]
-    return any(strip_accents(_strip_punct(_norm_keep_case(a))) == giv
-               for a in alts)
+    return any(strip_accents(_drop_commas(_strip_punct(_norm_keep_case(a))))
+               == giv for a in alts)

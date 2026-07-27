@@ -30,7 +30,7 @@ Unter **Einstellungen → Erweiterte Funktionen** lassen sich
 Zusatzfunktionen für Fortgeschrittene einzeln zuschalten (Standard:
 aus). Eingeschaltete Funktionen erscheinen als eigene Karte im
 Hauptmenü und gelten für alle Stufen gemeinsam. Aktuell verfügbar:
-die **Textanalyse** (siehe unten).
+die **Textanalyse** und das **Lexikon** (siehe unten).
 
 ## Textanalyse (erweiterte Funktion)
 
@@ -43,16 +43,16 @@ App — erstellt von einem Chatbot nach der mitgelieferten
    Abschnitten der Analyse.
 2. In der Textanalyse-Ansicht **importieren** (Datei oder „Als Text
    importieren“). Die App legt die Analyse an und erzeugt daraus
-   automatisch **zwei Vokabellisten**: „…– Vokabeln“ (Hauptvokabular)
-   und „…– Etymologie“ (Zusatzwörter aus Kognaten und Synonymen,
-   gebündelt nach Analysewort, ohne Dubletten).
+   automatisch die Vokabelliste „…– Vokabeln“ (Hauptvokabular).
 3. Jede Analyse ist komplett einsehbar: **Originaltext** (mit
    Sprachausgabe-Button, langes Drücken = langsam), **inhaltliche
-   Übersetzung**, **Wort-für-Wort-Segmente**, **Vokabeln**, **Phrasen**
-   und die **Etymologieliste**.
-4. Vokabeln mit Etymologie-Eintrag zeigen im Training (auf der
-   griechischen Seite) und in den Wortübersichten einen
-   **Info-Button** (ⓘ) mit Wortherkunft, Kognaten und Synonymen.
+   Übersetzung**, **Wort-für-Wort-Segmente**, **Vokabeln** und
+   **Phrasen**.
+
+Wortherkunft, Kognaten und Synonyme sind seit Version 0.6 **nicht mehr
+Teil der Analyse** — dafür gibt es das **Lexikon** mit der eigenen
+Arbeitsanweisung IV (siehe nächstes Kapitel). Ältere Analysen mit
+eingebauter Etymologie funktionieren unverändert weiter.
 
 **Korrektur per Reimport:** Eine korrigierte Analyse-Datei mit
 derselben `id` (oder demselben Titel) **ersetzt** die Analyse. Die
@@ -62,10 +62,53 @@ aktualisiert und behalten ihren Lernstand, neue Wörter kommen dazu,
 Quelle der Wahrheit). Beim Löschen einer Analyse fragt die App, ob die
 erzeugten Listen mitgelöscht werden sollen.
 
+## Lexikon (erweiterte Funktion)
+
+Das Lexikon ist das zentrale Nachschlagewerk zum **Worthintergrund**:
+Wortzerlegung, Bedeutungsentwicklung, Kognaten (verwandte Wörter) und
+Synonyme. Es wächst paketweise und speist die **ⓘ-Infobuttons** an
+Vokabeln überall in der App (Training, Wortlisten, Wortsuche) — ein
+Eintrag gilt für jedes Vorkommen des Wortes, egal in welcher Liste.
+
+So kommt Inhalt hinein:
+
+1. In einer Wortliste über das Listen-Menü **„Fehlende Wort-Infos
+   exportieren“** wählen. Die App stellt nur die Wörter zusammen, die
+   **noch keinen** Lexikon-Eintrag haben (als CSV-Zeilen).
+2. Diese Wörter zusammen mit der **Arbeitsanweisung IV** („Prompt
+   kopieren“ in der Lexikon-Ansicht) an einen Chatbot geben — am besten
+   in Portionen von etwa **10 Wörtern**. Der Chatbot liefert ein
+   **JSON-Paket** mit den Etymologie-Einträgen.
+3. Das Paket in der Lexikon-Ansicht (oder über das Listen-Menü:
+   „Wort-Infos importieren“) **importieren**.
+
+Beim Import passiert dreierlei:
+
+- Die Einträge werden **wortweise ins Lexikon gemergt**: ein schon
+  vorhandenes Wort wird ersetzt (so bessert man Einträge nach, indem
+  man das Wort einfach erneut liefert), neue kommen dazu, alle übrigen
+  bleiben unverändert.
+- Die **Zusatzwörter** des Pakets (lernwürdige Kognaten und Synonyme)
+  landen in der globalen, normal editierbaren Liste **„Lexikon –
+  Zusatzwörter“** — gebündelt nach Ursprungswort, ohne Dubletten;
+  bestehende Karten behalten beim Aktualisieren ihren Lernstand.
+- Pro Paket entsteht automatisch eine kleine **Auswahlliste**
+  („Lexikon: Paketname“) mit Verweisen auf genau diese Zusatzwörter —
+  ideal, um das Paket als überschaubare Portion zu trainieren. Die
+  Auswahl kann jederzeit gelöscht werden, die Karten bleiben.
+
+In der Lexikon-Ansicht lassen sich alle Einträge **durchsuchen**
+(alphabetisch sortiert), einzeln ansehen und löschen. Wortlisten mit
+Worthintergrund zeigen zusätzlich oben ein **Buchsymbol**, das den
+gesammelten Worthintergrund der ganzen Liste öffnet.
+
 ## So wertet die Abfrage
 
 - Groß-/Kleinschreibung und mehrfache Leerzeichen sind egal.
 - Satzzeichen am Anfang/Ende (`; · ! ? . , …`) sind egal.
+- **Kommas zählen nie als Fehler** — auch mitten im Satz: „Γεια σου, τι
+  κάνεις;“ und „Γεια σου τι κάνεις“ sind gleichwertig (auf der
+  deutschen Seite trennen Kommas weiterhin Alternativen, siehe unten).
 - **Wortteile in Klammern sind optional**: bei „αγαπ(ά)ω“ zählen αγαπάω
   und αγαπώ als richtig, bei „(Visiten-)Karte“ Visitenkarte und Karte
   (ein Bindestrich am Klammerrand verbindet die Teile). Klammern mit

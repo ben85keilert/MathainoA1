@@ -224,6 +224,9 @@ def help_view(nav, store=None) -> ft.Control:
             "außer wenn „Groß-/Kleinschreibung tolerieren“ aus ist (siehe "
             "unten).",
             "Satzzeichen am Anfang/Ende (z.B. ; · ! ? . , …) sind egal.",
+            "Kommas zählen nie als Fehler — auch mitten im Satz: "
+            "„Γεια σου, τι κάνεις;“ und „Γεια σου τι κάνεις“ sind "
+            "gleichwertig.",
             "Wortteile in Klammern sind optional: bei „αγαπ(ά)ω“ zählen "
             "αγαπάω und αγαπώ als richtig; bei „(Visiten-)Karte“ zählen "
             "Visitenkarte und Karte (ein Bindestrich am Klammerrand "
@@ -404,9 +407,17 @@ def help_view(nav, store=None) -> ft.Control:
             "erscheinen als eigene Karte im Hauptmenü.",
             "Textanalyse: importiert komplette Chatbot-Analysen "
             "griechischer Texte (Originaltext mit Sprachausgabe, "
-            "Übersetzung, Wort-für-Wort, Vokabellisten, Etymologie) und "
-            "zeigt im Training einen Info-Button mit Wortherkunft und "
-            "Synonymen. Details im Handbuch.",
+            "Übersetzung, Wort-für-Wort, Vokabelliste, Phrasen). "
+            "Details im Handbuch.",
+            "Lexikon: zentrales Nachschlagewerk zum Worthintergrund "
+            "(Zerlegung, Kognaten, Synonyme), gefüllt über Chatbot-"
+            "Pakete (Arbeitsanweisung IV). Speist die ⓘ-Infobuttons in "
+            "Training, Wortlisten und Wortsuche, sammelt Zusatzwörter "
+            "in der Liste „Lexikon – Zusatzwörter“ und legt pro Paket "
+            "eine Trainings-Auswahlliste an. In den Wortlisten: "
+            "„Fehlende Wort-Infos exportieren“ stellt die noch "
+            "ungedeckten Wörter für den Chatbot zusammen. Details im "
+            "Handbuch.",
         ]),
         ft.Text("Statistik exportieren", size=14, weight=ft.FontWeight.BOLD),
         _bullets([

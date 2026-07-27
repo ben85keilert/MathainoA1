@@ -81,6 +81,36 @@ def test_german_wrong_and_empty():
     assert ac.check_german("das Buch", "   ") == Result.WRONG
 
 
+# --- Kommas zählen nie als Fehler ---
+
+def test_greek_inner_comma_ignored():
+    # fehlendes oder zusätzliches Komma mitten im Satz ist kein Fehler
+    assert ac.check_greek("Γεια σου, τι κάνεις;",
+                          "Γεια σου τι κάνεις") == Result.CORRECT
+    assert ac.check_greek("Γεια σου τι κάνεις;",
+                          "Γεια σου, τι κάνεις") == Result.CORRECT
+    # ohne Leerzeichen nach dem Komma ebenfalls
+    assert ac.check_greek("Γεια σου, τι κάνεις;",
+                          "Γεια σου,τι κάνεις") == Result.CORRECT
+    # Akzentfehler bleiben trotz Komma-Toleranz ALMOST
+    assert ac.check_greek("Γεια σου, τι κάνεις;",
+                          "Γεια σου τι κανεις") == Result.ALMOST
+
+
+def test_german_full_variant_comma_ignored():
+    # die komplette Rückseite ohne Kommas getippt zählt als richtig
+    assert ac.check_german("Gyros, Kreis, Runde",
+                           "Gyros Kreis Runde") == Result.CORRECT
+    # Kommas trennen weiterhin Alternativen
+    assert ac.check_german("Gyros, Kreis, Runde", "Runde") == Result.CORRECT
+    assert ac.check_german("Danke, gerne", "danke gerne") == Result.CORRECT
+
+
+def test_case_check_ignores_commas():
+    # Fallprüfung darf ein fehlendes Komma nicht als Fehler werten
+    assert ac.case_ok("Danke, gerne", "Danke gerne", german=True)
+
+
 # --- Session ---
 
 def cards(n=5):

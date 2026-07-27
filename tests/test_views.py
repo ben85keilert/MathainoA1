@@ -96,7 +96,7 @@ def test_word_list_panel_groups_selection(store_with_edge_cases):
         import flet as ft
         if isinstance(ctrl, ft.Text) and ctrl.value:
             out.append(ctrl.value)
-        for attr in ("controls", "content", "title", "subtitle"):
+        for attr in ("controls", "content", "title", "subtitle", "trailing"):
             sub = getattr(ctrl, attr, None)
             subs = sub if isinstance(sub, list) else [sub]
             for s in subs:
@@ -148,7 +148,7 @@ def test_selection_editor_groups_and_sorts(store_with_edge_cases, tmp_path):
                 out.append(ctrl.value)
             if isinstance(ctrl, ft.IconButton) and ctrl.tooltip:
                 out.append(ctrl.tooltip)
-            for attr in ("controls", "content", "title", "subtitle"):
+            for attr in ("controls", "content", "title", "subtitle", "trailing"):
                 sub = getattr(ctrl, attr, None)
                 subs = sub if isinstance(sub, list) else [sub]
                 for s in subs:
@@ -321,7 +321,7 @@ def _collect_texts_and_tooltips(ctrl, out):
         out.append(ctrl.tooltip)
     if getattr(ctrl, "label", None) and isinstance(ctrl.label, str):
         out.append(ctrl.label)
-    for attr in ("controls", "content", "title", "subtitle"):
+    for attr in ("controls", "content", "title", "subtitle", "trailing"):
         sub = getattr(ctrl, attr, None)
         subs = sub if isinstance(sub, list) else [sub]
         for s in subs:
@@ -558,3 +558,119 @@ def test_edit_notes_dialog_no_full_editor_for_book_cards(tmp_path):
     trainer.edit_notes_dialog(nav.page, store, book_card)
     texts = [getattr(a, "content", None) for a in dialogs[0].actions]
     assert "Alles bearbeiten" not in texts
+
+
+# --- Lexikon (v0.6.0) --------------------------------------------------------
+
+def _sample_package_json():
+    import json
+    return json.dumps({
+        "title": "Paket 1",
+        "etymology": [{
+            "word": "γράφω",
+            "breakdown": [{"element": "γραφ-", "meaning": "ritzen"}],
+            "total": "ritzen → schreiben",
+            "semantics": "Vom altgriechischen γράφω.",
+            "cognates": {"related": [{"word": "το γράμμα",
+                                      "meaning": "Brief"}]},
+            "synonyms": [],
+            "extra_vocab": [{"front": "το γράμμα",
+                             "back": "Brief / Buchstabe",
+                             "article": "το", "word_type": "Nomen"}],
+        }],
+    }, ensure_ascii=False)
+
+
+def _enable_lexikon(tmp_path, monkeypatch):
+    from mathainoa1.storage import textanalyse as ta
+    from mathainoa1.storage.settings import AppSettings, save_app_settings
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    ta.invalidate_cache()
+    s = AppSettings()
+    s.enabled_features = ["lexikon"]
+    save_app_settings(s)
+    return ta
+
+
+def test_lexikon_view_builds(store_with_edge_cases, tmp_path, monkeypatch):
+    """Lexikon-Ansicht baut fehlerfrei — leer und mit importiertem Paket."""
+    ta = _enable_lexikon(tmp_path, monkeypatch)
+    from mathainoa1.ui.views import lexikon as lex_view
+
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "lex.db")
+    try:
+        lex_view.lexikon_view(nav, store, progress)  # leer
+
+        ta.lexicon_store(store).import_package(_sample_package_json())
+        view = lex_view.lexikon_view(nav, store, progress)
+        found: list[str] = []
+        _collect_texts_and_tooltips(view, found)
+        assert "γράφω" in found
+        assert "1 Einträge" in found
+    finally:
+        ta.invalidate_cache()
+        progress.close()
+
+
+def test_search_hit_shows_info_button(store_with_edge_cases, tmp_path,
+                                      monkeypatch):
+    """Wortsuche: Treffer mit Lexikon-Eintrag bekommen den ⓘ-Button."""
+    ta = _enable_lexikon(tmp_path, monkeypatch)
+    store, _vlist = store_with_edge_cases
+    ta.lexicon_store(store).import_package(_sample_package_json())
+    ta.invalidate_cache()
+
+    nav = _fake_nav()
+    view = manager.search_view(nav, store)
+    tf = view.controls[0]
+    tf.value = "γράφω"
+    tf.on_change(None)
+    found: list[str] = []
+    _collect_texts_and_tooltips(view, found)
+    assert "Wortherkunft & Synonyme" in found
+    ta.invalidate_cache()
+
+
+def test_list_view_word_info_icon(store_with_edge_cases, tmp_path,
+                                  monkeypatch):
+    """Listen-Detailansicht: Übersichtssymbol nur, wenn das Feature aktiv
+    ist und die Liste Worthintergrund hat."""
+    ta = _enable_lexikon(tmp_path, monkeypatch)
+    from mathainoa1.storage.settings import AppSettings, save_app_settings
+
+    store, vlist = store_with_edge_cases
+    ta.lexicon_store(store).import_package(_sample_package_json())
+    ta.invalidate_cache()
+
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "lvi.db")
+    try:
+        found: list[str] = []
+        _collect_texts_and_tooltips(
+            manager.list_view(nav, store, vlist, progress), found)
+        assert "Worthintergrund dieser Liste" in found
+
+        save_app_settings(AppSettings())  # Feature aus
+        ta.invalidate_cache()
+        found = []
+        _collect_texts_and_tooltips(
+            manager.list_view(nav, store, vlist, progress), found)
+        assert "Worthintergrund dieser Liste" not in found
+    finally:
+        ta.invalidate_cache()
+        progress.close()
+
+
+def test_prompts_two_step_split():
+    """AW III liefert keine Etymologie mehr; AW IV übernimmt sie."""
+    from mathainoa1.ui.views.lexikon import ARBEITSANWEISUNG_IV
+    from mathainoa1.ui.views.textanalyse import ARBEITSANWEISUNG_III
+
+    assert '"etymology"' not in ARBEITSANWEISUNG_III
+    assert "extra_vocab" not in ARBEITSANWEISUNG_III
+    assert "Arbeitsanweisung IV" in ARBEITSANWEISUNG_III
+    assert '"etymology"' in ARBEITSANWEISUNG_IV
+    assert '"extra_vocab"' in ARBEITSANWEISUNG_IV
+    assert "NICHT alphabetisch" in ARBEITSANWEISUNG_IV

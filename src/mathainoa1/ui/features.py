@@ -42,6 +42,11 @@ def _build_textanalyse(nav, store, progress) -> ft.Control:
     return overview_view(nav, store, progress)
 
 
+def _build_lexikon(nav, store, progress) -> ft.Control:
+    from mathainoa1.ui.views.lexikon import lexikon_view
+    return lexikon_view(nav, store, progress)
+
+
 FEATURES: list[Feature] = [
     Feature(
         key="textanalyse",
@@ -49,6 +54,13 @@ FEATURES: list[Feature] = [
         subtitle="Griechische Texte: Übersetzung, Wortliste, Etymologie",
         icon=ft.Icons.ARTICLE_OUTLINED,
         build=_build_textanalyse,
+    ),
+    Feature(
+        key="lexikon",
+        title="Lexikon",
+        subtitle="Worthintergrund: Zerlegung, Kognaten, Synonyme",
+        icon=ft.Icons.MENU_BOOK_OUTLINED,
+        build=_build_lexikon,
     ),
 ]
 
