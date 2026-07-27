@@ -36,8 +36,10 @@ Damit die App funktioniert, speichert sie folgende Daten
 Diese Daten verlassen das Gerät zu keinem Zeitpunkt. Sie lassen sich
 über die App-Funktionen (z.B. Lernstand zurücksetzen, Listen und
 Notizen löschen) oder durch Deinstallation der App vollständig
-entfernen. Exporte (CSV/JSON/PDF) werden nur auf ausdrücklichen Wunsch
-erzeugt und an dem selbst gewählten Ort gespeichert.
+entfernen. Exporte (CSV/JSON/PDF) und das **Backup** (ZIP-Datei mit den
+selbst gewählten Datenbereichen, Einstellungen → Backup) werden nur auf
+ausdrücklichen Wunsch erzeugt und an dem selbst gewählten Ort
+gespeichert.
 
 ## Sprachausgabe
 

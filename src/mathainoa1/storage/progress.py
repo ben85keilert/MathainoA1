@@ -149,3 +149,32 @@ class ProgressStore:
             "SELECT card_id, box, correct, wrong, streak, last_seen, due FROM card_progress"
         ).fetchall()
         return {r[0]: self._row_to_progress(r) for r in rows}
+
+    # --- Backup: Fortschritt als Daten statt als DB-Datei ---------------
+    # Die SQLite-Datei selbst wird nie kopiert/ersetzt — die App hält eine
+    # offene Verbindung; stattdessen wandern die Zeilen als JSON ins
+    # Backup und beim Restore per replace_all in DIESE Verbindung.
+
+    def export_rows(self) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT card_id, box, correct, wrong, streak, last_seen, due"
+            " FROM card_progress ORDER BY card_id"
+        ).fetchall()
+        keys = ("card_id", "box", "correct", "wrong", "streak",
+                "last_seen", "due")
+        return [dict(zip(keys, r)) for r in rows]
+
+    def replace_all(self, rows: list[dict]) -> int:
+        """Ersetzt den kompletten Lernstand (Backup-Import)."""
+        self.conn.execute("DELETE FROM card_progress")
+        self.conn.executemany(
+            """INSERT INTO card_progress
+               (card_id, box, correct, wrong, streak, last_seen, due)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            [(str(r.get("card_id", "")), int(r.get("box", 1)),
+              int(r.get("correct", 0)), int(r.get("wrong", 0)),
+              int(r.get("streak", 0)), r.get("last_seen"), r.get("due"))
+             for r in rows if r.get("card_id")],
+        )
+        self.conn.commit()
+        return len(rows)

@@ -674,3 +674,68 @@ def test_prompts_two_step_split():
     assert '"etymology"' in ARBEITSANWEISUNG_IV
     assert '"extra_vocab"' in ARBEITSANWEISUNG_IV
     assert "NICHT alphabetisch" in ARBEITSANWEISUNG_IV
+
+
+# --- Backup (v0.7.0) ---------------------------------------------------------
+
+def test_settings_view_backup_section(store_with_edge_cases, tmp_path,
+                                      monkeypatch):
+    """Einstellungen: Backup-Abschnitt nur mit übergebenen Stores;
+    ohne Stores (Alt-Signatur) baut die View weiter fehlerfrei."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.storage.progress import ProgressStore
+    from mathainoa1.ui.views import settings as settings_mod
+
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "bs.db")
+    try:
+        found: list[str] = []
+        _collect_texts_and_tooltips(
+            settings_mod.settings_view(nav, store, progress), found)
+        assert "Backup" in found
+        assert "Backup erstellen" in [t for t in found] or any(
+            "Backup" in t for t in found)
+
+        found = []
+        _collect_texts_and_tooltips(settings_mod.settings_view(nav), found)
+        assert "Backup" not in found
+    finally:
+        progress.close()
+
+
+def test_stats_view_has_no_export_button(store_with_edge_cases, tmp_path,
+                                         monkeypatch):
+    """Der Statistik-Export ist vom Backup abgelöst — kein Download mehr."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.storage.progress import ProgressStore
+
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "se.db")
+    try:
+        found: list[str] = []
+        _collect_texts_and_tooltips(stats.stats_view(nav, store, progress),
+                                    found)
+        assert not any("exportieren" in t.lower() for t in found)
+        assert "Listen" in found
+    finally:
+        progress.close()
+
+
+def test_summarize_list_counts(store_with_edge_cases, tmp_path):
+    """Kennzahlen einer Liste (früher in stats_export, jetzt in der View)."""
+    from mathainoa1.storage.progress import ProgressStore
+
+    store, vlist = store_with_edge_cases
+    progress = ProgressStore(tmp_path / "sm.db")
+    try:
+        progress.record(vlist.cards[0].id, correct=True)
+        progress.record(vlist.cards[1].id, correct=False)
+        s = stats.summarize_list(vlist, progress.all())
+        assert s["cards"] == len(vlist.cards)
+        assert s["trained"] == 2
+        assert s["boxes"][1] == 1 and s["boxes"][2] == 1
+        assert s["secure"] == 0
+    finally:
+        progress.close()

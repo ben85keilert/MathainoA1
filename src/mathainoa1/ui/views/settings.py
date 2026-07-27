@@ -6,8 +6,11 @@ setzt Theme-Modus und Akzentfarbe der ganzen App.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import flet as ft
 
+from mathainoa1.storage import backup
 from mathainoa1.storage.content import LEVELS
 from mathainoa1.storage.settings import (
     TTS_GOOGLE,
@@ -43,7 +46,7 @@ def apply_app_theme(page: ft.Page, s: AppSettings) -> None:
     page.dark_theme = ft.Theme(color_scheme_seed=seed)
 
 
-def settings_view(nav) -> ft.Control:
+def settings_view(nav, store=None, progress=None) -> ft.Control:
     page = nav.page
     s = load_app_settings()
 
@@ -204,6 +207,125 @@ def settings_view(nav) -> ft.Control:
     def _h(text: str) -> ft.Text:
         return ft.Text(text, size=16, weight=ft.FontWeight.BOLD)
 
+    # --- Backup: Export/Import der Nutzerdaten (kategorieweise) ---
+    backup_rows: list[ft.Control] = []
+    if store is not None and progress is not None:
+        picker = ft.FilePicker()
+        if picker not in page.services:
+            page.services.append(picker)
+
+        def create_dialog(e):
+            boxes = {key: ft.Checkbox(label=label, value=True)
+                     for key, label in backup.PARTS}
+
+            def sync(e=None):
+                # Fortschritt hängt an den Karten-IDs der Vokabeln
+                if not boxes["vocab"].value:
+                    boxes["progress"].value = False
+                boxes["progress"].disabled = not boxes["vocab"].value
+                page.update()
+
+            boxes["vocab"].on_change = sync
+
+            async def do_export(e):
+                parts = [k for k, cb in boxes.items() if cb.value]
+                try:
+                    data = backup.create_backup(progress, parts)
+                except ValueError as exc:
+                    page.pop_dialog()
+                    page.show_dialog(ft.SnackBar(ft.Text(str(exc))))
+                    return
+                page.pop_dialog()
+                await picker.save_file(
+                    dialog_title="Backup speichern",
+                    file_name=backup.suggested_filename(),
+                    allowed_extensions=["zip"], src_bytes=data)
+                page.show_dialog(ft.SnackBar(ft.Text(
+                    f"Backup erstellt ({max(1, len(data) // 1024)} kB).")))
+
+            page.show_dialog(ft.AlertDialog(
+                title=ft.Text("Backup erstellen"),
+                content=ft.Column(
+                    [ft.Text("Was soll in die Backup-Datei?", size=13),
+                     *boxes.values(),
+                     ft.Text("Heruntergeladenes Audio ist nie enthalten — "
+                             "es wird bei Bedarf neu geladen.",
+                             size=13, italic=True)],
+                    tight=True, spacing=6, width=420,
+                    scroll=ft.ScrollMode.AUTO),
+                actions=[ft.TextButton("Abbrechen",
+                                       on_click=lambda e: page.pop_dialog()),
+                         ft.FilledButton("Speichern", on_click=do_export)],
+            ))
+
+        async def pick_restore(e):
+            files = await picker.pick_files(
+                dialog_title="Backup wiederherstellen",
+                allowed_extensions=["zip"], with_data=True)
+            if not files:
+                return
+            f = files[0]
+            data = f.bytes_data if hasattr(f, "bytes_data") else None
+            if data is None and f.path:
+                data = Path(f.path).read_bytes()
+            if data is None:
+                return
+            try:
+                manifest = backup.read_manifest(data)
+            except ValueError as exc:
+                page.show_dialog(ft.SnackBar(ft.Text(str(exc))))
+                return
+            labels = ", ".join(backup.part_label(p)
+                               for p in manifest["parts"])
+
+            def do_restore(e):
+                try:
+                    backup.restore_backup(data, store, progress)
+                except ValueError as exc:
+                    page.pop_dialog()
+                    page.show_dialog(ft.SnackBar(ft.Text(str(exc))))
+                    return
+                # Wiederhergestellte Einstellungen sofort wirksam machen
+                fresh = load_app_settings()
+                apply_app_theme(page, fresh)
+                set_tts_engine(fresh.tts_engine)
+                page.pop_dialog()
+                title = nav.stack[-1][0]
+                nav.stack[-1] = (title,
+                                 settings_view(nav, store, progress))
+                nav._show()
+                page.show_dialog(ft.SnackBar(ft.Text(
+                    f"Backup wiederhergestellt: {labels}.")))
+
+            page.show_dialog(ft.AlertDialog(
+                title=ft.Text("Backup wiederherstellen?"),
+                content=ft.Text(
+                    f"Ersetzt auf diesem Gerät: {labels}. Das lässt sich "
+                    "nicht rückgängig machen — nicht enthaltene Bereiche "
+                    "bleiben unverändert."),
+                actions=[ft.TextButton("Abbrechen",
+                                       on_click=lambda e: page.pop_dialog()),
+                         ft.FilledButton("Wiederherstellen",
+                                         on_click=do_restore)],
+            ))
+
+        backup_rows = [
+            ft.Divider(),
+            _h("Backup"),
+            ft.Text("Sichert die gewählten Bereiche als eine ZIP-Datei — "
+                    "für Sicherungskopien und den Umzug auf ein neues "
+                    "Gerät. Beim Wiederherstellen werden genau die im "
+                    "Backup enthaltenen Bereiche ersetzt.",
+                    size=13, italic=True),
+            ft.Row([
+                ft.FilledButton("Backup erstellen", icon=ft.Icons.ARCHIVE,
+                                on_click=create_dialog),
+                ft.OutlinedButton("Backup wiederherstellen",
+                                  icon=ft.Icons.UNARCHIVE,
+                                  on_click=pick_restore),
+            ], spacing=8, wrap=True),
+        ]
+
     return ft.Column(
         [
             _h("Stufe"),
@@ -241,6 +363,7 @@ def settings_view(nav) -> ft.Control:
             ft.Divider(),
             _h("Sprachausgabe"),
             rg_tts,
+            *backup_rows,
             ft.Divider(),
             _h("Erweiterte Funktionen"),
             ft.Text("Zusatzfunktionen für Fortgeschrittene. Eingeschaltete "

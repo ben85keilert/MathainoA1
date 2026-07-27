@@ -239,6 +239,32 @@ kurzen Hinweis. Klammern und Alternativen werden beim Sprechen
 bereinigt: „αγαπ(ά)ω“ wird als „αγαπάω“ gesprochen, „και / κι“ als
 „και“, Zusätze wie „(ΕΕ)“ entfallen.
 
+## Backup (Sichern & Gerätewechsel)
+
+Unter **Einstellungen → Backup** lassen sich die eigenen Daten als
+**eine ZIP-Datei** sichern und wiederherstellen — für Sicherungskopien
+und den Umzug auf ein neues Gerät.
+
+Beim **Erstellen** wählst du, was in die Datei soll:
+
+- **Vokabeln & Auswahllisten** (eigene Listen, Auswahllisten,
+  Reihenfolge, Anmerkungen)
+- **Lernfortschritt** (Leitner-Boxen und Zähler — nur zusammen mit den
+  Vokabeln wählbar, denn der Fortschritt hängt an den Karten)
+- **Notizen**, **Textanalysen**, **Lexikon**, **Einstellungen**
+
+Heruntergeladenes Audio ist nie enthalten — es wird bei Bedarf einfach
+neu geladen (bzw. über „Audio vorbereiten“ im Listenmenü).
+
+Beim **Wiederherstellen** zeigt die App vorher an, welche Bereiche die
+Datei enthält: genau diese Bereiche werden auf dem Gerät **ersetzt**
+(nicht zusammengeführt — das lässt sich nicht rückgängig machen);
+alle nicht enthaltenen Bereiche bleiben unverändert. Ein Neustart ist
+nicht nötig.
+
+Das Backup ersetzt auch den früheren Statistik-Export: Der Lernstand
+steckt vollständig in der Kategorie „Lernfortschritt“.
+
 ## Wie kommt die Statistik zustande?
 
 ### Das Boxen-System (Leitner)
@@ -301,17 +327,8 @@ Deklinations- und Konjugationsrunden zeigen am Ende zusätzlich ihr eigenes
 Rundenergebnis (x von y richtig); das ist unabhängig von der dauerhaften
 Vokabelstatistik.
 
-### Statistik exportieren
+### Statistik sichern
 
-Über das Download-Symbol oben in der Statistik-Ansicht lassen sich die
-Statistikdaten exportieren — „Als Text“ (Zwischenablage) oder als Datei:
-
-- **CSV**: eine Zeile pro Karte aller sichtbaren Listen (auch
-  untrainierte Karten, dann mit leeren Fortschrittsspalten) mit den
-  Spalten `liste, front, back, word_type, box, correct, wrong, streak,
-  last_seen, due`.
-- **JSON**: dieselben Kartendaten plus eine Zusammenfassung pro Liste
-  (Kartenzahl, trainiert, sicher, Boxen-Verteilung).
-
-Der Export enthält genau die Listen, die die Statistik gerade anzeigt —
-die eingestellte Stufe wirkt also auch hier.
+Den kompletten Lernstand sicherst du über **Einstellungen → Backup**
+(Kategorie „Lernfortschritt“, zusammen mit den Vokabeln) — siehe das
+Kapitel „Backup“. Einen separaten Statistik-Export gibt es nicht mehr.

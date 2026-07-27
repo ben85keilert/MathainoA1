@@ -419,13 +419,23 @@ def help_view(nav, store=None) -> ft.Control:
             "ungedeckten Wörter für den Chatbot zusammen. Details im "
             "Handbuch.",
         ]),
-        ft.Text("Statistik exportieren", size=14, weight=ft.FontWeight.BOLD),
+    ])
+
+    backup_ch = _chapter(nav, "Backup", ft.Icons.ARCHIVE_OUTLINED, [
+        _p("Einstellungen → Backup sichert deine Daten als eine "
+           "ZIP-Datei — für Sicherungskopien und den Umzug auf ein "
+           "neues Gerät."),
         _bullets([
-            "Download-Symbol oben in der Statistik: exportiert eine Zeile "
-            "pro Karte (Liste, Box, richtig/falsch, zuletzt trainiert) "
-            "als CSV oder JSON — als Text in die Zwischenablage oder als "
-            "Datei. JSON enthält zusätzlich eine Zusammenfassung pro "
-            "Liste.",
+            "Beim Erstellen wählbar: Vokabeln & Auswahllisten, "
+            "Lernfortschritt (nur zusammen mit den Vokabeln), Notizen, "
+            "Textanalysen, Lexikon, Einstellungen.",
+            "Heruntergeladenes Audio ist nie enthalten — es wird bei "
+            "Bedarf neu geladen.",
+            "Wiederherstellen ersetzt genau die im Backup enthaltenen "
+            "Bereiche (nicht rückgängig zu machen); alles andere bleibt "
+            "unverändert. Kein Neustart nötig.",
+            "Ersetzt den früheren Statistik-Export — der Lernstand "
+            "steckt in der Kategorie „Lernfortschritt“.",
         ]),
     ])
 
@@ -545,7 +555,7 @@ def help_view(nav, store=None) -> ft.Control:
                "Verben …) findest du über das Buchsymbol oben in der "
                "Leiste."),
             trainings, wertung, leitner, editing, wortsuche, prompts,
-            stufen, audio, datenschutz, about_row,
+            stufen, audio, backup_ch, datenschutz, about_row,
         ],
         spacing=4,
         scroll=ft.ScrollMode.AUTO,

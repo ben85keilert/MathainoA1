@@ -154,7 +154,8 @@ def home_view(nav: Navigator, store: ContentStore, progress: ProgressStore) -> f
     settings_fab = ft.FloatingActionButton(
         icon=ft.Icons.SETTINGS, mini=True, bottom=16, right=16,
         tooltip="Einstellungen",
-        on_click=lambda e: nav.go("Einstellungen", settings_view(nav)),
+        on_click=lambda e: nav.go("Einstellungen",
+                                  settings_view(nav, store, progress)),
     )
     root = ft.Stack([menu, settings_fab], expand=True)
 

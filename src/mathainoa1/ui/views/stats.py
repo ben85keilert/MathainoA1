@@ -12,18 +12,33 @@ from mathainoa1.models import VocabList
 from mathainoa1.storage.content import ContentStore, filter_level
 from mathainoa1.storage.progress import MAX_BOX, CardProgress, ProgressStore
 from mathainoa1.storage.settings import load_app_settings
-from mathainoa1.storage.stats_export import stats_csv, stats_json, summarize_list
-from mathainoa1.ui.dialogs import plaintext_dialog
 from mathainoa1.ui.views.wordlist import BOX_COLORS, word_list_panel
+
+
+def summarize_list(vlist: VocabList,
+                   all_progress: dict[str, CardProgress]) -> dict:
+    """Kennzahlen einer Liste: trainiert = mindestens einmal beantwortet,
+    sicher = Box 4–5."""
+    boxes = {i: 0 for i in range(1, MAX_BOX + 1)}
+    seen = 0
+    for c in vlist.cards:
+        p = all_progress.get(c.id)
+        if p and p.seen:
+            seen += 1
+            boxes[p.box] += 1
+    return {
+        "id": vlist.id,
+        "name": vlist.name,
+        "cards": len(vlist.cards),
+        "trained": seen,
+        "secure": boxes[MAX_BOX - 1] + boxes[MAX_BOX],
+        "boxes": boxes,
+    }
 
 
 def stats_view(nav, store: ContentStore, progress: ProgressStore) -> ft.Control:
     all_progress = progress.all()
     level = load_app_settings().level
-    page = nav.page
-    picker = ft.FilePicker()
-    if picker not in page.services:
-        page.services.append(picker)
 
     def reset_list(vlist) -> None:
         def do_reset(e):
@@ -94,68 +109,9 @@ def stats_view(nav, store: ContentStore, progress: ProgressStore) -> ft.Control:
         level)
     blocks = [list_block(l) for l in lists]
 
-    # --- Export der Statistikdaten (CSV/JSON, als Text oder Datei) ---
-
-    def export_dialog(e):
-        seg_format = ft.SegmentedButton(
-            selected=["csv"],
-            segments=[ft.Segment(value="csv", label=ft.Text("CSV")),
-                      ft.Segment(value="json", label=ft.Text("JSON"))],
-        )
-
-        def current_format() -> str:
-            sel = seg_format.selected
-            if isinstance(sel, (list, set, tuple)) and sel:
-                return next(iter(sel))
-            return sel or "csv"
-
-        def build_text(fmt: str) -> str:
-            if fmt == "json":
-                return stats_json(lists, all_progress, level)
-            return stats_csv(lists, all_progress)
-
-        def as_text(e):
-            fmt = current_format()
-            page.pop_dialog()
-            plaintext_dialog(page, f"statistik.{fmt}", build_text(fmt))
-
-        async def as_file(e):
-            fmt = current_format()
-            data = build_text(fmt).encode("utf-8")
-            page.pop_dialog()
-            await picker.save_file(
-                dialog_title="Statistik exportieren",
-                file_name=f"statistik.{fmt}",
-                allowed_extensions=[fmt],
-                src_bytes=data,
-            )
-
-        page.show_dialog(ft.AlertDialog(
-            title=ft.Text("Statistik exportieren"),
-            content=ft.Column(
-                [seg_format,
-                 ft.Text("Eine Zeile pro Karte (auch untrainierte) mit "
-                         "Liste, Box und Zählern; JSON zusätzlich mit "
-                         "einer Zusammenfassung pro Liste.",
-                         size=13, italic=True)],
-                tight=True, spacing=12, width=360,
-            ),
-            actions=[
-                ft.TextButton("Abbrechen",
-                              on_click=lambda e: page.pop_dialog()),
-                ft.OutlinedButton("Als Text", icon=ft.Icons.COPY,
-                                  on_click=as_text),
-                ft.FilledButton("Datei speichern", icon=ft.Icons.DOWNLOAD,
-                                on_click=as_file),
-            ],
-        ))
-
-    export_row = ft.Row(
-        [ft.Text("Listen", size=18, weight=ft.FontWeight.BOLD, expand=True),
-         ft.IconButton(ft.Icons.DOWNLOAD, tooltip="Statistik exportieren…",
-                       on_click=export_dialog)],
-        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-    )
+    # Statistikdaten sichern? Das übernimmt das Backup in den
+    # Einstellungen (Kategorie „Lernfortschritt").
+    header = ft.Text("Listen", size=18, weight=ft.FontWeight.BOLD)
 
     # Problemwörter: am häufigsten falsch beantwortete Karten
     by_id = {c.id: c for l in lists for c in l.cards}
@@ -174,7 +130,7 @@ def stats_view(nav, store: ContentStore, progress: ProgressStore) -> ft.Control:
         for p in problems
     ]
 
-    controls: list[ft.Control] = [export_row, *blocks]
+    controls: list[ft.Control] = [header, *blocks]
     if problem_tiles:
         controls += [ft.Divider(),
                      ft.Text("Problemwörter", size=18, weight=ft.FontWeight.BOLD),
