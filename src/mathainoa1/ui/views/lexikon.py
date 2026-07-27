@@ -76,7 +76,8 @@ REGELN
    Kognaten und Synonymen DIESES Eingabeworts, als Vokabeleinträge
    (front mit Artikel, back, article, plural, word_type; bei Verben auch
    stem2, aorist_passive, participle; unregelmäßige Formen ins Feld
-   "forms" wie "gen_sg=του άντρα"). NIEMALS das Eingabewort selbst,
+   "forms" wie "gen_sg=άντρα" — Formen OHNE Artikel, die App setzt ihn
+   selbst davor). NIEMALS das Eingabewort selbst,
    keine altgriechischen Wurzeln, keine deutschen oder lateinischen
    Wörter. Beim jeweiligen Eingabewort lassen — die App bündelt die
    Zusatzwörter in dieser Reihenfolge.

@@ -25,7 +25,7 @@ from mathainoa1.storage.textanalyse import (
     TextAnalysis,
     analyses_dir,
 )
-from mathainoa1.ui.audio import play_long_text
+from mathainoa1.ui.audio import speaker_button
 from mathainoa1.ui.views.wordlist import word_list_panel
 
 # Arbeitsanweisung III: erweitert die Analyse-Prompts des Nutzers
@@ -59,7 +59,7 @@ SCHEMA (Beispiel mit allen Feldern)
     {"front": "ο σεισμός", "back": "Erdbeben", "article": "ο",
      "plural": "-οί", "word_type": "Nomen", "forms": "",
      "stem2": "", "aorist_passive": "", "participle": "",
-     "hints_gr": "", "hints_de": ""}
+     "hints_gr": "", "hints_de": "", "notes_gr": "", "notes_de": ""}
   ],
   "phrases": [
     {"gr": "έγινε σεισμός", "de": "es gab ein Erdbeben",
@@ -81,23 +81,32 @@ REGELN
    oder Sonstiges. Jedes Lemma genau einmal.
 4. Strukturierte Felder statt Klammernotation: Plural ins Feld "plural"
    (z.B. "-οί" oder Vollform "οι άνθρωποι"), unregelmäßiger Genitiv ins
-   Feld "forms" als "gen_sg=του άντρα", abweichendes Femininum als
-   "fem=γλυκιά". Keine Zusatzangaben in Klammern in "front".
+   Feld "forms" als "gen_sg=άντρα" (Formen OHNE Artikel — die App setzt
+   ihn selbst davor), abweichendes Femininum als "fem=γλυκιά".
+   Keine Zusatzangaben in Klammern in "front". Kurze Lernhilfen:
+   "hints_gr"/"hints_de" (Gebrauchshinweis, z.B. "mit Akk.") und
+   "notes_gr"/"notes_de" (Zusatznotiz, z.B. "per du") — gr erscheint
+   bei der griechischen Abfrageseite, de bei der deutschen.
 5. Verb-Stammformen: "stem2" = Aorist Aktiv / 2. Stamm (Stamm mit
    Bindestrich, z.B. "γράψ-", oder 6 Personenformen kommagetrennt),
-   "aorist_passive" = Aorist Passiv im gleichen Format (immer angeben,
-   er ist nicht aus dem Aktiv berechenbar), "participle" = Perfekt-
-   Partizip nur bei Unregelmäßigkeit (z.B. "γραμμένος").
+   "aorist_passive" = Aorist Passiv im gleichen Format (angeben, wenn
+   bekannt — er ist nicht aus dem Aktiv berechenbar und wird ab Stufe
+   A2 trainiert), "participle" = Perfekt-Partizip nur bei
+   Unregelmäßigkeit (z.B. "γραμμένος").
 6. Komplette Alternativantworten mit " / " trennen ("και / κι");
    optionale Wortteile in runde Klammern ("αγαπ(ά)ω", "(Visiten-)Karte").
    Muss innerhalb eines Satzes genau EINE von mehreren Varianten genannt
    werden, eckige Klammern verwenden: "Ich spreche [nicht/kein]
    Chinesisch." bzw. "Πώς [είσαι/είστε];" — kein nacktes "/" mitten im
    Satz.
-7. KEINE Etymologie in dieser Datei: Wortherkunft, Kognaten, Synonyme
+7. Feste Wendungen, die als Vokabel gelernt werden sollen (z.B.
+   Grußformeln), gehören mit word_type "Phrase" in "vocab"; "phrases"
+   ist dagegen für satzweise Konstruktionen AUS dem Text (nur Anzeige,
+   keine Lernkarten).
+8. KEINE Etymologie in dieser Datei: Wortherkunft, Kognaten, Synonyme
    und Zusatzwörter liefert die separate Arbeitsanweisung IV (Lexikon
    der App) — hier weglassen.
-8. KORREKTUR: Wenn du eine frühere Analyse korrigierst, übernimm "id"
+9. KORREKTUR: Wenn du eine frühere Analyse korrigierst, übernimm "id"
    und "title" unverändert aus der alten Datei. Die App ersetzt die
    Analyse dann und erhält den Lernstand der Vokabeln.
 """
@@ -329,16 +338,8 @@ def detail_view(nav, astore: AnalysisStore, store: ContentStore,
     page = nav.page
 
     def text_controls() -> list[ft.Control]:
-        speaker = ft.GestureDetector(
-            content=ft.Container(
-                ft.Icon(ft.Icons.VOLUME_UP, color=ft.Colors.PRIMARY),
-                padding=8,
-                tooltip="Originaltext anhören — lang drücken: langsam",
-            ),
-            on_tap=lambda e: play_long_text(page, analysis.original_text),
-            on_long_press_start=lambda e: play_long_text(
-                page, analysis.original_text, slow=True),
-        )
+        speaker = speaker_button(page, lambda: analysis.original_text,
+                                 long_text=True)
         items: list[ft.Control] = [
             ft.Row([ft.Text("Originaltext", size=15,
                             weight=ft.FontWeight.BOLD, expand=True), speaker],
@@ -368,6 +369,8 @@ def detail_view(nav, astore: AnalysisStore, store: ContentStore,
                 dense=True, title=title,
                 subtitle=ft.Text(s.note, size=12, italic=True)
                 if s.note else None,
+                trailing=speaker_button(page, lambda s=s: s.gr,
+                                        long_text=True, icon_size=18),
             ))
         return rows
 
@@ -395,6 +398,8 @@ def detail_view(nav, astore: AnalysisStore, store: ContentStore,
                               selectable=True),
                 subtitle=ft.Text(" — ".join(x for x in (p.de, p.note) if x),
                                  size=13),
+                trailing=speaker_button(page, lambda p=p: p.gr,
+                                        long_text=True, icon_size=18),
             ))
         return rows
 

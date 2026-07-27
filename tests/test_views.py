@@ -739,3 +739,96 @@ def test_summarize_list_counts(store_with_edge_cases, tmp_path):
         assert s["secure"] == 0
     finally:
         progress.close()
+
+
+def test_list_view_title_row_with_tab_toggles(store_with_edge_cases,
+                                              tmp_path):
+    """Titelzeile (v0.7.1): Name + Reiter-Umschalter oben — auch für
+    Buchlisten (ohne Umbenennen-Stift)."""
+    import flet as ft
+    import json
+
+    store, vlist = store_with_edge_cases
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "tr2.db")
+    try:
+        found: list[str] = []
+        _collect_texts_and_tooltips(
+            manager.list_view(nav, store, vlist, progress), found)
+        assert vlist.name in found
+        assert "Kartenansicht" in found and "Tabellenansicht" in found
+        assert "Liste umbenennen" in found
+
+        book_dir = tmp_path / "book2"
+        book_dir.mkdir()
+        book = VocabList(name="Buchliste", cards=[
+            VocabCard(front="ο δρόμος", back="Straße", word_type="Nomen")])
+        (book_dir / "b.json").write_text(
+            json.dumps(book.to_dict(), ensure_ascii=False), encoding="utf-8")
+        store2 = ContentStore(book_dir, tmp_path / "user2")
+        store2.load_all()
+        book_list = next(iter(store2.lists.values()))
+        found = []
+        _collect_texts_and_tooltips(
+            manager.list_view(nav, store2, book_list, progress), found)
+        assert "Buchliste" in found
+        assert "Kartenansicht" in found and "Tabellenansicht" in found
+        assert "Liste umbenennen" not in found
+    finally:
+        progress.close()
+
+
+# --- Prompt-Konsistenz (v0.7.1) ---------------------------------------------
+
+def test_prompt_examples_have_all_columns():
+    """Beispielzeilen in Prompt und Beispielliste: volle 13 Spalten —
+    sonst lernt der Chatbot ein verkürztes Format (aorist_passive und
+    participle fehlten positionsrichtig)."""
+    import csv
+    import io
+
+    from mathainoa1.storage.content import _EXAMPLE_CSV, CSV_FIELDS
+    from mathainoa1.ui.views.help import _CSV_FORMAT_RULES
+
+    block = _CSV_FORMAT_RULES.split("BEISPIELZEILEN")[1]
+    rows = [r for r in csv.reader(io.StringIO(block)) if len(r) > 1]
+    assert rows
+    assert all(len(r) == len(CSV_FIELDS) for r in rows)
+    # γράφω zeigt jetzt auch aorist_passive und participle
+    grafo = next(r for r in rows if r[0] == "γράφω")
+    assert grafo[11] == "γραφτ-" and grafo[12] == "γραμμένος"
+
+    example_rows = [r for r in csv.reader(io.StringIO(_EXAMPLE_CSV)) if r]
+    assert all(len(r) == len(CSV_FIELDS) for r in example_rows)
+
+
+def test_prompt_forms_without_article_and_keys():
+    """forms-Werte ohne Artikel (sonst „του του άντρα") und nom_pl in
+    der Schlüsselliste; aorist_passive nicht mehr als Pflicht."""
+    from mathainoa1.ui.views.help import _CSV_FORMAT_RULES
+    from mathainoa1.ui.views.lexikon import ARBEITSANWEISUNG_IV
+    from mathainoa1.ui.views.textanalyse import ARBEITSANWEISUNG_III
+
+    assert "του άντρα" not in ARBEITSANWEISUNG_III
+    assert "του άντρα" not in ARBEITSANWEISUNG_IV
+    assert "nom_pl" in _CSV_FORMAT_RULES
+    assert "immer angeben" not in ARBEITSANWEISUNG_III
+    assert "notes_gr" in ARBEITSANWEISUNG_III  # Schema nennt alle Felder
+
+
+def test_prompt_level_interpolation(tmp_path, monkeypatch):
+    """CHATBOT_/TEXT_PROMPT tragen die aktive Stufe statt fest „A1"."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.storage.settings import (
+        AppSettings,
+        load_app_settings,
+        save_app_settings,
+    )
+    from mathainoa1.ui.views.help import CHATBOT_PROMPT, TEXT_PROMPT
+
+    s = AppSettings()
+    s.level = "A2"
+    save_app_settings(s)
+    for tpl in (CHATBOT_PROMPT, TEXT_PROMPT):
+        text = tpl.format(level=load_app_settings().level)
+        assert "Niveau A2" in text and "{level}" not in text

@@ -35,7 +35,7 @@ from mathainoa1.storage.settings import (
     save_conjugation_settings,
     save_declension_settings,
 )
-from mathainoa1.ui.audio import autoplay_button, maybe_autoplay, play_text
+from mathainoa1.ui.audio import autoplay_button, maybe_autoplay, speaker_button
 from mathainoa1.ui.views.trainer import typing_controls
 
 
@@ -741,9 +741,11 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         if session.settings.mode == "typing":
             focus_answer()
 
-    btn_answer_play = ft.IconButton(
-        ft.Icons.VOLUME_UP, tooltip="Lösung anhören", visible=False,
-        on_click=lambda e: play_text(nav.page, session_answer["text"]))
+    # Gemeinsamer Lautsprecher: Gedrückthalten schaltet den app-weiten
+    # Langsam-Modus um — damit kann auch die Lösung langsam gehört werden
+    btn_answer_play = speaker_button(nav.page,
+                                     lambda: session_answer["text"])
+    btn_answer_play.visible = False
     # Die zuletzt aufgedeckte Lösung — session.current kann schon weiter sein
     session_answer = {"text": ""}
 

@@ -125,17 +125,26 @@ def create_backup(progress: ProgressStore, parts: list[str]) -> bytes:
     base = app_data_dir()
     counts: dict[str, int] = {}
     buf = io.BytesIO()
+
+    def writestr(name: str, data) -> None:
+        # Fester Zeitstempel statt Datei-mtime: Android liefert teils
+        # mtimes vor 1980, an denen zipfile mit "ZIP does not support
+        # timestamps before 1980" scheitert. Der Inhalt zählt, nicht
+        # das Datum (das steht im Manifest).
+        info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+        zf.writestr(info, data, compress_type=zipfile.ZIP_DEFLATED)
+
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for part in chosen:
             if part == "progress":
                 rows = progress.export_rows()
-                zf.writestr(PROGRESS_NAME,
-                            json.dumps(rows, ensure_ascii=False, indent=1))
+                writestr(PROGRESS_NAME,
+                         json.dumps(rows, ensure_ascii=False, indent=1))
                 counts[part] = len(rows)
                 continue
             n = 0
             for rel in _iter_part_files(base, part):
-                zf.write(base / rel, rel)
+                writestr(rel, (base / rel).read_bytes())
                 n += 1
             counts[part] = n
         manifest = {
@@ -145,8 +154,8 @@ def create_backup(progress: ProgressStore, parts: list[str]) -> bytes:
             "parts": chosen,
             "counts": counts,
         }
-        zf.writestr(MANIFEST_NAME,
-                    json.dumps(manifest, ensure_ascii=False, indent=2))
+        writestr(MANIFEST_NAME,
+                 json.dumps(manifest, ensure_ascii=False, indent=2))
     return buf.getvalue()
 
 

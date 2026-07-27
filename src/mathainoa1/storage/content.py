@@ -372,23 +372,23 @@ EXAMPLE_LIST_NAME = "Beispiel (alle Worttypen)"
 # Liste exakt das Import-/Export-Format zeigt und sich exportieren lässt.
 _EXAMPLE_CSV = (
     ",".join(CSV_FIELDS) + "\n"
-    '"ο δρόμος","Straße","-οι","ο","Nomen",,,,,,\n'
-    '"η γυναίκα","Frau","-ες","η","Nomen",,,,,"gen_pl=γυναικών",\n'
-    '"το πρόβλημα","Problem","-ματα","το","Nomen",,,,,,\n'
-    '"το παιδί","Kind","-ιά","το","Nomen",,,,,,\n'
-    '"γράφω","schreiben",,,"Verb",,,,,,"γράψ-"\n'
+    '"ο δρόμος","Straße","-οι","ο","Nomen",,,,,,,,\n'
+    '"η γυναίκα","Frau","-ες","η","Nomen",,,,,"gen_pl=γυναικών",,,\n'
+    '"το πρόβλημα","Problem","-ματα","το","Nomen",,,,,,,,\n'
+    '"το παιδί","Kind","-ιά","το","Nomen",,,,,,,,\n'
+    '"γράφω","schreiben",,,"Verb",,,,,,"γράψ-","γραφτ-","γραμμένος"\n'
     '"βλέπω","sehen",,,"Verb",,,,,,'
-    '"δω, δεις, δει, δούμε, δείτε, δουν/δούνε"\n'
+    '"δω, δεις, δει, δούμε, δείτε, δουν/δούνε",,\n'
     '"πάω","gehen",,,"Verb",,,,,'
     '"1sg=πάω; 2sg=πας; 3sg=πάει; 1pl=πάμε; 2pl=πάτε; 3pl=πάνε",'
-    '"πάω, πας, πάει, πάμε, πάτε, πάνε"\n'
-    '"μικρός","klein",,,"Adjektiv",,,,,,\n'
-    '"γλυκός","süß",,,"Adjektiv",,,,,"fem=γλυκιά",\n'
-    '"εδώ","hier",,,"Adverb",,,,,,\n'
-    '"από","von, aus",,,"Präposition",,"mit Akkusativ",,,,\n'
-    '"Τι κάνεις;","Wie geht\'s?",,,"Phrase",,,,"per du",,\n'
-    '"πέντε","fünf",,,"Zahl",,,,,,\n'
-    '"και","und, auch",,,"Sonstiges",,,,,,\n'
+    '"πάω, πας, πάει, πάμε, πάτε, πάνε",,\n'
+    '"μικρός","klein",,,"Adjektiv",,,,,,,,\n'
+    '"γλυκός","süß",,,"Adjektiv",,,,,"fem=γλυκιά",,,\n'
+    '"εδώ","hier",,,"Adverb",,,,,,,,\n'
+    '"από","von, aus",,,"Präposition",,"mit Akkusativ",,,,,,\n'
+    '"Τι κάνεις;","Wie geht\'s?",,,"Phrase",,,,"per du",,,,\n'
+    '"πέντε","fünf",,,"Zahl",,,,,,,,\n'
+    '"και","und, auch",,,"Sonstiges",,,,,,,,\n'
 )
 
 

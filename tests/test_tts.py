@@ -243,3 +243,74 @@ def test_google_engine_offline_shows_hint(monkeypatch, engine_setter,
     page = FakePage()
     audio.play_text(page, "ο δρόμος")
     assert len(page.dialogs) == 1
+
+
+# --- Langsam-Modus (v0.7.1): Gedrückthalten schaltet app-weit um ------------
+
+@pytest.fixture
+def slow_mode_reset(monkeypatch):
+    """Setzt den Modul-Zustand des Langsam-Modus nach dem Test zurück."""
+    monkeypatch.setattr(audio, "_slow_mode", False)
+    yield
+    monkeypatch.setattr(audio, "_slow_mode", False)
+
+
+def test_slow_mode_toggle_and_snackbar(slow_mode_reset):
+    page = FakePage()
+    assert audio.slow_mode() is False
+    assert audio.toggle_slow_mode(page) is True
+    assert audio.slow_mode() is True
+    assert audio.toggle_slow_mode(page) is False
+    assert len(page.dialogs) == 2  # je Umschalten eine SnackBar
+
+
+def test_play_text_follows_slow_mode(monkeypatch, engine_setter,
+                                     slow_mode_reset):
+    calls = []
+    monkeypatch.setattr(audio, "_speak_system", _record(calls, "system"))
+    engine_setter(TTS_SYSTEM)
+    page = FakePage()
+
+    audio.play_text(page, "ο δρόμος")            # Modus aus -> normal
+    audio.toggle_slow_mode(page)
+    audio.play_text(page, "ο δρόμος")            # Modus an -> langsam
+    audio.play_long_text(page, "Γεια σου κόσμε")  # gilt auch für Fließtext
+    audio.play_text(page, "ο δρόμος", slow=False)  # expliziter Override
+    audio.maybe_autoplay(page, "ο δρόμος")       # Autoplay aus -> nichts
+
+    assert [(c[0], c[2]) for c in calls] == [
+        ("system", False), ("system", True), ("system", True),
+        ("system", False)]
+
+
+def test_maybe_autoplay_follows_slow_mode(monkeypatch, engine_setter,
+                                          slow_mode_reset):
+    calls = []
+    monkeypatch.setattr(audio, "_speak_system", _record(calls, "system"))
+    monkeypatch.setattr(audio, "_autoplay", True)
+    engine_setter(TTS_SYSTEM)
+    page = FakePage()
+    audio.toggle_slow_mode(page)
+    audio.maybe_autoplay(page, "ο δρόμος")
+    monkeypatch.setattr(audio, "_autoplay", None)
+    assert [(c[0], c[2], c[3]) for c in calls] == [("system", True, False)]
+
+
+def test_speaker_button_taps_and_toggles(monkeypatch, engine_setter,
+                                         slow_mode_reset):
+    calls = []
+    monkeypatch.setattr(audio, "_speak_system", _record(calls, "system"))
+    engine_setter(TTS_SYSTEM)
+    page = FakePage()
+    btn = audio.speaker_button(page, lambda: "ο δρόμος")
+    icon = btn.content.content
+    assert icon.icon == audio.ft.Icons.VOLUME_UP
+
+    btn.on_tap(None)                 # normal
+    btn.on_long_press_start(None)    # umschalten + sofort langsam spielen
+    assert icon.icon == audio.ft.Icons.SLOW_MOTION_VIDEO
+    btn.on_tap(None)                 # bleibt langsam
+    btn.on_long_press_start(None)    # zurück auf normal
+    assert icon.icon == audio.ft.Icons.VOLUME_UP
+
+    assert [c[2] for c in calls] == [False, True, True, False]

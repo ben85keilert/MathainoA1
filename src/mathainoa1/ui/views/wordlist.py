@@ -14,7 +14,23 @@ from mathainoa1.logic.answer_check import normalize, strip_accents
 from mathainoa1.models import WORD_TYPES, VocabCard
 from mathainoa1.storage.progress import MAX_BOX, CardProgress
 from mathainoa1.storage.textanalyse import etymology_for
-from mathainoa1.ui.audio import play_text
+from mathainoa1.ui.audio import (
+    SPEAKER_TOOLTIP,
+    play_text,
+    slow_mode,
+    toggle_slow_mode,
+)
+
+
+def _toggle_and_play(e, card: VocabCard) -> None:
+    """Gedrückthalten: Langsam-Modus umschalten, Icon nachziehen und das
+    Wort sofort im neuen Tempo abspielen."""
+    page = e.control.page
+    slow = toggle_slow_mode(page)
+    icon = e.control.content.content  # GestureDetector -> Container -> Icon
+    icon.icon = ft.Icons.SLOW_MOTION_VIDEO if slow else ft.Icons.VOLUME_UP
+    play_text(page, card.front)
+    page.update()
 
 BOX_COLORS = [ft.Colors.RED, ft.Colors.ORANGE, ft.Colors.AMBER,
               ft.Colors.LIGHT_GREEN, ft.Colors.GREEN]
@@ -107,13 +123,14 @@ def card_tiles(cards: list[VocabCard], on_click=None, on_delete=None,
         trailing_items.append(
             ft.GestureDetector(
                 content=ft.Container(
-                    ft.Icon(ft.Icons.VOLUME_UP, color=ft.Colors.PRIMARY),
+                    ft.Icon(ft.Icons.SLOW_MOTION_VIDEO if slow_mode()
+                            else ft.Icons.VOLUME_UP,
+                            color=ft.Colors.PRIMARY),
                     padding=8,
-                    tooltip="Anhören — lang drücken: langsam",
+                    tooltip=SPEAKER_TOOLTIP,
                 ),
                 on_tap=lambda e, c=c: play_text(e.control.page, c.front),
-                on_long_press_start=lambda e, c=c: play_text(
-                    e.control.page, c.front, slow=True),
+                on_long_press_start=lambda e, c=c: _toggle_and_play(e, c),
             ),
         )
         if on_delete:

@@ -15,6 +15,7 @@ import flet as ft
 from mathainoa1 import APP_NAME, __version__
 from mathainoa1.storage import content
 from mathainoa1.storage.content import CSV_FIELDS
+from mathainoa1.storage.settings import load_app_settings
 
 # Gemeinsamer Teil beider Chatbot-Prompts: Ausgabeformat, Spaltenregeln
 # und Beispielzeilen der Import-CSV
@@ -47,11 +48,14 @@ REGELN FÜR DIE SPALTEN
    "Ich spreche [nicht/kein] Chinesisch." akzeptiert beide Sätze,
    "Πώς [είσαι/είστε];" ebenso. KEIN nacktes "a / b" mitten im Satz
    (das würde als zwei Komplett-Alternativen gewertet).
-9. hints/notes: nur kurze Lernhilfen (z.B. "nur Plural", "mit Akk.",
-   "wörtl.: …") — keine Verweise auf Buchseiten oder Übungen.
+9. Vier Notiz-Spalten, nur kurze Lernhilfen (keine Buchseiten oder
+   Übungsnummern): hints_gr/notes_gr erscheinen, wenn die griechische
+   Seite abgefragt wird, hints_de/notes_de bei der deutschen. hints =
+   Gebrauchshinweis zum Wort (z.B. "mit Akk.", "nur Plural"), notes =
+   Zusatznotiz (z.B. "per du", "wörtl.: …").
 10. forms nur bei Unregelmäßigkeit: "schlüssel=form; …" mit den
-   Schlüsseln acc_sg, gen_sg, acc_pl, gen_pl, fem, 1sg…3pl
-   (z.B. "gen_pl=γυναικών").
+   Schlüsseln acc_sg, gen_sg, nom_pl, acc_pl, gen_pl, fem, 1sg…3pl
+   (z.B. "gen_pl=γυναικών") — Formen ohne Artikel eintragen.
 11. stem2: der 2. Stamm (Aoriststamm, für θα/να) — bei JEDEM Verb
     angeben, das einen hat (ohne ihn kein Futur-Training):
     - regelmäßig ein Stamm mit Bindestrich; die Betonung entscheidet
@@ -62,31 +66,36 @@ REGELN FÜR DIE SPALTEN
     - weglassen nur, wenn der Futurstamm dem Präsens entspricht und
       unbekannt ist, oder bei Fixformen (κοστίζει, θα δούμε).
 12. aorist_passive: der Aorist Passiv (3. Stamm) im gleichen Format wie
-    stem2 — angeben, wenn bekannt (nicht aus dem Aktiv berechenbar).
+    stem2 — angeben, wenn bekannt (nicht aus dem Aktiv berechenbar);
+    wird ab Stufe A2 trainiert und schadet bei A1 nicht.
     participle: das Perfekt-Partizip nur bei unregelmäßiger Form
     (z.B. γραμμένος). Beide Spalten sonst leer lassen.
 
-BEISPIELZEILEN (je Worttyp; regelmäßige Wörter brauchen keine forms)
-"ο δρόμος","Straße","-οι","ο","Nomen",,,,,,
-"η γυναίκα","Frau","-ες","η","Nomen",,,,,"gen_pl=γυναικών",
-"γράφω","schreiben",,,"Verb",,,,,,"γράψ-"
-"βλέπω","sehen",,,"Verb",,,,,,"δω, δεις, δει, δούμε, δείτε, δουν/δούνε"
-"πάω","gehen",,,"Verb",,,,,"1sg=πάω; 2sg=πας; 3sg=πάει; 1pl=πάμε; 2pl=πάτε; 3pl=πάνε","πάω, πας, πάει, πάμε, πάτε, πάνε"
-"μικρός","klein",,,"Adjektiv",,,,,,
-"γλυκός","süß",,,"Adjektiv",,,,,"fem=γλυκιά",
-"εδώ","hier",,,"Adverb",,,,,,
-"από","von, aus",,,"Präposition",,,,,,
-"Τι κάνεις;","Wie geht's?",,,"Phrase",,,"per du",,,
-"πέντε","fünf",,,"Zahl",,,,,,
-"και","und, auch",,,"Sonstiges",,,,,,
+BEISPIELZEILEN (je Worttyp; regelmäßige Wörter brauchen keine forms —
+jede Zeile hat alle 13 Spalten)
+"ο δρόμος","Straße","-οι","ο","Nomen",,,,,,,,
+"η γυναίκα","Frau","-ες","η","Nomen",,,,,"gen_pl=γυναικών",,,
+"γράφω","schreiben",,,"Verb",,,,,,"γράψ-","γραφτ-","γραμμένος"
+"βλέπω","sehen",,,"Verb",,,,,,"δω, δεις, δει, δούμε, δείτε, δουν/δούνε",,
+"πάω","gehen",,,"Verb",,,,,"1sg=πάω; 2sg=πας; 3sg=πάει; 1pl=πάμε; 2pl=πάτε; 3pl=πάνε","πάω, πας, πάει, πάμε, πάτε, πάνε",,
+"μικρός","klein",,,"Adjektiv",,,,,,,,
+"γλυκός","süß",,,"Adjektiv",,,,,"fem=γλυκιά",,,
+"εδώ","hier",,,"Adverb",,,,,,,,
+"από","von, aus",,,"Präposition",,"mit Akk.",,,,,,
+"Τι κάνεις;","Wie geht's?",,,"Phrase",,,,"per du",,,,
+"πέντε","fünf",,,"Zahl",,,,,,,,
+"και","und, auch",,,"Sonstiges",,,,,,,,
 """
 
-# Prompt 1 — Wortlisten-Prompt: fertige Vokabellisten (Grundformen)
+# Prompt 1 — Wortlisten-Prompt: fertige Vokabellisten (Grundformen).
+# {level} wird beim Öffnen des Kopier-Dialogs mit der aktiven Stufe
+# (AppSettings.level) gefüllt — siehe features.py: Prompts müssen zur
+# Stufe passen.
 CHATBOT_PROMPT = f"""\
 AUFGABE
 Du bekommst eine Liste griechischer Vokabeln (Grundformen) mit
 deutschen Bedeutungen — als Foto oder als Text. Erstelle daraus eine
-Import-CSV für eine Griechisch-Lern-App (Niveau A1).
+Import-CSV für eine Griechisch-Lern-App (Niveau {{level}}).
 
 {_CSV_FORMAT_RULES}"""
 
@@ -97,7 +106,7 @@ AUFGABE
 Du bekommst einen griechischen Text — z.B. einen abfotografierten
 Zeitungsausschnitt, eine Buchseite oder ein Schild. Die Wörter stehen
 dort in gebeugten Formen. Erstelle daraus eine Vokabel-CSV für eine
-Griechisch-Lern-App (Niveau A1): jedes Wort in seiner Grundform.
+Griechisch-Lern-App (Niveau {{level}}): jedes Wort in seiner Grundform.
 
 ZURÜCKFÜHREN AUF DIE GRUNDFORM
 - Nomen → Nominativ Singular mit Artikel (z.B. τους δρόμους →
@@ -371,21 +380,24 @@ def help_view(nav, store=None) -> ft.Control:
         ]),
         ft.Row(
             [
-                ft.OutlinedButton("Wortlisten-Prompt",
-                                  icon=ft.Icons.LIST_ALT,
-                                  on_click=open_prompt_dialog(
-                                      "Wortlisten-Prompt", CHATBOT_PROMPT)),
-                ft.OutlinedButton("Lesetext-Prompt",
-                                  icon=ft.Icons.NEWSPAPER,
-                                  on_click=open_prompt_dialog(
-                                      "Lesetext-Prompt", TEXT_PROMPT)),
+                ft.OutlinedButton(
+                    "Wortlisten-Prompt", icon=ft.Icons.LIST_ALT,
+                    on_click=open_prompt_dialog(
+                        "Wortlisten-Prompt", CHATBOT_PROMPT.format(
+                            level=load_app_settings().level))),
+                ft.OutlinedButton(
+                    "Lesetext-Prompt", icon=ft.Icons.NEWSPAPER,
+                    on_click=open_prompt_dialog(
+                        "Lesetext-Prompt", TEXT_PROMPT.format(
+                            level=load_app_settings().level))),
             ],
             wrap=True, spacing=8,
         ),
-        _p("Mit der erweiterten Funktion „Textanalyse“ (Einstellungen → "
-           "Erweiterte Funktionen) gibt es zusätzlich einen dritten "
-           "Prompt für komplette Textanalysen — direkt in der "
-           "Textanalyse-Ansicht über „Prompt kopieren“."),
+        _p("Mit den erweiterten Funktionen (Einstellungen → Erweiterte "
+           "Funktionen) kommen zwei weitere Prompts dazu: "
+           "Arbeitsanweisung III für komplette Textanalysen („Prompt "
+           "kopieren“ in der Textanalyse-Ansicht) und Arbeitsanweisung IV "
+           "für Etymologie-Pakete („Prompt kopieren“ im Lexikon)."),
     ])
 
     stufen = _chapter(nav, "Stufen & erweiterte Funktionen",
@@ -456,10 +468,13 @@ def help_view(nav, store=None) -> ft.Control:
         ]),
         _p("Bedienung in allen Listen und Trainings:"),
         _bullets([
-            "Lautsprecher-Symbol an jeder Karte: kurz antippen spielt "
-            "normal, lang drücken langsam (zum Nachsprechen). Im "
-            "Vokabeltraining gibt es dafür zwei Symbole unter der Karte — "
-            "sie erscheinen erst, wenn die griechische Seite sichtbar ist.",
+            "Lautsprecher-Symbol: kurz antippen spielt ab, lang drücken "
+            "schaltet den Langsam-Modus um — danach spielt jedes "
+            "Antippen überall langsam (zum Nachsprechen), bis wieder "
+            "lange gedrückt wird; beim App-Start ist das Tempo wieder "
+            "normal. Im Vokabeltraining erscheint der Lautsprecher "
+            "unter der Karte erst, wenn die griechische Seite sichtbar "
+            "ist.",
             "Auto-Play: In allen drei Trainings schaltet das "
             "Lautsprecher-Symbol oben rechts um, ob automatisch "
             "vorgelesen wird, sobald der griechische Text erscheint. "

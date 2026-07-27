@@ -236,3 +236,19 @@ def test_restore_after_full_wipe_new_device(env, tmp_path):
     assert load_notes().notes
     assert ta.lexicon_store(store).entries
     assert progress.get(vlist.cards[0].id) is not None
+
+
+def test_create_backup_survives_pre_1980_mtimes(env):
+    """Android-Bug: Datei-mtimes vor 1980 dürfen den Export nicht brechen
+    (fester ZIP-Zeitstempel statt Datei-Datum)."""
+    import os
+
+    store, progress = env
+    vlist = _populate(store, progress)
+    for p in user_vocab_dir().rglob("*.json"):
+        os.utime(p, (0, 0))  # Epoche 1970 — vor der ZIP-Untergrenze 1980
+    data = backup.create_backup(progress, ALL_PARTS)
+
+    store.delete_user_list(vlist.id)
+    backup.restore_backup(data, store, progress)
+    assert vlist.id in store.lists

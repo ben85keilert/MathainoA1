@@ -44,10 +44,11 @@ App — erstellt von einem Chatbot nach der mitgelieferten
 2. In der Textanalyse-Ansicht **importieren** (Datei oder „Als Text
    importieren“). Die App legt die Analyse an und erzeugt daraus
    automatisch die Vokabelliste „…– Vokabeln“ (Hauptvokabular).
-3. Jede Analyse ist komplett einsehbar: **Originaltext** (mit
-   Sprachausgabe-Button, langes Drücken = langsam), **inhaltliche
+3. Jede Analyse ist komplett einsehbar: **Originaltext**, **inhaltliche
    Übersetzung**, **Wort-für-Wort-Segmente**, **Vokabeln** und
-   **Phrasen**.
+   **Phrasen** — Originaltext, jedes Segment und jede Phrase haben
+   einen eigenen Sprachausgabe-Button (langes Drücken schaltet den
+   Langsam-Modus um, siehe Kapitel „Audio“).
 
 Wortherkunft, Kognaten und Synonyme sind seit Version 0.6 **nicht mehr
 Teil der Analyse** — dafür gibt es das **Lexikon** mit der eigenen
@@ -212,11 +213,15 @@ Die App spricht jedes griechische Wort selbst. In den **Einstellungen**
 
 Bedienung:
 
-- **Lautsprecher-Symbol an jeder Karte** in den Listenansichten:
-  **kurz antippen** spielt normal, **lang drücken** langsam (zum
-  Nachsprechen). Im Vokabeltraining erscheinen Lautsprecher- und
-  Langsam-Symbol unter der Karte — aber erst, wenn die griechische
-  Seite sichtbar ist, damit die Antwort nicht verraten wird.
+- **Lautsprecher-Symbol** (an jeder Karte, im Training, in der
+  Textanalyse): **kurz antippen** spielt ab, **lang drücken** schaltet
+  den **Langsam-Modus** um — danach spielt jedes Antippen überall
+  langsam (zum Nachsprechen), bis wieder lange gedrückt wird. Das
+  Symbol wechselt dabei zum Schneckentempo-Icon, und eine kurze
+  Meldung bestätigt das Umschalten; beim App-Start ist das Tempo
+  wieder normal. Im Vokabeltraining erscheint der Lautsprecher unter
+  der Karte erst, wenn die griechische Seite sichtbar ist, damit die
+  Antwort nicht verraten wird.
 - Nur im Google-Modus: **„Audio vorbereiten"** im Listenmenü (⋮, auch
   bei Buchlisten) lädt alle Wörter einer Liste auf einmal in den
   Cache — praktisch vor einer Reise, damit die ganze Liste offline

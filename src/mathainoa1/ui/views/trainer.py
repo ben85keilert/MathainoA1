@@ -18,7 +18,7 @@ from mathainoa1.storage.textanalyse import etymology_for
 from mathainoa1.ui.audio import (
     autoplay_button,
     maybe_autoplay,
-    play_text,
+    speaker_button,
 )
 
 ALL = "__all__"
@@ -400,14 +400,10 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     # Per Klick eingeblendet — gilt nur für die aktuelle Karte
     revealed = {"notes": False, "hints": False, "answered": False}
 
-    # Audiobuttons neben dem Bearbeiten-Symbol: drei Symbole in einer
-    # kompakten Zeile direkt über dem Antwortfeld
-    btn_play = ft.IconButton(
-        ft.Icons.VOLUME_UP, tooltip="Anhören",
-        on_click=lambda e: play_text(nav.page, shown["card"].front))
-    btn_play_slow = ft.IconButton(
-        ft.Icons.SLOW_MOTION_VIDEO, tooltip="Langsam — zum Nachsprechen",
-        on_click=lambda e: play_text(nav.page, shown["card"].front, slow=True))
+    # Lautsprecher neben dem Bearbeiten-Symbol: ein Symbol, Gedrückthalten
+    # schaltet den app-weiten Langsam-Modus um (spart ein Icon in der
+    # engen Zeile über dem Antwortfeld)
+    btn_play = speaker_button(nav.page, lambda: shown["card"].front)
 
     def show_word_info(e):
         entry = etymology_for(shown["card"]) if shown["card"] else None
@@ -420,7 +416,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     btn_info = ft.IconButton(ft.Icons.INFO_OUTLINE,
                              tooltip="Wortherkunft & Synonyme",
                              on_click=show_word_info)
-    icons_row = ft.Row([btn_play, btn_play_slow, btn_info, btn_edit],
+    icons_row = ft.Row([btn_play, btn_info, btn_edit],
                        alignment=ft.MainAxisAlignment.CENTER, spacing=0)
 
     def update_audio_row():
@@ -428,7 +424,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         # dem Aufdecken, sonst wäre die Antwort verraten
         card = shown["card"]
         on = session.prompt_side(card) == "gr" or revealed["answered"]
-        btn_play.visible = btn_play_slow.visible = on
+        btn_play.visible = on
         # Info-Button unter derselben Bedingung (griechische Seite sichtbar),
         # und nur wenn es zum Wort einen Etymologie-Eintrag gibt
         btn_info.visible = on and etymology_for(card) is not None

@@ -1509,6 +1509,26 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
     sort_btn = ft.IconButton(on_click=toggle_sort)
     select_btn = ft.IconButton(ft.Icons.CHECKLIST, on_click=toggle_select)
 
+    # Reiter-Umschalter in der Titelzeile (statt breiter TabBar in der
+    # Werkzeugzeile — dort war zu wenig Platz); der Wisch-Wechsel der
+    # TabBarView bleibt und läuft über on_tab_change
+    def switch_tab(index: int):
+        def handler(e):
+            if view_state["sort_mode"]:
+                return  # im Sortiermodus gesperrt (Buttons sind disabled)
+            tabs.selected_index = index
+            view_state["tab"] = index
+            refresh_header_buttons()
+            page.update()
+        return handler
+
+    cards_btn = ft.IconButton(ft.Icons.VIEW_AGENDA_OUTLINED, icon_size=20,
+                              tooltip="Kartenansicht",
+                              on_click=switch_tab(0))
+    table_btn = ft.IconButton(ft.Icons.TABLE_ROWS_OUTLINED, icon_size=20,
+                              tooltip="Tabellenansicht",
+                              on_click=switch_tab(1))
+
     def show_word_info(e):
         # Gesammelter Worthintergrund der Liste in Listenreihenfolge;
         # Karten, die auf denselben Eintrag zeigen, nur einmal
@@ -1571,8 +1591,13 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         select_btn.disabled = view_state["tab"] != 0
         select_btn.tooltip = ("Markieren beenden" if view_state["select_mode"]
                               else "Wörter markieren (Mehrfachauswahl)")
-        # im Sortiermodus ist der Tab-Wechsel gesperrt
-        tab_bar.disabled = view_state["sort_mode"]
+        # aktiver Reiter farbig; im Sortiermodus ist der Wechsel gesperrt
+        # (der Wisch-Pfad wird zusätzlich in on_tab_change abgefangen)
+        cards_btn.icon_color = (ft.Colors.PRIMARY
+                                if view_state["tab"] == 0 else None)
+        table_btn.icon_color = (ft.Colors.PRIMARY
+                                if view_state["tab"] == 1 else None)
+        cards_btn.disabled = table_btn.disabled = view_state["sort_mode"]
 
     def reorder_cards(e):
         card = vlist.cards.pop(e.old_index)
@@ -1889,15 +1914,11 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
                         else "Noch keine Karten in dieser Liste.")]
         page.update()
 
-    # Zwei Reiter: Kartenliste und Tabelle aller Werte; die TabBarView
-    # lässt sich auch per Links-rechts-Wischen wechseln. Rechts neben den
-    # Reitern: Worttyp-Filter und (bei eigenen Listen) der Sortiermodus —
-    # die Zeile bleibt beim Scrollen sichtbar, nur die Tab-Inhalte scrollen.
-    tab_bar = ft.TabBar(tabs=[
-        ft.Tab(label="Karten", icon=ft.Icons.VIEW_AGENDA_OUTLINED),
-        ft.Tab(label="Tabelle", icon=ft.Icons.TABLE_ROWS_OUTLINED),
-    ])
-    header_row = [ft.Container(tab_bar, expand=True)]
+    # Werkzeugzeile über den Tab-Inhalten: nur noch die Icons, rechtsbündig
+    # (die Reiter-Umschalter sitzen oben in der Titelzeile). Die Zeile
+    # bleibt beim Scrollen sichtbar, nur die Tab-Inhalte scrollen; die
+    # TabBarView lässt sich weiter per Links-rechts-Wischen wechseln.
+    header_row: list[ft.Control] = [ft.Container(expand=True)]
     if (textanalyse.feature_enabled()
             and any(textanalyse.etymology_for(c) is not None
                     for c in vlist.cards)):
@@ -1931,10 +1952,10 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
     )
     refresh()
 
-    if not vlist.editable:
-        return tabs
-
-    # Listenname als anklickbare Überschrift: Klick öffnet Umbenennen
+    # Titelzeile für alle Listen: Name (bei eigenen Listen anklickbar =
+    # Umbenennen) links, Reiter-Umschalter Karten/Tabelle rechts. Der
+    # Umbenennen-Klick liegt nur auf dem Namensbereich, damit er beim
+    # Tippen auf die Reiter nicht mitfeuert.
     name_text = ft.Text(vlist.name, size=16, weight=ft.FontWeight.BOLD,
                         expand=True)
 
@@ -1943,14 +1964,24 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         nav.stack[-1] = (vlist.name, nav.stack[-1][1])  # AppBar-Titel mitziehen
         nav._show()
 
-    name_header = ft.Container(
-        ft.Row([name_text,
-                ft.Icon(ft.Icons.EDIT_OUTLINED, size=18)],
-               vertical_alignment=ft.CrossAxisAlignment.CENTER),
-        ink=True, border_radius=8,
-        padding=ft.Padding.symmetric(horizontal=4, vertical=2),
-        tooltip="Liste umbenennen",
-        on_click=lambda e: rename_dialog(page, store, vlist,
-                                         on_saved=after_rename),
-    )
-    return ft.Column([name_header, tabs], spacing=4, expand=True)
+    if vlist.editable:
+        name_zone = ft.Container(
+            ft.Row([name_text,
+                    ft.Icon(ft.Icons.EDIT_OUTLINED, size=18)],
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ink=True, border_radius=8,
+            padding=ft.Padding.symmetric(horizontal=4, vertical=2),
+            tooltip="Liste umbenennen",
+            on_click=lambda e: rename_dialog(page, store, vlist,
+                                             on_saved=after_rename),
+            expand=True,
+        )
+    else:
+        name_zone = ft.Container(
+            name_text,
+            padding=ft.Padding.symmetric(horizontal=4, vertical=2),
+            expand=True,
+        )
+    title_row = ft.Row([name_zone, cards_btn, table_btn],
+                       vertical_alignment=ft.CrossAxisAlignment.CENTER)
+    return ft.Column([title_row, tabs], spacing=4, expand=True)

@@ -138,15 +138,17 @@ async def _speak_google(page: ft.Page, text: str, slow: bool,
 
 # --- gemeinsame API für alle Views -----------------------------------------
 
-def play_text(page: ft.Page, text: str, slow: bool = False,
+def play_text(page: ft.Page, text: str, slow: bool | None = None,
               notify_errors: bool = True) -> None:
     """Spricht einen griechischen Text; sync aufrufbar aus jedem on_click.
 
     Der Weg (Systemstimme oder Google) kommt aus den App-Einstellungen.
-    slow=True verlangsamt die Wiedergabe (zum Nachsprechen). Fehler zeigen
-    eine SnackBar, außer notify_errors=False (Auto-Play soll lautlos
-    scheitern).
+    slow=None folgt dem app-weiten Langsam-Modus (slow_mode); True/False
+    erzwingt ein Tempo. Fehler zeigen eine SnackBar, außer
+    notify_errors=False (Auto-Play soll lautlos scheitern).
     """
+    if slow is None:
+        slow = _slow_mode
     spoken = speakable(text)
     if not spoken:
         return
@@ -160,7 +162,7 @@ def play_text(page: ft.Page, text: str, slow: bool = False,
     page.run_task(run)
 
 
-def play_long_text(page: ft.Page, text: str, slow: bool = False,
+def play_long_text(page: ft.Page, text: str, slow: bool | None = None,
                    notify_errors: bool = True) -> None:
     """Spricht einen längeren Fließtext (z.B. Originaltext einer
     Textanalyse) — ohne die speakable()-Kürzungen von play_text, die für
@@ -170,6 +172,8 @@ def play_long_text(page: ft.Page, text: str, slow: bool = False,
     Texte intern selbst und liefert eine MP3, die im Cache landet
     (erste Wiedergabe dauert dann etwas).
     """
+    if slow is None:
+        slow = _slow_mode
     spoken = re.sub(r"\s+", " ", text or "").strip()
     if not spoken:
         return
@@ -186,9 +190,66 @@ def play_long_text(page: ft.Page, text: str, slow: bool = False,
 def maybe_autoplay(page: ft.Page, text: str) -> None:
     """Spricht den Text automatisch, wenn Auto-Play an ist — lautlos bei
     Fehlern (offline oder fehlende Stimme soll nicht jede Karte eine
-    Meldung zeigen)."""
+    Meldung zeigen). Folgt dem Langsam-Modus."""
     if autoplay_enabled():
         play_text(page, text, notify_errors=False)
+
+
+# --- Langsam-Modus (Sitzung, nicht persistiert) ----------------------------
+#
+# Gedrückthalten eines Lautsprechers schaltet app-weit auf langsame
+# Wiedergabe um (SLOW_FACTOR), erneutes Gedrückthalten zurück auf normal.
+# Bewusst nicht gespeichert: die App startet immer im Normaltempo.
+
+_slow_mode: bool = False
+
+SPEAKER_TOOLTIP = "Anhören — lang drücken: langsam an/aus"
+
+
+def slow_mode() -> bool:
+    return _slow_mode
+
+
+def toggle_slow_mode(page: ft.Page) -> bool:
+    global _slow_mode
+    _slow_mode = not _slow_mode
+    page.show_dialog(ft.SnackBar(ft.Text(
+        "Langsame Wiedergabe an — nochmal lange drücken für normal."
+        if _slow_mode else "Normale Wiedergabe.")))
+    return _slow_mode
+
+
+def speaker_button(page: ft.Page, text_provider,
+                   long_text: bool = False,
+                   icon_size: int | None = None) -> ft.GestureDetector:
+    """Einheitlicher Lautsprecher: Tippen = anhören im aktuellen Tempo,
+    Gedrückthalten = Langsam-Modus umschalten und sofort im neuen Tempo
+    abspielen (hörbares Feedback).
+
+    text_provider ist eine Funktion, damit der Text zur Abspielzeit
+    aktuell ist (Trainer wechselt die Karte unter dem Button weg). Das
+    Icon zeigt den Modus beim Aufbau und nach eigenem Umschalten; andere,
+    bereits gebaute Lautsprecher färben sich nicht mit um — dafür gibt es
+    die SnackBar von toggle_slow_mode.
+    """
+    play = play_long_text if long_text else play_text
+    icon = ft.Icon(
+        ft.Icons.SLOW_MOTION_VIDEO if _slow_mode else ft.Icons.VOLUME_UP,
+        size=icon_size, color=ft.Colors.PRIMARY if _slow_mode else None)
+
+    def on_long(e):
+        slow = toggle_slow_mode(page)
+        icon.icon = (ft.Icons.SLOW_MOTION_VIDEO if slow
+                     else ft.Icons.VOLUME_UP)
+        icon.color = ft.Colors.PRIMARY if slow else None
+        play(page, text_provider())
+        page.update()
+
+    return ft.GestureDetector(
+        content=ft.Container(icon, padding=8, tooltip=SPEAKER_TOOLTIP),
+        on_tap=lambda e: play(page, text_provider()),
+        on_long_press_start=on_long,
+    )
 
 
 # --- Einstellungen (gecacht — nicht bei jeder Karte die JSON lesen) --------
