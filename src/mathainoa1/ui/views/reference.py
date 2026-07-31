@@ -175,40 +175,65 @@ def articles_view() -> ft.Control:
 
 # --- 2) Deklinationen ---
 
-_NOUN_EXAMPLES = [
-    ("m, -ος", "ο δρόμος", "ο", "-οι", None),
-    ("m, -ης", "ο χάρτης", "ο", "-ες", None),
-    ("m, -ας", "ο άντρας", "ο", "-ες", None),
-    ("f, -α", "η θάλασσα", "η", "-ες", None),
-    ("f, -η", "η τέχνη", "η", "-ες", None),
-    ("f, -η/-εις", "η πόλη", "η", "-εις", None),
-    ("n, -ο", "το δώρο", "το", "-α", None),
-    ("n, -ι", "το σπίτι", "το", "-ια", None),
-    ("n, -μα", "το πρόβλημα", "το", "-ματα", None),
+# Muster je Geschlecht — alle Endungen, die in den A1-Buchlisten
+# (Kapitel 1–8) tatsächlich vorkommen, mit Beispielwörtern von dort
+_NOUN_EXAMPLES_BY_GENDER = [
+    ("Maskulin", [
+        ("-ος", "ο γύρος", "ο", "-οι"),
+        ("-ης", "ο χάρτης", "ο", "-ες"),
+        ("-ας", "ο άντρας", "ο", "-ες"),
+        ("-ές", "ο καφές", "ο", "-έδες"),
+        ("-ούς", "ο παππούς", "ο", "-ούδες"),
+    ]),
+    ("Feminin", [
+        ("-α", "η ταβέρνα", "η", "-ες"),
+        ("-η", "η φίλη", "η", "-ες"),
+        ("-ση/-ξη/-ψη", "η ερώτηση", "η", "-εις"),
+        ("-ος", "η οδός", "η", "-οί"),
+    ]),
+    ("Neutrum", [
+        ("-ο", "το θέατρο", "το", "-α"),
+        ("-ι", "το σπίτι", "το", "-ια"),
+        ("-μα", "το όνομα", "το", "-ματα"),
+        ("-ος", "το λάθος", "το", "-η"),
+    ]),
 ]
 
 
 def declensions_view() -> ft.Control:
-    nouns = []
-    for label, front, art, pl, forms in _NOUN_EXAMPLES:
-        card = _card(front, article=art, plural=pl, word_type="Nomen",
-                     forms=forms or {})
-        nouns.append((label, decl.parse_noun(card)))
-    rows = []
-    for case, num, _ in _CASE_LABELS:
-        row = []
-        for _, noun in nouns:
-            form = decl.decline(noun, case, num)
-            art = decl.ARTICLES[(case, num)][noun.gender]
-            row.append(_form_cell(form, noun.stem, art) if form else "—")
-        rows.append(row)
-    return _view(
+    sections: list[ft.Control] = [
         _h("Nomen: A1-Muster mit allen Formen"),
-        _frozen_table("", [l for _, _, l in _CASE_LABELS],
-                      [label for label, _ in nouns], rows),
-        _p("Unveränderliche Fremdwörter (το σουβενίρ, το φαξ): alle Formen "
-           "gleich, im Programm mit Plural „-“ gekennzeichnet."),
+        _p("Alle Muster, die in den Buchlisten der Kapitel 1–8 vorkommen, "
+           "getrennt nach Geschlecht."),
+    ]
+    for gender_title, examples in _NOUN_EXAMPLES_BY_GENDER:
+        nouns = []
+        for label, front, art, pl in examples:
+            card = _card(front, article=art, plural=pl, word_type="Nomen")
+            nouns.append((label, decl.parse_noun(card)))
+        rows = []
+        for case, num, _ in _CASE_LABELS:
+            row = []
+            for _, noun in nouns:
+                form = decl.decline(noun, case, num)
+                art = decl.ARTICLES[(case, num)][noun.gender]
+                row.append(_form_cell(form, noun.stem, art) if form else "—")
+            rows.append(row)
+        sections += [
+            _h(gender_title),
+            _frozen_table("", [l for _, _, l in _CASE_LABELS],
+                          [label for label, _ in nouns], rows),
+        ]
+    return _view(
+        *sections,
+        _p("Unveränderliche Fremdwörter (το μετρό, το σινεμά, η πανσιόν): "
+           "alle Formen gleich, im Programm mit Plural „-“ gekennzeichnet."),
+        _p("Nur-Plural-Wörter: τα ελληνικά, οι διακοπές, οι γονείς — es "
+           "gibt keinen Singular; der Genitiv von οι γονείς (των γονιών/"
+           "γονέων) folgt keinem A1-Muster."),
         _p("Eigennamen (η Αθήνα) haben keinen Plural."),
+        _p("Sonderfälle aus den Listen ohne A1-Muster: το γάλα → τα "
+           "γάλατα, το κρέας → τα κρέατα, το βράδυ → τα βράδια."),
     )
 
 
@@ -231,28 +256,49 @@ def _conj_column(verb: conj.Verb, future: bool = False) -> list[str]:
 def verbs_view() -> ft.Control:
     graf = conj.parse_verb(_card("γράφω", word_type="Verb", stem2="γράψ-"))
     agap = conj.parse_verb(_card("αγαπάω", word_type="Verb"))
+    boro = conj.parse_verb(_card("μπορώ", word_type="Verb"))
     erx = conj.parse_verb(_card("έρχομαι", word_type="Verb"))
+    sik = conj.parse_verb(_card("σηκώνομαι", word_type="Verb",
+                                stem2="σηκωθ-"))
     ime = conj.parse_verb(_card("είμαι", word_type="Verb"))
-    cols = [_conj_column(v) for v in (graf, agap, erx, ime)]
+    present = (graf, agap, boro, erx, ime)
+    cols = [_conj_column(v) for v in present]
+    # Unregelmäßige Präsens-Verben, die in den Kapiteln 1–8 vorkommen
+    irregular = [conj.parse_verb(_card(w, word_type="Verb"))
+                 for w in ("πάω", "τρώω", "λέω", "ακούω")]
+    irr_cols = [_conj_column(v) for v in irregular]
     fut = _conj_column(graf, future=True)
+    fut_sik = _conj_column(sik, future=True)
     return _view(
         _h("Präsens"),
         _frozen_table("Person", _PERSON_LABELS,
-                      ["γράφω (A-Typ)", "αγαπάω (B-Typ)",
-                       "έρχομαι (-ομαι)", "είμαι (sein)"],
-                      [[cols[0][i], cols[1][i], cols[2][i], cols[3][i]]
-                       for i in range(6)]),
+                      ["γράφω (A-Typ)", "αγαπάω (B1, -άω)",
+                       "μπορώ (B2, -ώ)", "έρχομαι (-ομαι)", "είμαι (sein)"],
+                      [[c[i] for c in cols] for i in range(6)]),
         _p("A-Typ: Endungen -ω, -εις, -ει, -ουμε, -ετε, -ουν(ε). "
-           "B-Typ (-άω): -άω/-ώ, -άς, -άει/-ά, -άμε/-ούμε, -άτε, "
+           "B1 (-άω): -άω/-ώ, -άς, -άει/-ά, -άμε/-ούμε, -άτε, "
            "-άνε/-ούν(ε). "
-           "Endbetont auf -ώ (μπορώ): -ώ, -είς, -εί, -ούμε, -είτε, -ούν(ε). "
+           "B2, endbetont auf -ώ (μπορώ, ζω): -ώ, -είς, -εί, -ούμε, "
+           "-είτε, -ούν(ε). "
            "-ομαι: -ομαι, -εσαι, -εται, -όμαστε, -εστε/-όσαστε, -ονται."),
+        _h("Unregelmäßiges Präsens"),
+        _frozen_table("Person", _PERSON_LABELS,
+                      ["πάω", "τρώω", "λέω", "ακούω"],
+                      [[c[i] for c in irr_cols] for i in range(6)]),
         _h("Futur und να-Form: θα / να + 2. Stamm"),
-        _table(["Person", "γράφω → θα γράψω"],
-               [[_PERSON_LABELS[i], fut[i]] for i in range(6)]),
+        _frozen_table("Person", _PERSON_LABELS,
+                      ["γράφω → θα γράψω (Stamm betont)",
+                       "σηκώνομαι → θα σηκωθώ (Stamm unbetont)"],
+                      [[fut[i], fut_sik[i]] for i in range(6)]),
         _p("Nach να stehen dieselben Formen wie nach θα: θέλω να γράψω, "
            "θέλεις να γράψεις … Der 2. Stamm steht im Programm im Feld "
-           "„2. Stamm“ (z.B. γράψ-); die Endungen entsprechen dem A-Typ."),
+           "„2. Stamm“ (z.B. γράψ-). Stamm mit Akzent → A-Typ-Endungen "
+           "(θα γράψω); Stamm ohne Akzent → endbetont wie B2 "
+           "(σηκωθ- → θα σηκωθώ, θα σηκωθείς …)."),
+        _p("Unregelmäßiges Futur aus den Kapiteln 1–8: βλέπω → θα δω, "
+           "πίνω → θα πιω, λέω → θα πω, τρώω → θα φάω, πάω → θα πάω. "
+           "Im Programm stehen solche Futur-Formen als 6er-Liste im "
+           "Feld „2. Stamm“."),
     )
 
 
@@ -397,6 +443,90 @@ def questions_view() -> ft.Control:
         _p("σε verschmilzt mit dem bestimmten Artikel: στο(ν), στη(ν), "
            "στο, στους, στις, στα."),
     )
+
+
+# --- Beugungstabellen für ein einzelnes Wort (Dialog in den Trainern) ---
+
+def _noun_forms_table(card: VocabCard) -> ft.Control | None:
+    noun = decl.parse_noun(card)
+    if noun is None:
+        return None
+    rows, any_form = [], False
+    for case, num, label in _CASE_LABELS:
+        form = decl.decline(noun, case, num)
+        if form:
+            any_form = True
+            art = decl.ARTICLES[(case, num)][noun.gender]
+            rows.append([label, _form_cell(form, noun.stem, art)])
+        else:
+            rows.append([label, "—"])
+    if not any_form:
+        return None
+    return _table(["Fall", "Form"], rows)
+
+
+def _adjective_forms_table(card: VocabCard) -> ft.Control | None:
+    adj = decl.parse_adjective(card)
+    if adj is None:
+        return None
+    rows = [[label] + [_form_cell(decl.decline_adjective(adj, g, case, num),
+                                  adj.stem)
+                       for g in ("m", "f", "n")]
+            for case, num, label in _CASE_LABELS]
+    return _table(["", "maskulin", "feminin", "neutrum"], rows)
+
+
+def _verb_forms_tables(card: VocabCard) -> ft.Control | None:
+    verb = conj.parse_verb(card)
+    if verb is None:
+        return None
+    col = _conj_column(verb)
+    controls: list[ft.Control] = [
+        _h("Präsens"),
+        _table(["Person", "Form"],
+               [[_PERSON_LABELS[i], col[i]] for i in range(6)]),
+    ]
+    if conj.has_future(verb):
+        fut = _conj_column(verb, future=True)
+        controls += [
+            _h("Futur (θα + 2. Stamm)"),
+            _table(["Person", "Form"],
+                   [[_PERSON_LABELS[i], fut[i]] for i in range(6)]),
+        ]
+    return ft.Column(controls, tight=True, spacing=12)
+
+
+def word_forms_content(card: VocabCard) -> ft.Control | None:
+    """Deklinations-/Konjugationstabelle für genau diese Karte —
+    None, wenn kein Muster erkannt wird (dann keinen Button anbieten)."""
+    if card.word_type == "Nomen":
+        return _noun_forms_table(card)
+    if card.word_type == "Adjektiv":
+        return _adjective_forms_table(card)
+    if card.word_type == "Verb":
+        return _verb_forms_tables(card)
+    return None
+
+
+def has_word_forms(card: VocabCard) -> bool:
+    return word_forms_content(card) is not None
+
+
+def show_word_forms(page: ft.Page, card: VocabCard) -> None:
+    """Beugungsformen der Karte als Dialog (aus den Trainern aufrufbar)."""
+    content = word_forms_content(card)
+    if content is None:
+        page.show_dialog(ft.SnackBar(ft.Text(
+            "Für dieses Wort sind keine Beugungsformen ableitbar.")))
+        return
+    page.show_dialog(ft.AlertDialog(
+        title=ft.Text(card.with_plural(card.front)),
+        content=ft.Container(
+            ft.Column([content], tight=True, scroll=ft.ScrollMode.AUTO),
+            width=420),
+        actions=[ft.IconButton(ft.Icons.CLOSE, tooltip="Schließen",
+                               on_click=lambda e: page.pop_dialog())],
+    ))
 
 
 CHAPTERS = [

@@ -303,14 +303,21 @@ def test_speaker_button_taps_and_toggles(monkeypatch, engine_setter,
     engine_setter(TTS_SYSTEM)
     page = FakePage()
     btn = audio.speaker_button(page, lambda: "ο δρόμος")
-    icon = btn.content.content
-    assert icon.icon == audio.ft.Icons.VOLUME_UP
+    holder = btn.content
+    assert holder.content.icon == audio.ft.Icons.VOLUME_UP
 
+    # Doppeltipp-Fenster aus, damit die schnellen Test-Taps einzeln zählen
+    monkeypatch.setattr(audio, "_slow_tap", -1.0)
     btn.on_tap(None)                 # normal
     btn.on_long_press_start(None)    # umschalten + sofort langsam spielen
-    assert icon.icon == audio.ft.Icons.SLOW_MOTION_VIDEO
+    assert holder.content.value == audio.TURTLE  # Schildkröte = langsam
     btn.on_tap(None)                 # bleibt langsam
     btn.on_long_press_start(None)    # zurück auf normal
-    assert icon.icon == audio.ft.Icons.VOLUME_UP
+    assert holder.content.icon == audio.ft.Icons.VOLUME_UP
 
-    assert [c[2] for c in calls] == [False, True, True, False]
+    # Doppeltipp: zweiter Tipp im Zeitfenster schaltet ebenfalls um
+    monkeypatch.setattr(audio, "_slow_tap", 1000.0)
+    btn.on_tap(None)
+    assert holder.content.value == audio.TURTLE
+
+    assert [c[2] for c in calls] == [False, True, True, False, True]

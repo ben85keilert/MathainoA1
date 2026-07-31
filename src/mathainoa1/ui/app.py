@@ -113,6 +113,43 @@ class Navigator:
         self.page.update()
 
 
+# Kern-Kacheln des Hauptmenüs in Standardreihenfolge: (key, icon, Titel,
+# Untertitel). key ist stabil und wird in AppSettings.menu_order gespeichert.
+CORE_TILES = [
+    ("vokabeln", ft.Icons.STYLE, "Vokabeltraining",
+     "Karteikarten oder Tippen, nach Liste und Worttyp"),
+    ("statistik", ft.Icons.INSIGHTS, "Statistik",
+     "Fortschritt und Problemwörter"),
+    ("nomen", ft.Icons.TABLE_CHART, "Nomentraining",
+     "Nomen deklinieren: Plural, Akkusativ und Genitiv"),
+    ("verben", ft.Icons.SYNC_ALT, "Verbtraining",
+     "Verben im Präsens: vom deutschen Infinitiv zur Form"),
+    ("adjektive", ft.Icons.PALETTE_OUTLINED, "Adjektivtraining",
+     "Adjektiv + Nomen deklinieren — mit eigenen Verbindungen"),
+    ("verwaltung", ft.Icons.EDIT_NOTE, "Vokabelverwaltung",
+     "Eigene Listen anlegen, importieren, exportieren"),
+]
+
+
+def menu_tiles_meta(app_settings) -> list[tuple[str, str, str]]:
+    """(key, Titel, Icon) aller Kacheln in Standardreihenfolge, inkl.
+    eingeschalteter Features — für den Sortier-Editor der Einstellungen."""
+    metas = [(key, title, icon) for key, icon, title, _sub in CORE_TILES]
+    metas += [(f.key, f.title, f.icon)
+              for f in enabled_features(app_settings)]
+    return metas
+
+
+def ordered_menu_keys(default_keys: list[str],
+                      saved: list[str]) -> list[str]:
+    """Gespeicherte Reihenfolge anwenden: unbekannte gespeicherte Keys
+    entfallen, neue (ungespeicherte) Kacheln hängen sich in
+    Standardreihenfolge hinten an."""
+    known = set(default_keys)
+    order = [k for k in saved if k in known]
+    return order + [k for k in default_keys if k not in order]
+
+
 def home_view(nav: Navigator, store: ContentStore, progress: ProgressStore) -> ft.Control:
     def item(icon, title, subtitle, builder=None):
         return ft.Card(
@@ -125,29 +162,26 @@ def home_view(nav: Navigator, store: ContentStore, progress: ProgressStore) -> f
             opacity=1.0 if builder else 0.55,
         )
 
+    builders = {
+        "vokabeln": lambda n: trainer.setup_view(n, store, progress),
+        "statistik": lambda n: stats.stats_view(n, store, progress),
+        "nomen": lambda n: grammar.setup_view(n, store, progress),
+        "verben": lambda n: grammar.conjugation_setup_view(n, store, progress),
+        "adjektive": lambda n: grammar.adjective_setup_view(n, store, progress),
+        "verwaltung": lambda n: manager.manager_view(n, store, progress),
+    }
+
     def build_menu() -> list[ft.Control]:
-        cards = [
-            item(ft.Icons.STYLE, "Vokabeltraining",
-                 "Karteikarten oder Tippen, nach Liste und Worttyp",
-                 lambda n: trainer.setup_view(n, store, progress)),
-            item(ft.Icons.TABLE_CHART, "Nomentraining",
-                 "Nomen und Adjektive: Plural, Akkusativ und Genitiv",
-                 lambda n: grammar.setup_view(n, store, progress)),
-            item(ft.Icons.SYNC_ALT, "Verbtraining",
-                 "Verben im Präsens: vom deutschen Infinitiv zur Form",
-                 lambda n: grammar.conjugation_setup_view(n, store, progress)),
-            item(ft.Icons.EDIT_NOTE, "Vokabelverwaltung",
-                 "Eigene Listen anlegen, importieren, exportieren",
-                 lambda n: manager.manager_view(n, store, progress)),
-            item(ft.Icons.INSIGHTS, "Statistik",
-                 "Fortschritt und Problemwörter",
-                 lambda n: stats.stats_view(n, store, progress)),
-        ]
-        for f in enabled_features(load_app_settings()):
-            cards.append(item(
-                f.icon, f.title, f.subtitle,
-                lambda n, f=f: f.build(n, store, progress)))
-        return cards
+        app = load_app_settings()
+        tiles = {key: item(icon, title, sub, builders[key])
+                 for key, icon, title, sub in CORE_TILES}
+        default_keys = [key for key, _i, _t, _s in CORE_TILES]
+        for f in enabled_features(app):
+            tiles[f.key] = item(f.icon, f.title, f.subtitle,
+                                lambda n, f=f: f.build(n, store, progress))
+            default_keys.append(f.key)
+        return [tiles[k] for k in ordered_menu_keys(default_keys,
+                                                    app.menu_order)]
 
     menu = ft.Column(build_menu(), spacing=8, scroll=ft.ScrollMode.AUTO)
     # Rundes Zahnrad unten rechts öffnet die Einstellungen

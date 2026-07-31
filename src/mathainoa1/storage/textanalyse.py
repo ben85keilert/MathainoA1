@@ -21,7 +21,6 @@ Vorrang.
 
 from __future__ import annotations
 
-import datetime
 import json
 import re
 import uuid
@@ -31,7 +30,6 @@ from pathlib import Path
 from mathainoa1.logic.answer_check import normalize, strip_accents
 from mathainoa1.models import (
     WORD_TYPES,
-    SelectionList,
     VocabCard,
     VocabList,
     parse_forms_text,
@@ -499,20 +497,26 @@ def parse_lexicon_package(text: str) -> tuple[str, list[EtymologyEntry]]:
 
 
 class LexiconStore:
-    """Zentrales Lexikon: eine Datei, wortweiser Merge, plus Sync der
-    globalen Zusatzwörter-Liste und einer Auswahlliste pro Paket."""
+    """Zentrales Lexikon: eine Datei, wortweiser Merge, plus Sync einer
+    Zusatzwörter-Liste je Quellliste („Zusatzwörter – <title>")."""
 
     EXTRA_LIST_NAME = "Lexikon – Zusatzwörter"
+    EXTRA_LIST_PREFIX = "Zusatzwörter – "
 
     def __init__(self, path: Path, content: ContentStore):
         self.path = path
         self.content = content
         self.entries: list[EtymologyEntry] = []
         self.extra_list_id: str = ""
+        # word_keys, deren geerbter Zusatzwort-Verweis gelöst wurde —
+        # sie gelten wieder als "ohne Eintrag" (Gap-Export), bis sie
+        # einen eigenen Lexikon-Eintrag bekommen
+        self.detached: set[str] = set()
 
     def load(self) -> None:
         self.entries = []
         self.extra_list_id = ""
+        self.detached = set()
         try:
             with open(self.path, encoding="utf-8") as f:
                 data = json.load(f)
@@ -524,11 +528,13 @@ class LexiconStore:
                         for e in (data.get("entries") or [])
                         if isinstance(e, dict)]
         self.extra_list_id = str(data.get("extra_list_id", ""))
+        self.detached = {str(k) for k in (data.get("detached") or []) if k}
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         data = {"schema_version": 1,
                 "extra_list_id": self.extra_list_id,
+                "detached": sorted(self.detached),
                 "entries": [e.to_dict() for e in self.entries]}
         with open(self.path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -538,11 +544,11 @@ class LexiconStore:
 
         Statistik-Schlüssel: new/updated (Lexikon-Einträge),
         extra_new/extra_updated (Karten der Zusatzwörter-Liste),
-        selection (Name der erzeugten Auswahlliste oder "").
+        extra_list (Name der befüllten Zusatzwörter-Liste oder "").
         """
         title, new_entries = parse_lexicon_package(text)
         stats = {"new": 0, "updated": 0,
-                 "extra_new": 0, "extra_updated": 0, "selection": ""}
+                 "extra_new": 0, "extra_updated": 0, "extra_list": ""}
         by_key = {word_key(e.word): i for i, e in enumerate(self.entries)}
         for entry in new_entries:
             key = word_key(entry.word)
@@ -556,26 +562,40 @@ class LexiconStore:
             else:
                 self.entries[pos] = entry  # Nachbessern: Eintrag ersetzen
                 stats["updated"] += 1
-        card_ids = self._sync_extra_list(new_entries, stats)
-        if card_ids:
-            name = (f"Lexikon: {title}" if title else
-                    f"Lexikon-Paket {datetime.date.today().isoformat()}")
-            self.content.save_selection(
-                SelectionList(name=name, card_ids=card_ids))
-            stats["selection"] = name
+        self._sync_extra_list(new_entries, stats, title)
         self.save()
         invalidate_cache()
         return stats
 
+    def _extra_list_for(self, title: str) -> VocabList:
+        """Zielliste der Zusatzwörter eines Pakets.
+
+        Mit Titel (= Name der Quellliste aus dem Gap-Export): eigene
+        Liste „Zusatzwörter – <title>", per Name gesucht — so bleiben
+        die Zusatzwörter kapitelweise überschaubar. Ohne Titel: die
+        bisherige globale Liste (Alt-Pakete), per gespeicherter id.
+        """
+        if title:
+            name = self.EXTRA_LIST_PREFIX + title
+            for vlist in self.content.lists.values():
+                if vlist.editable and vlist.name == name:
+                    return vlist
+            return VocabList(name=name)
+        vlist = self.content.lists.get(self.extra_list_id)
+        if vlist is not None and vlist.editable:
+            return vlist
+        vlist = VocabList(name=self.EXTRA_LIST_NAME)
+        self.extra_list_id = vlist.id
+        return vlist
+
     def _sync_extra_list(self, new_entries: list[EtymologyEntry],
-                         stats: dict) -> list[str]:
-        """Zusatzwörter des Pakets in die globale Liste einpflegen.
+                         stats: dict, title: str = "") -> None:
+        """Zusatzwörter des Pakets in ihre Liste einpflegen.
 
         Additiv (nie löschen), gebündelt in Paket-Reihenfolge, dedupliziert
         gegen Ursprungswörter und Bestand; gematchte Karten behalten ihre
         id (Lernstand). Anders als sync_vocab_lists wird der Listenname
         nicht überschrieben — Umbenennungen des Nutzers bleiben.
-        Rückgabe: Karten-IDs dieses Pakets (für die Auswahlliste).
         """
         seen = {word_key(e.word) for e in new_entries}
         cards: list[VocabCard] = []
@@ -590,29 +610,41 @@ class LexiconStore:
                 seen.add(key)
                 cards.append(card)
         if not cards:
-            return []
-        vlist = self.content.lists.get(self.extra_list_id)
-        if vlist is not None and not vlist.editable:
-            vlist = None
-        if vlist is None:  # noch nie erzeugt oder vom Nutzer gelöscht
-            vlist = VocabList(name=self.EXTRA_LIST_NAME)
-            self.extra_list_id = vlist.id
+            return
+        vlist = self._extra_list_for(title)
         existing: dict[str, VocabCard] = {}
         for c in vlist.cards:
             existing.setdefault(word_key(c.front), c)
-        card_ids: list[str] = []
         for card in cards:
             old = existing.get(word_key(card.front))
             if old is not None:
                 if _copy_card_fields(card, old):
                     stats["extra_updated"] += 1
-                card_ids.append(old.id)
             else:
                 vlist.cards.append(card)
                 stats["extra_new"] += 1
-                card_ids.append(card.id)
         self.content.save_user_list(vlist)
-        return card_ids
+        stats["extra_list"] = vlist.name
+
+    def detach_words(self, words: list[str]) -> int:
+        """Geerbte Zusatzwort-Verweise dieser Wörter lösen.
+
+        Die Wörter zeigen danach keinen ⓘ mehr und erscheinen wieder im
+        Export fehlender Wort-Infos. Ein späterer eigener Lexikon-Eintrag
+        gewinnt ohnehin — die Sperre betrifft nur geerbte Verweise.
+        Rückgabe: Anzahl neu gelöster Verknüpfungen.
+        """
+        head = {word_key(e.word) for e in self.entries}
+        added = 0
+        for w in words:
+            key = word_key(w)
+            if key and key not in head and key not in self.detached:
+                self.detached.add(key)
+                added += 1
+        if added:
+            self.save()
+            invalidate_cache()
+        return added
 
     def delete_entry(self, word: str) -> bool:
         """Eintrag entfernen; die Zusatzwörter-Liste bleibt unberührt
@@ -658,7 +690,31 @@ def feature_enabled() -> bool:
 
 
 def _build_index() -> dict[str, EtymologyEntry]:
+    # Lexikon-Datei vorab lesen: die gelösten Verknüpfungen (detached)
+    # gelten für alle Quellen, auch für Alt-Analysen
+    try:
+        with open(lexicon_path(), encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        data = None
+    detached: set[str] = set()
+    if isinstance(data, dict):
+        detached = {str(k) for k in (data.get("detached") or []) if k}
+
     index: dict[str, EtymologyEntry] = {}
+
+    def add(entry: EtymologyEntry) -> None:
+        key = word_key(entry.word)
+        if key:
+            index[key] = entry
+        # Zusatzwörter (Kognaten/Synonyme) zeigen auf den Eintrag ihres
+        # Ursprungsworts — außer die Verknüpfung wurde gelöst; ein
+        # eigener Haupteintrag (oben) gewinnt immer
+        for v in entry.extra_vocab:
+            extra_key = word_key(str(v.get("front", "")))
+            if extra_key and extra_key not in detached:
+                index.setdefault(extra_key, entry)
+
     directory = analyses_dir()
     for p in sorted(directory.glob("*.json")) if directory.exists() else []:
         try:
@@ -667,33 +723,12 @@ def _build_index() -> dict[str, EtymologyEntry]:
         except (json.JSONDecodeError, OSError):
             continue
         for entry in analysis.etymology:
-            key = word_key(entry.word)
-            if key:
-                index[key] = entry
-            # Zusatzwörter (Kognaten/Synonyme) zeigen auf den Eintrag
-            # ihres Analyseworts — so hat auch die Etymologie-Liste Infos
-            for v in entry.extra_vocab:
-                extra_key = word_key(str(v.get("front", "")))
-                if extra_key:
-                    index.setdefault(extra_key, entry)
+            add(entry)
     # Lexikon zuletzt: die gepflegte Quelle überschreibt Alt-Analysen
-    try:
-        with open(lexicon_path(), encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        data = None
     if isinstance(data, dict):
         for raw in data.get("entries") or []:
-            if not isinstance(raw, dict):
-                continue
-            entry = EtymologyEntry.from_dict(raw)
-            key = word_key(entry.word)
-            if key:
-                index[key] = entry
-            for v in entry.extra_vocab:
-                extra_key = word_key(str(v.get("front", "")))
-                if extra_key:
-                    index.setdefault(extra_key, entry)
+            if isinstance(raw, dict):
+                add(EtymologyEntry.from_dict(raw))
     return index
 
 

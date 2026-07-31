@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 
 import flet as ft
 
@@ -203,7 +204,11 @@ def maybe_autoplay(page: ft.Page, text: str) -> None:
 
 _slow_mode: bool = False
 
-SPEAKER_TOOLTIP = "Anhören — lang drücken: langsam an/aus"
+SPEAKER_TOOLTIP = "Anhören — Doppeltipp oder lang drücken: langsam an/aus"
+
+# Schildkröte = langsame Wiedergabe (zum Nachsprechen); es gibt kein
+# passendes Material-Icon, daher als Emoji-Text in Buttons/Symbolen
+TURTLE = "🐢"
 
 
 def slow_mode() -> bool:
@@ -219,36 +224,59 @@ def toggle_slow_mode(page: ft.Page) -> bool:
     return _slow_mode
 
 
-def speaker_button(page: ft.Page, text_provider,
+def speaker_button(page: ft.Page | None, text_provider,
                    long_text: bool = False,
-                   icon_size: int | None = None) -> ft.GestureDetector:
+                   icon_size: int | None = None,
+                   icon_color: str | None = None) -> ft.GestureDetector:
     """Einheitlicher Lautsprecher: Tippen = anhören im aktuellen Tempo,
-    Gedrückthalten = Langsam-Modus umschalten und sofort im neuen Tempo
-    abspielen (hörbares Feedback).
+    Gedrückthalten ODER Doppeltipp (Zeitfenster in den Einstellungen) =
+    Langsam-Modus umschalten und sofort im neuen Tempo abspielen
+    (hörbares Feedback). Im Langsam-Modus wird das Symbol zur
+    Schildkröte 🐢.
 
     text_provider ist eine Funktion, damit der Text zur Abspielzeit
     aktuell ist (Trainer wechselt die Karte unter dem Button weg). Das
-    Icon zeigt den Modus beim Aufbau und nach eigenem Umschalten; andere,
-    bereits gebaute Lautsprecher färben sich nicht mit um — dafür gibt es
-    die SnackBar von toggle_slow_mode.
+    Symbol zeigt den Modus beim Aufbau und nach eigenem Umschalten;
+    andere, bereits gebaute Lautsprecher wechseln nicht mit um — dafür
+    gibt es die SnackBar von toggle_slow_mode.
+
+    page darf None sein (Listenzeilen, die vor dem Einhängen gebaut
+    werden) — die Seite kommt zur Event-Zeit aus e.control.page.
     """
     play = play_long_text if long_text else play_text
-    icon = ft.Icon(
-        ft.Icons.SLOW_MOTION_VIDEO if _slow_mode else ft.Icons.VOLUME_UP,
-        size=icon_size, color=ft.Colors.PRIMARY if _slow_mode else None)
 
-    def on_long(e):
-        slow = toggle_slow_mode(page)
-        icon.icon = (ft.Icons.SLOW_MOTION_VIDEO if slow
-                     else ft.Icons.VOLUME_UP)
-        icon.color = ft.Colors.PRIMARY if slow else None
-        play(page, text_provider())
-        page.update()
+    def symbol() -> ft.Control:
+        if _slow_mode:
+            return ft.Text(TURTLE, size=icon_size or 20)
+        return ft.Icon(ft.Icons.VOLUME_UP, size=icon_size, color=icon_color)
+
+    holder = ft.Container(symbol(), padding=8, tooltip=SPEAKER_TOOLTIP)
+    last_tap = {"t": 0.0}
+
+    def event_page(e) -> ft.Page | None:
+        ctl = getattr(e, "control", None)
+        return (ctl.page if ctl is not None else None) or page
+
+    def toggle(e):
+        pg = event_page(e)
+        toggle_slow_mode(pg)
+        holder.content = symbol()
+        play(pg, text_provider())
+        pg.update()
+
+    def on_tap(e):
+        now = time.monotonic()
+        if now - last_tap["t"] <= slow_tap_seconds():
+            last_tap["t"] = 0.0
+            toggle(e)
+        else:
+            last_tap["t"] = now
+            play(event_page(e), text_provider())
 
     return ft.GestureDetector(
-        content=ft.Container(icon, padding=8, tooltip=SPEAKER_TOOLTIP),
-        on_tap=lambda e: play(page, text_provider()),
-        on_long_press_start=on_long,
+        content=holder,
+        on_tap=on_tap,
+        on_long_press_start=toggle,
     )
 
 
@@ -256,6 +284,7 @@ def speaker_button(page: ft.Page, text_provider,
 
 _autoplay: bool | None = None
 _engine: str | None = None
+_slow_tap: float | None = None
 
 
 def autoplay_enabled() -> bool:
@@ -285,6 +314,21 @@ def set_tts_engine(value: str) -> None:
     _engine = value
     s = load_app_settings()
     s.tts_engine = value
+    save_app_settings(s)
+
+
+def slow_tap_seconds() -> float:
+    global _slow_tap
+    if _slow_tap is None:
+        _slow_tap = load_app_settings().slow_double_tap_seconds
+    return _slow_tap
+
+
+def set_slow_tap_seconds(value: float) -> None:
+    global _slow_tap
+    _slow_tap = value
+    s = load_app_settings()
+    s.slow_double_tap_seconds = value
     save_app_settings(s)
 
 

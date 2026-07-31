@@ -49,6 +49,44 @@ def strip_accents(s: str) -> str:
     return unicodedata.normalize("NFC", stripped).replace("ς", "σ")
 
 
+def _strip_accents_keep_sigma(s: str) -> str:
+    """Wie strip_accents, aber ohne die ς→σ-Faltung — für almost_kind."""
+    decomposed = unicodedata.normalize("NFD", s)
+    stripped = "".join(c for c in decomposed if not unicodedata.combining(c))
+    return unicodedata.normalize("NFC", stripped)
+
+
+def almost_kind(expected: str, given: str) -> str:
+    """Worin liegt der Fehler eines ALMOST: "accent", "sigma" oder "both".
+
+    Vergleicht die Antwort gegen alle Alternativen/Varianten der Vorgabe:
+    stimmt sie bei erhaltenem Sigma (nur Akzente gestrichen), ist es ein
+    reiner Akzentfehler; stimmt sie bei erhaltenen Akzenten (nur ς→σ
+    gefaltet), ein reiner Schluss-Sigma-Fehler — sonst beides.
+    """
+    # dieselbe Varianten-Pipeline wie check_greek: [a/b]-Gruppen,
+    # "/"-Alternativen, optionale Klammern — und dieselbe Normalisierung
+    forms: list[str] = []
+    for bv in bracket_variants(expected):
+        alts = ([a for a in (p.strip() for p in bv.split("/")) if a]
+                if "/" in bv else [bv])
+        for alt in alts:
+            forms += greek_variants(alt)
+    giv = _drop_commas(_strip_punct(normalize(given)))
+    accent_only = sigma_only = False
+    for variant in forms:
+        exp = _drop_commas(_strip_punct(normalize(variant)))
+        if _strip_accents_keep_sigma(exp) == _strip_accents_keep_sigma(giv):
+            accent_only = True
+        if exp.replace("ς", "σ") == giv.replace("ς", "σ"):
+            sigma_only = True
+    if accent_only and not sigma_only:
+        return "accent"
+    if sigma_only and not accent_only:
+        return "sigma"
+    return "both"
+
+
 _PUNCT = ";·!?.,…"
 
 

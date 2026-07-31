@@ -106,6 +106,26 @@ class ProgressStore:
             p.streak = 0
         p.last_seen = now
         p.due = now + timedelta(days=BOX_INTERVALS[p.box])
+        self._save(p)
+        return p
+
+    def restore_box(self, card_id: str, box: int,
+                    now: datetime | None = None) -> CardProgress | None:
+        """Box nach richtiger Antwort in der Fehlerrunde wiederherstellen.
+
+        Macht den Box-1-Reset eines Leichtsinnsfehlers rückgängig (Zähler
+        und Streak bleiben unverändert — der Fehler zählt weiterhin)."""
+        p = self.get(card_id)
+        if p is None:
+            return None
+        now = now or datetime.now()
+        p.box = max(p.box, min(box, MAX_BOX))
+        p.last_seen = now
+        p.due = now + timedelta(days=BOX_INTERVALS[p.box])
+        self._save(p)
+        return p
+
+    def _save(self, p: CardProgress) -> None:
         self.conn.execute(
             """INSERT INTO card_progress
                (card_id, box, correct, wrong, streak, last_seen, due)
@@ -117,7 +137,6 @@ class ProgressStore:
              p.last_seen.isoformat(), p.due.isoformat()),
         )
         self.conn.commit()
-        return p
 
     def _row_to_progress(self, row) -> CardProgress:
         return CardProgress(

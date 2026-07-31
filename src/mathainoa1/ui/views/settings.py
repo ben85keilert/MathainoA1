@@ -19,7 +19,7 @@ from mathainoa1.storage.settings import (
     load_app_settings,
     save_app_settings,
 )
-from mathainoa1.ui.audio import set_tts_engine
+from mathainoa1.ui.audio import set_slow_tap_seconds, set_tts_engine
 from mathainoa1.ui.features import FEATURES
 
 # Auswählbare Akzentfarben (Schlüssel wird in AppSettings.seed gespeichert)
@@ -88,6 +88,30 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
 
     dd_color.on_select = on_color  # Flet 0.85: Dropdowns feuern on_select
 
+    # --- Ansicht: Reihenfolge der Hauptmenü-Kacheln (Drag & Drop) ---
+    # Lazy-Import: app importiert dieses Modul (Importzirkel)
+    from mathainoa1.ui.app import menu_tiles_meta, ordered_menu_keys
+    from mathainoa1.ui.views.wordlist import drag_row
+    tile_meta = {k: (title, icon) for k, title, icon in menu_tiles_meta(s)}
+    menu_keys = ordered_menu_keys(list(tile_meta), s.menu_order)
+    menu_list = ft.ReorderableListView(show_default_drag_handles=False)
+
+    def rebuild_menu_rows():
+        menu_list.controls = [
+            drag_row(ft.Row([ft.Icon(tile_meta[k][1], size=20),
+                             ft.Text(tile_meta[k][0])], spacing=8))
+            for k in menu_keys]
+
+    def on_menu_reorder(e):
+        menu_keys.insert(e.new_index, menu_keys.pop(e.old_index))
+        s.menu_order = list(menu_keys)
+        save_app_settings(s)
+        rebuild_menu_rows()
+        page.update()
+
+    menu_list.on_reorder = on_menu_reorder
+    rebuild_menu_rows()
+
     # --- Abfrage: Box-Reset bei strengen Fehlern ---
     sw_accent = ft.Switch(
         label="Akzentfehler setzt die Box zurück (auf Box 1)",
@@ -136,6 +160,40 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
         save_app_settings(s)
 
     sw_check.on_change = on_check
+
+    # --- Abfrage: Fehlerrunde und Leitner-Box ---
+    rg_repeat = ft.RadioGroup(
+        value=(s.repeat_round_promotion
+               if s.repeat_round_promotion in ("off", "on", "auto") else "off"),
+        content=ft.Column([
+            ft.Radio(value="off", label="Keine Verbesserung (Standard)"),
+            ft.Radio(value="on", label="Verbesserung möglich"),
+            ft.Radio(value="auto",
+                     label="Automatisch: nur wenn keine neuen Wörter dabei sind"),
+        ], spacing=4),
+    )
+
+    def on_repeat(e):
+        s.repeat_round_promotion = rg_repeat.value or "off"
+        save_app_settings(s)
+
+    rg_repeat.on_change = on_repeat
+
+    # --- Sprachausgabe: Doppeltipp-Zeit für langsames Abspielen ---
+    dd_tap = ft.Dropdown(
+        label="Doppeltipp-Zeitfenster (langsam abspielen)",
+        value=f"{s.slow_double_tap_seconds:g}",
+        options=[ft.DropdownOption(key=v, text=f"{v} Sekunden")
+                 for v in ("0.3", "0.5", "0.8", "1")],
+    )
+
+    def on_tap_time(e):
+        try:
+            set_slow_tap_seconds(float(dd_tap.value))
+        except (TypeError, ValueError):
+            pass
+
+    dd_tap.on_select = on_tap_time  # Flet 0.85: Dropdowns feuern on_select
 
     # --- Sprachausgabe: Weg wählen ---
     rg_tts = ft.RadioGroup(
@@ -339,6 +397,11 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
             ft.Text("Design", size=13),
             seg_theme,
             dd_color,
+            ft.Text("Hauptmenü-Reihenfolge", size=13),
+            ft.Text("Kacheln am ≡ ziehen — die Startseite übernimmt die "
+                    "neue Reihenfolge sofort.", size=13, italic=True),
+            ft.Container(menu_list,
+                         height=min(480, 60 * max(1, len(menu_keys)))),
             ft.Divider(),
             _h("Abfrage"),
             ft.Text("Greift nur, wenn beim Training „Akzentfehler tolerieren“ "
@@ -361,8 +424,23 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
                     "eingeblendeter Tastatur).", size=13, italic=True),
             sw_check,
             ft.Divider(),
+            ft.Text("Fehlerrunde", size=13),
+            ft.Text("Ein Fehler setzt die Box auf 1. Hier lässt sich "
+                    "einstellen, ob ein in der Fehlerrunde richtig "
+                    "beantwortetes Wort seine alte Box zurückbekommt — "
+                    "Leichtsinnsfehler werden so weniger hart bestraft. "
+                    "„Automatisch“ erlaubt das nur, wenn die Runde keine "
+                    "neuen (untrainierten) Wörter enthält.",
+                    size=13, italic=True),
+            rg_repeat,
+            ft.Divider(),
             _h("Sprachausgabe"),
             rg_tts,
+            ft.Text("Doppeltipp auf einen Lautsprecher (oder langes "
+                    "Drücken) schaltet die langsame Wiedergabe an/aus — "
+                    "das Symbol wird dann zur Schildkröte 🐢.",
+                    size=13, italic=True),
+            dd_tap,
             *backup_rows,
             ft.Divider(),
             _h("Erweiterte Funktionen"),

@@ -48,6 +48,17 @@ class AppSettings:
     # Eingeschaltete erweiterte Funktionen (Schlüssel aus ui/features.FEATURES).
     # Unbekannte Schlüssel (z.B. entfernte Features) werden ignoriert.
     enabled_features: list[str] = field(default_factory=list)
+    # Fehlerrunde: darf eine richtige Antwort die alte Box wiederherstellen?
+    # "off" = nie (Standard), "on" = immer, "auto" = nur wenn keine neuen
+    # Wörter in der Runde sind (Liste schon einmal durchgearbeitet)
+    repeat_round_promotion: str = "off"
+    # Doppeltipp-Fenster (Sekunden) für "langsam abspielen" auf dem
+    # Lautsprecher der Wortlisten (zusätzlich zum langen Drücken)
+    slow_double_tap_seconds: float = 0.5
+    # Reihenfolge der Hauptmenü-Kacheln (Keys aus ui/app.CORE_TILES bzw.
+    # Feature-Keys); leer = Standardreihenfolge. Unbekannte Keys werden
+    # ignoriert, fehlende hängen sich hinten an.
+    menu_order: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -124,6 +135,26 @@ def load_declension_settings() -> DeclensionSettings:
 
 def save_declension_settings(settings: DeclensionSettings) -> None:
     path = app_data_dir() / "declension_settings.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(settings.to_dict(), f, ensure_ascii=False, indent=2)
+
+
+def load_adjective_settings() -> DeclensionSettings:
+    """Defaults des Adjektivtrainings (eigene Datei, gleiches Schema wie
+    die Deklinations-Einstellungen)."""
+    path = app_data_dir() / "adjective_settings.json"
+    if path.exists():
+        try:
+            with open(path, encoding="utf-8") as f:
+                return DeclensionSettings.from_dict(json.load(f))
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+    return DeclensionSettings()
+
+
+def save_adjective_settings(settings: DeclensionSettings) -> None:
+    path = app_data_dir() / "adjective_settings.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(settings.to_dict(), f, ensure_ascii=False, indent=2)

@@ -88,26 +88,30 @@ def test_parse_package_errors():
 
 # --- Merge & Listen ---------------------------------------------------------
 
+def _list_named(store, name):
+    return next((l for l in store.lists.values() if l.name == name), None)
+
+
 def test_import_merges_entries_and_builds_lists(env):
     store, lex = env
     stats = _import(lex)
     assert stats["new"] == 2 and stats["updated"] == 0
-    # Zusatzliste: Ursprungswörter ausgefiltert, Bündelreihenfolge
-    vlist = store.lists[lex.extra_list_id]
-    assert vlist.name == "Lexikon – Zusatzwörter"
+    # Zusatzliste je Quellliste (title): Ursprungswörter ausgefiltert,
+    # Bündelreihenfolge
+    vlist = _list_named(store, "Zusatzwörter – Alltag 1")
+    assert vlist is not None
     assert [c.front for c in vlist.cards] == ["η δόνηση", "το γράμμα"]
     assert stats["extra_new"] == 2
-    # pro Paket eine Auswahlliste mit Referenzen auf genau diese Karten
-    sel = next(iter(store.selections.values()))
-    assert sel.name == "Lexikon: Alltag 1"
-    assert sel.card_ids == [c.id for c in vlist.cards]
-    assert stats["selection"] == sel.name
+    assert stats["extra_list"] == "Zusatzwörter – Alltag 1"
+    # keine automatische Auswahlliste mehr (Menü-Übersichtlichkeit)
+    assert not store.selections
 
 
 def test_reimport_replaces_entry_and_keeps_card_ids(env):
     store, lex = env
     _import(lex)
-    old_ids = [c.id for c in store.lists[lex.extra_list_id].cards]
+    vlist = _list_named(store, "Zusatzwörter – Alltag 1")
+    old_ids = [c.id for c in vlist.cards]
     fixed = json.loads(json.dumps(PACKAGE))
     fixed["etymology"][0]["total"] = "korrigiert"
     fixed["etymology"][0]["extra_vocab"][0]["back"] = "Vibration"
@@ -116,38 +120,49 @@ def test_reimport_replaces_entry_and_keeps_card_ids(env):
     assert stats["new"] == 0 and stats["updated"] == 2
     assert len(lex.entries) == 2
     assert lex.entries[0].total == "korrigiert"
-    vlist = store.lists[lex.extra_list_id]
-    # additiv: keine Karte verloren, IDs (Lernstand) erhalten
+    vlist = _list_named(store, "Zusatzwörter – Alltag 1")
+    # additiv: keine Karte verloren, IDs (Lernstand) erhalten,
+    # keine zweite Liste gleichen Namens
     assert [c.id for c in vlist.cards] == old_ids
     assert vlist.cards[0].back == "Vibration"
     assert stats["extra_updated"] == 1 and stats["extra_new"] == 0
+    assert sum(1 for l in store.lists.values()
+               if l.name == "Zusatzwörter – Alltag 1") == 1
 
 
 def test_import_survives_deleted_extra_list(env):
     store, lex = env
     _import(lex)
-    store.delete_user_list(lex.extra_list_id)
+    store.delete_user_list(_list_named(store, "Zusatzwörter – Alltag 1").id)
     stats = _import(lex)
     assert stats["extra_new"] == 2
-    assert store.lists[lex.extra_list_id].name == "Lexikon – Zusatzwörter"
+    assert _list_named(store, "Zusatzwörter – Alltag 1") is not None
 
 
-def test_extra_list_rename_survives_reimport(env):
+def test_untitled_package_uses_global_list(env):
+    # Alt-Pakete ohne title: Fallback auf die globale Liste per id —
+    # Umbenennungen überleben dort weiterhin
     store, lex = env
-    _import(lex)
+    untitled = json.loads(json.dumps(PACKAGE))
+    del untitled["title"]
+    stats = _import(lex, untitled)
     vlist = store.lists[lex.extra_list_id]
+    assert vlist.name == "Lexikon – Zusatzwörter"
+    assert stats["extra_list"] == vlist.name
     vlist.name = "Meine Bonuswörter"
     store.save_user_list(vlist)
-    _import(lex)
+    _import(lex, untitled)
     assert store.lists[lex.extra_list_id].name == "Meine Bonuswörter"
 
 
 def test_lexicon_roundtrip(env):
     store, lex = env
     _import(lex)
+    lex.detach_words(["η δόνηση"])
     fresh = ta.lexicon_store(store)
     assert [e.word for e in fresh.entries] == ["ο σεισμός", "γράφω"]
     assert fresh.extra_list_id == lex.extra_list_id
+    assert fresh.detached == lex.detached != set()
 
 
 def test_delete_entry(env):
@@ -202,3 +217,34 @@ def test_missing_cards(env):
     extra = VocabCard(front="η δόνηση", back="Erschütterung")
     gap = VocabCard(front="το ψωμί", back="Brot")
     assert ta.missing_cards([covered, extra, gap]) == [gap]
+
+
+# --- Verknüpfung lösen (detach) ----------------------------------------------
+
+def test_detach_breaks_inherited_link_only(env):
+    _store, lex = env
+    _import(lex)
+    _enable(ta.LEXIKON_KEY)
+    extra = VocabCard(front="η δόνηση", back="Erschütterung")
+    head = VocabCard(front="ο σεισμός", back="Erdbeben")
+    assert ta.etymology_for(extra) is not None
+    # Hauptwörter lassen sich nicht lösen (eigener Eintrag gewinnt eh)
+    assert lex.detach_words([head.front]) == 0
+    assert lex.detach_words([extra.front]) == 1
+    assert lex.detach_words([extra.front]) == 0  # schon gelöst
+    assert ta.etymology_for(extra) is None
+    assert ta.etymology_for(head) is not None
+    # gelöst = wieder Lücke im Gap-Export
+    assert ta.missing_cards([head, extra]) == [extra]
+
+
+def test_own_entry_wins_despite_detach(env):
+    _store, lex = env
+    _import(lex)
+    lex.detach_words(["η δόνηση"])
+    _enable(ta.LEXIKON_KEY)
+    followup = {"title": "Alltag 2", "etymology": [
+        {"word": "η δόνηση", "total": "eigener Eintrag"}]}
+    _import(lex, followup)
+    entry = ta.etymology_for(VocabCard(front="η δόνηση", back="x"))
+    assert entry is not None and entry.total == "eigener Eintrag"

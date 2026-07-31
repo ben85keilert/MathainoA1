@@ -171,19 +171,24 @@ class SelectionList:
     """Auswahlliste: reine Referenz auf Karten bestehender Listen (per ID).
 
     Fortschritt/Statistik laufen über die referenzierten Karten weiter.
+    kind: "words" = normale Auswahlliste; "adjektive" = Trainingsliste des
+    Adjektivtrainings (erscheint nur dort, nicht in den übrigen Menüs).
     """
 
     name: str
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     card_ids: list[str] = field(default_factory=list)
+    kind: str = "words"
 
     def to_dict(self) -> dict:
-        return {"id": self.id, "name": self.name, "card_ids": self.card_ids}
+        return {"id": self.id, "name": self.name,
+                "card_ids": self.card_ids, "kind": self.kind}
 
     @classmethod
     def from_dict(cls, d: dict) -> "SelectionList":
         return cls(name=d["name"], id=d.get("id", uuid.uuid4().hex[:12]),
-                   card_ids=list(d.get("card_ids", [])))
+                   card_ids=list(d.get("card_ids", [])),
+                   kind=d.get("kind", "words"))
 
 
 @dataclass

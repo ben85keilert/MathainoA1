@@ -95,11 +95,15 @@ def _lexikon_menu_items(page: ft.Page, store: ContentStore, name: str,
             return
         csv_text = content.export_csv_columns(
             missing, ["front", "back", "article", "word_type"])
+        # Quellliste in der ersten Zeile mitliefern: der Chatbot übernimmt
+        # sie als "title", der Import bündelt die Zusatzwörter dann in
+        # der Liste „Zusatzwörter – <Name>"
+        export_text = f"Liste: {name}\n{csv_text}"
         plaintext_dialog(
             page,
             f"Fehlende Wort-Infos — {name} "
             f"({len(missing)} von {len(cards)} ohne Eintrag)",
-            csv_text)
+            export_text)
 
     def import_infos(e):
         from mathainoa1.ui.views.lexikon import open_import_dialog
@@ -1136,6 +1140,14 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
         noun_section.visible = wt == "Nomen" or other
         verb_section.visible = wt == "Verb" or other
         adj_section.visible = wt == "Adjektiv" or other
+        # Reine A2-Felder auf Stufe A1 ausblenden — außer sie sind schon
+        # gefüllt (vorhandene Daten sollen sichtbar/editierbar bleiben).
+        # Beim Speichern bleiben ausgeblendete Werte erhalten.
+        a2 = load_app_settings().level == "A2"
+        tf_aorist_passive.visible = a2 or bool(
+            (tf_aorist_passive.value or "").strip())
+        tf_participle.visible = a2 or bool(
+            (tf_participle.value or "").strip())
         page.update()
 
     def on_article_select(e=None):
@@ -1362,11 +1374,14 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         """
         w = getattr(page, "width", None) or 420
         first_w = max(120, 0.30 * w)
-        cols = [("Deutsch", 150), ("Plural", 90), ("Artikel", 70),
-                ("Typ", 100), ("Formen", 170), ("2. Stamm", 110),
-                ("Aorist Passiv", 110), ("Partizip", 110),
-                ("Hinweis GR", 130), ("Hinweis DE", 130),
-                ("Notiz GR", 130), ("Notiz DE", 130)]
+        # Reine A2-Spalten nur auf Stufe A2 zeigen (values() unten
+        # muss dieselbe Reihenfolge liefern)
+        a2 = load_app_settings().level == "A2"
+        cols = ([("Deutsch", 150), ("Plural", 90), ("Artikel", 70),
+                 ("Typ", 100), ("Formen", 170), ("2. Stamm", 110)]
+                + ([("Aorist Passiv", 110), ("Partizip", 110)] if a2 else [])
+                + [("Hinweis GR", 130), ("Hinweis DE", 130),
+                   ("Notiz GR", 130), ("Notiz DE", 130)])
         max_k = len(cols) - 1
         k = min(max(view_state.get("col_offset", 0), 0), max_k)
         view_state["col_offset"] = k
@@ -1425,10 +1440,10 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         )
 
         def values(c: VocabCard) -> tuple:
-            return (c.back, c.plural, c.article or "", c.word_type,
-                    forms_to_text(c.forms), c.stem2,
-                    c.aorist_passive, c.participle,
-                    c.hints_gr, c.hints_de, c.notes_gr, c.notes_de)
+            return ((c.back, c.plural, c.article or "", c.word_type,
+                     forms_to_text(c.forms), c.stem2)
+                    + ((c.aorist_passive, c.participle) if a2 else ())
+                    + (c.hints_gr, c.hints_de, c.notes_gr, c.notes_de))
 
         rows = []
         for i, c in enumerate(shown_cards()):
@@ -1742,7 +1757,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
               "wird das Audio neu erzeugt.")
 
     def add_to_selection_selected(e):
-        sels = sorted(store.selections.values(), key=lambda x: x.name)
+        sels = store.selections_of()
         NEW = "__new__"
         dd = ft.Dropdown(
             label="Auswahlliste",
@@ -1791,6 +1806,28 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
                      ft.FilledButton("Hinzufügen", on_click=ok)],
         ))
 
+    def detach_lexikon_selected(e):
+        # Geerbte Wort-Info-Verweise lösen: Karten, deren ⓘ auf den
+        # Eintrag eines ANDEREN Worts zeigt (Zusatzwörter), gelten danach
+        # wieder als "ohne Eintrag" und erscheinen im Gap-Export —
+        # so lässt sich ein eigener Eintrag anfordern. Echte eigene
+        # Einträge bleiben unberührt.
+        eligible = []
+        for c in selected_cards():
+            entry = textanalyse.etymology_for(c)
+            if (entry is not None and textanalyse.word_key(c.front)
+                    != textanalyse.word_key(entry.word)):
+                eligible.append(c.front)
+        if not eligible:
+            snack("Keine geerbten Wort-Info-Verknüpfungen in der "
+                  "Markierung (eigene Einträge werden nicht gelöst).")
+            return
+        lex = textanalyse.lexicon_store(store)
+        n = lex.detach_words(eligible)
+        snack(f"{n} Verknüpfung(en) gelöst — die Wörter erscheinen "
+              "wieder unter „Fehlende Wort-Infos exportieren“.")
+        refresh()
+
     def select_action_bar() -> ft.Control:
         none = not selected
 
@@ -1807,6 +1844,10 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
               if google_audio() else []),
             act_btn(ft.Icons.CONTENT_COPY, "In andere Liste kopieren…",
                     copy_selected),
+            *([act_btn(ft.Icons.LINK_OFF,
+                       "Wort-Info-Verknüpfung lösen",
+                       detach_lexikon_selected)]
+              if textanalyse.feature_enabled() else []),
         ]
         if vlist.editable:
             buttons += [

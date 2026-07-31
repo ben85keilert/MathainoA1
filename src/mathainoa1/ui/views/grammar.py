@@ -18,7 +18,7 @@ import flet as ft
 
 from mathainoa1.logic import conjugation as conj
 from mathainoa1.logic import declension as decl
-from mathainoa1.logic.answer_check import Result
+from mathainoa1.logic.answer_check import Result, almost_kind, check_greek
 from mathainoa1.logic.conjugation import ConjugationSettings
 from mathainoa1.logic.declension import (
     CASE_NAMES,
@@ -26,17 +26,32 @@ from mathainoa1.logic.declension import (
     DeclensionSession,
     DeclensionSettings,
 )
+from mathainoa1.models import SelectionList
+from mathainoa1.storage.adjective_combos import (
+    combo_key,
+    load_pairs,
+    prune_pairs,
+    save_pairs,
+)
 from mathainoa1.storage.content import ContentStore, filter_level
 from mathainoa1.storage.progress import ProgressStore
 from mathainoa1.storage.settings import (
+    load_adjective_settings,
     load_app_settings,
     load_conjugation_settings,
     load_declension_settings,
+    save_adjective_settings,
     save_conjugation_settings,
     save_declension_settings,
 )
 from mathainoa1.ui.audio import autoplay_button, maybe_autoplay, speaker_button
-from mathainoa1.ui.views.trainer import typing_controls
+from mathainoa1.storage.textanalyse import etymology_for
+from mathainoa1.ui.views.reference import has_word_forms, show_word_forms
+from mathainoa1.ui.views.trainer import (
+    almost_feedback,
+    edit_notes_dialog,
+    typing_controls,
+)
 
 
 def _make_session(tasks, settings, on_result=None) -> DeclensionSession:
@@ -170,7 +185,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         sorted(store.lists.values(),
                key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
         load_app_settings().level)
-    selections = sorted(store.selections.values(), key=lambda x: x.name)
+    selections = store.selections_of()
     if not lists:
         return ft.Text("Keine Vokabellisten gefunden.")
     valid_ids = {l.id for l in lists} | {x.id for x in selections}
@@ -230,8 +245,6 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         label="Aufgabenanzahl", value=str(s.word_count),
         keyboard_type=ft.KeyboardType.NUMBER, width=160,
     )
-    sw_adjectives = ft.Switch(label="Adjektive aus der Liste mitdeklinieren",
-                              value=s.with_adjectives)
     sw_repeat = ft.Switch(label="Fehler am Ende wiederholen", value=s.repeat_errors)
     sw_accent = ft.Switch(label="Akzentfehler tolerieren", value=s.accent_tolerant)
     sw_case = ft.Switch(label="Groß-/Kleinschreibung tolerieren (nur Nomen)",
@@ -241,12 +254,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
     def refresh_info(e=None):
         cards = store.cards_for(dd_list.value)
         nouns = decl.declinable_nouns(cards)
-        adjs = decl.usable_adjectives(cards)
-        info_text.value = (f"{len(nouns)} deklinierbare Nomen · "
-                           f"{len(adjs)} Adjektive in dieser Liste")
-        sw_adjectives.disabled = not adjs
-        if not adjs:
-            sw_adjectives.value = False
+        info_text.value = f"{len(nouns)} deklinierbare Nomen in dieser Liste"
         nav.page.update()
 
     # Flet-0.85-Dropdowns feuern on_select (on_change existiert nicht)
@@ -280,7 +288,6 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             word_count=count,
             cases=cases,
             numbers=numbers,
-            with_adjectives=sw_adjectives.value,
             repeat_errors=sw_repeat.value,
             accent_tolerant=sw_accent.value,
             case_tolerant=sw_case.value,
@@ -309,7 +316,6 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             error_text.value = "Keine deklinierbaren Nomen in dieser Liste."
             nav.page.update()
             return
-        adjs = decl.usable_adjectives(cards)
 
         def noun_tile(c, n) -> ft.Control:
             acc = decl.decline(n, "acc", "sg")
@@ -335,10 +341,6 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
                             extra=sort_btns),
             word_rows,
         ]
-        if adjs:
-            rows.append(ft.Text(f"{len(adjs)} Adjektive", size=16,
-                                weight=ft.FontWeight.BOLD))
-            rows.append(ft.Text(", ".join(a.word for a in adjs)))
         nav.go(f"Wörter ({len(nouns)})",
                ft.Column(rows, spacing=4, scroll=ft.ScrollMode.AUTO))
 
@@ -387,7 +389,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             seg_direction,
             seg_cases,
             seg_numbers,
-            sw_adjectives, sw_repeat, sw_accent, sw_case,
+            sw_repeat, sw_accent, sw_case,
             error_text,
             ft.Row(
                 [
@@ -404,6 +406,369 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
     )
 
 
+def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
+                         preselect_id: str | None = None) -> ft.Control:
+    """Adjektivtraining: dekliniert werden nur kuratierte Adjektiv↔Nomen-
+    Verbindungen (combos_view). Trainierbar sind normale Listen (es zählen
+    ihre Adjektive) und eigene Adjektiv-Auswahllisten (nur hier sichtbar)."""
+    s = load_adjective_settings()
+    lists = filter_level(
+        sorted(store.lists.values(),
+               key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
+        load_app_settings().level)
+    selections = store.selections_of("adjektive")
+    if not lists and not selections:
+        return ft.Text("Keine Vokabellisten gefunden.")
+    valid_ids = {l.id for l in lists} | {x.id for x in selections}
+    if preselect_id and preselect_id in valid_ids:
+        s.list_id = preselect_id
+    if s.list_id not in valid_ids:
+        s.list_id = lists[0].id if lists else selections[0].id
+
+    dd_list = ft.Dropdown(
+        label="Liste",
+        value=s.list_id,
+        options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists]
+        + [ft.DropdownOption(key=x.id, text=f"★ {x.name}") for x in selections],
+    )
+    info_text = ft.Text("", size=13)
+    seg_mode = ft.SegmentedButton(
+        selected=[s.mode],
+        segments=[
+            ft.Segment(value="flashcard", label=ft.Text("Karteikarte"),
+                       icon=ft.Icons.STYLE),
+            ft.Segment(value="typing", label=ft.Text("Schreiben"),
+                       icon=ft.Icons.KEYBOARD),
+        ],
+    )
+    seg_direction = ft.SegmentedButton(
+        selected=[s.direction if s.direction in ("gr", "de") else "gr"],
+        segments=[
+            ft.Segment(value="gr", label=ft.Text("Griechisch"),
+                       icon=ft.Icons.TRANSLATE),
+            ft.Segment(value="de", label=ft.Text("Deutsch"),
+                       icon=ft.Icons.PSYCHOLOGY),
+        ],
+    )
+    seg_cases = ft.SegmentedButton(
+        allow_multiple_selection=True,
+        allow_empty_selection=True,
+        show_selected_icon=True,
+        selected=[c for c in s.cases if c in CASE_NAMES] or ["acc"],
+        segments=[
+            ft.Segment(value="nom", label=ft.Text("Nominativ (Pl.)")),
+            ft.Segment(value="acc", label=ft.Text("Akkusativ")),
+            ft.Segment(value="gen", label=ft.Text("Genitiv")),
+        ],
+    )
+    seg_numbers = ft.SegmentedButton(
+        allow_multiple_selection=True,
+        allow_empty_selection=True,
+        show_selected_icon=True,
+        selected=[n for n in s.numbers if n in NUMBER_NAMES] or ["sg"],
+        segments=[
+            ft.Segment(value="sg", label=ft.Text("Singular")),
+            ft.Segment(value="pl", label=ft.Text("Plural")),
+        ],
+    )
+    tf_count = ft.TextField(
+        label="Aufgabenanzahl", value=str(s.word_count),
+        keyboard_type=ft.KeyboardType.NUMBER, width=160,
+    )
+    sw_repeat = ft.Switch(label="Fehler am Ende wiederholen", value=s.repeat_errors)
+    sw_accent = ft.Switch(label="Akzentfehler tolerieren", value=s.accent_tolerant)
+    sw_case = ft.Switch(label="Groß-/Kleinschreibung tolerieren (nur Nomen)",
+                        value=s.case_tolerant)
+    error_text = ft.Text("", color=ft.Colors.ERROR)
+
+    def adj_items():
+        return decl.usable_adjective_cards(store.cards_for(dd_list.value))
+
+    def refresh_info(e=None):
+        items = adj_items()
+        pairs = load_pairs()
+        keys = {combo_key(a.word) for _, a in items}
+        n_pairs = sum(len(v) for k, v in pairs.items() if k in keys)
+        info_text.value = (f"{len(items)} Adjektive · "
+                           f"{n_pairs} aktivierte Verbindungen")
+        nav.page.update()
+
+    # Flet-0.85-Dropdowns feuern on_select (on_change existiert nicht)
+    dd_list.on_select = refresh_info
+    refresh_info()
+
+    def multi_values(seg: ft.SegmentedButton) -> list[str]:
+        sel = seg.selected
+        if isinstance(sel, (list, set, tuple)):
+            return list(sel)
+        return [sel] if sel else []
+
+    def current_settings() -> DeclensionSettings | None:
+        try:
+            count = max(1, int(tf_count.value))
+        except (TypeError, ValueError):
+            error_text.value = "Bitte eine gültige Aufgabenanzahl eingeben."
+            nav.page.update()
+            return None
+        cases = [c for c in ("nom", "acc", "gen") if c in multi_values(seg_cases)]
+        numbers = [n for n in ("sg", "pl") if n in multi_values(seg_numbers)]
+        if not cases or not numbers:
+            error_text.value = "Bitte mindestens einen Fall und eine Zahl wählen."
+            nav.page.update()
+            return None
+        mode_sel = multi_values(seg_mode)
+        dir_sel = multi_values(seg_direction)
+        return DeclensionSettings(
+            mode=mode_sel[0] if mode_sel else "typing",
+            direction=dir_sel[0] if dir_sel else "gr",
+            word_count=count,
+            cases=cases,
+            numbers=numbers,
+            repeat_errors=sw_repeat.value,
+            accent_tolerant=sw_accent.value,
+            case_tolerant=sw_case.value,
+            list_id=dd_list.value,
+        )
+
+    def new_selection(e):
+        from mathainoa1.ui.views.manager import selection_editor
+
+        def on_saved(sel):
+            nav.stack[-2] = ("Adjektivtraining",
+                             adjective_setup_view(nav, store, progress,
+                                                  preselect_id=sel.id))
+            nav.back()
+
+        # kind="adjektive": die Liste erscheint nur im Adjektivtraining
+        nav.go("Neue Adjektiv-Auswahlliste",
+               selection_editor(nav, store,
+                                SelectionList(name="", kind="adjektive"),
+                                on_saved, progress))
+
+    def open_combos(e):
+        nav.go("Adjektiv ↔ Nomen", combos_view(nav, store))
+
+    def _prune_against_all() -> dict[str, set[str]]:
+        """pairs laden und tote Verbindungen entfernen (Wort weg = weg)."""
+        pairs = load_pairs()
+        all_cards = store.all_cards()
+        valid_adj = {combo_key(a.word)
+                     for _, a in decl.usable_adjective_cards(all_cards)}
+        valid_nouns = {combo_key(n.word)
+                       for _, n in decl.declinable_nouns(all_cards)}
+        if prune_pairs(pairs, valid_adj, valid_nouns):
+            save_pairs(pairs)
+        return pairs
+
+    def make_tasks(st: DeclensionSettings):
+        return decl.generate_adjective_tasks(
+            decl.usable_adjective_cards(store.cards_for(st.list_id)),
+            decl.declinable_nouns(store.all_cards()),
+            load_pairs(), st)
+
+    def start(e):
+        settings = current_settings()
+        if settings is None:
+            return
+        items = adj_items()
+        if not items:
+            error_text.value = "Keine Adjektive in dieser Auswahl."
+            nav.page.update()
+            return
+        pairs = _prune_against_all()
+        tasks = decl.generate_adjective_tasks(
+            items, decl.declinable_nouns(store.all_cards()), pairs, settings)
+        if not tasks:
+            if settings.cases == ["nom"] and settings.numbers == ["sg"]:
+                error_text.value = ("Nominativ wird nur im Plural abgefragt — "
+                                    "bitte Plural dazuwählen.")
+            else:
+                error_text.value = (
+                    "Keine Aufgaben — bitte zuerst über „Verbindungen "
+                    "festlegen…“ Nomen für die Adjektive aktivieren.")
+            nav.page.update()
+            return
+        save_adjective_settings(settings)
+        session = _make_session(tasks, settings)
+        nav.go("Adjektivtraining", run_view(
+            nav, store, session, title="Adjektivtraining",
+            make_tasks=make_tasks))
+
+    return ft.Column(
+        [
+            ft.Row([ft.Container(dd_list, expand=True),
+                    autoplay_button(nav.page)],
+                   spacing=8,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Row([ft.TextButton("Neue Adjektiv-Auswahlliste erstellen…",
+                                  icon=ft.Icons.PLAYLIST_ADD,
+                                  on_click=new_selection)]),
+            ft.Row([ft.TextButton("Verbindungen festlegen…",
+                                  icon=ft.Icons.LINK, on_click=open_combos)]),
+            info_text,
+            ft.Text("Abgefragt werden nur aktivierte Adjektiv↔Nomen-"
+                    "Verbindungen (gelten listenübergreifend).",
+                    size=13, italic=True),
+            ft.Divider(),
+            ft.Row([seg_mode, tf_count], spacing=12,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            seg_direction,
+            seg_cases,
+            seg_numbers,
+            sw_repeat, sw_accent, sw_case,
+            error_text,
+            ft.Row(
+                [
+                    ft.FilledButton("Training starten", icon=ft.Icons.PLAY_ARROW,
+                                    on_click=start),
+                ],
+                spacing=8, wrap=True,
+            ),
+        ],
+        spacing=12,
+        scroll=ft.ScrollMode.AUTO,
+    )
+
+
+def combos_view(nav, store: ContentStore) -> ft.Control:
+    """Kuration der Adjektiv↔Nomen-Verbindungen: Adjektiv wählen, Listen
+    durchblättern, Nomen aktivieren/deaktivieren. Wortbasiert — eine
+    Verbindung gilt überall, egal aus welcher Liste die Karten stammen."""
+    page = nav.page
+    pairs = load_pairs()
+    all_cards = store.all_cards()
+    by_key: dict[str, tuple] = {}
+    for c, a in decl.usable_adjective_cards(all_cards):
+        by_key.setdefault(combo_key(a.word), (c, a))
+    if not by_key:
+        return ft.Text("Keine Adjektive in den Listen gefunden.")
+    # tote Verbindungen gleich aufräumen
+    valid_nouns = {combo_key(n.word)
+                   for _, n in decl.declinable_nouns(all_cards)}
+    if prune_pairs(pairs, set(by_key), valid_nouns):
+        save_pairs(pairs)
+
+    adj_sorted = sorted(by_key.items(), key=lambda kv: kv[0])
+    dd_adj = ft.Dropdown(
+        label="Adjektiv",
+        value=adj_sorted[0][0],
+        options=[ft.DropdownOption(
+            key=k, text=f"{a.word} — {a.meaning}" if a.meaning else a.word)
+            for k, (_c, a) in adj_sorted],
+    )
+    lists = filter_level(
+        sorted(store.lists.values(),
+               key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
+        load_app_settings().level)
+    selections = store.selections_of()
+    dd_list = ft.Dropdown(
+        label="Nomen aus Liste",
+        value=lists[0].id if lists else (selections[0].id if selections else None),
+        options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists]
+        + [ft.DropdownOption(key=x.id, text=f"★ {x.name}") for x in selections],
+    )
+    count_text = ft.Text("", size=13)
+    body = ft.Column(spacing=0)
+
+    def current_adj():
+        return by_key[dd_adj.value][1]
+
+    def nouns_for_list() -> list[tuple]:
+        seen: set[str] = set()
+        result = []
+        for c, n in decl.declinable_nouns(store.cards_for(dd_list.value)):
+            key = combo_key(n.word)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append((key, c, n))
+        return result
+
+    def toggle(noun_key: str):
+        akey = combo_key(current_adj().word)
+        active = pairs.setdefault(akey, set())
+        if noun_key in active:
+            active.discard(noun_key)
+            if not active:
+                del pairs[akey]
+        else:
+            active.add(noun_key)
+        save_pairs(pairs)
+        refresh()
+
+    def set_all(on: bool):
+        akey = combo_key(current_adj().word)
+        keys = {k for k, _c, _n in nouns_for_list()}
+        if on:
+            pairs.setdefault(akey, set()).update(keys)
+        else:
+            active = pairs.get(akey)
+            if active:
+                active -= keys
+                if not active:
+                    del pairs[akey]
+        save_pairs(pairs)
+        refresh()
+
+    def refresh(e=None):
+        adj = current_adj()
+        akey = combo_key(adj.word)
+        active = pairs.get(akey, set())
+        tiles: list[ft.Control] = []
+        for key, c, n in nouns_for_list():
+            on = key in active
+            base_number = "pl" if n.plural_only else "sg"
+            art = decl.ARTICLES[("nom", base_number)][n.gender]
+            phrase = (f"{art} "
+                      f"{decl.decline_adjective(adj, n.gender, 'nom', base_number)} "
+                      f"{n.word}")
+            tiles.append(ft.ListTile(
+                # key je Zustand: harter Austausch statt träger Animation
+                # (gleiches Muster wie die Mehrfachauswahl der Verwaltung)
+                key=f"combo-{c.id}-{int(on)}",
+                dense=True,
+                leading=ft.Icon(
+                    ft.Icons.CHECK_BOX if on
+                    else ft.Icons.CHECK_BOX_OUTLINE_BLANK,
+                    color=ft.Colors.PRIMARY if on else None),
+                title=ft.Row([ft.Text(c.front, expand=1),
+                              ft.Text(c.back, expand=1)], spacing=8),
+                subtitle=ft.Text(phrase, size=12),
+                bgcolor=ft.Colors.PRIMARY_CONTAINER if on else None,
+                on_click=lambda e, k=key: toggle(k),
+            ))
+        count_text.value = (f"{len(active)} Verbindungen für „{adj.word}“ "
+                            "aktiv (über alle Listen)")
+        body.controls = tiles or [ft.Text(
+            "Keine deklinierbaren Nomen in dieser Liste.", italic=True)]
+        page.update()
+
+    # Flet-0.85-Dropdowns feuern on_select (on_change existiert nicht)
+    dd_adj.on_select = refresh
+    dd_list.on_select = refresh
+    refresh()
+    return ft.Column(
+        [
+            ft.Text("Antippen aktiviert/deaktiviert ein Nomen für das "
+                    "gewählte Adjektiv — nur aktivierte Verbindungen "
+                    "werden im Adjektivtraining abgefragt.",
+                    size=13, italic=True),
+            dd_adj,
+            ft.Row([ft.Container(dd_list, expand=True),
+                    ft.TextButton("Alle an",
+                                  on_click=lambda e: set_all(True)),
+                    ft.TextButton("Alle aus",
+                                  on_click=lambda e: set_all(False))],
+                   spacing=4, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            count_text,
+            body,
+        ],
+        spacing=10,
+        scroll=ft.ScrollMode.AUTO,
+        expand=True,
+    )
+
+
 def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                            preselect_id: str | None = None) -> ft.Control:
     s = load_conjugation_settings()
@@ -411,7 +776,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
         sorted(store.lists.values(),
                key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
         load_app_settings().level)
-    selections = sorted(store.selections.values(), key=lambda x: x.name)
+    selections = store.selections_of()
     if not lists:
         return ft.Text("Keine Vokabellisten gefunden.")
     valid_ids = {l.id for l in lists} | {x.id for x in selections}
@@ -658,7 +1023,15 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
     task_label = ft.Text("", size=16, color=ft.Colors.PRIMARY,
                          weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
     meaning = ft.Text("", size=14, italic=True, text_align=ft.TextAlign.CENTER)
+    # Notizen/Hinweise der Karte — wie im Vokabeltrainer: vor der Antwort
+    # nur die sichtbare Seite, nach dem Aufdecken beide Seiten
+    notes_col = ft.Column(spacing=8,
+                          horizontal_alignment=ft.CrossAxisAlignment.CENTER)
     answer = ft.Text("", size=22, text_align=ft.TextAlign.CENTER)
+    # Bei deutscher Vorgabe steht das griechische Wort nirgends — nach dem
+    # Aufdecken die Grundform (Lemma/Nominativ) mit einblenden
+    base_form = ft.Text("", size=14, italic=True,
+                        text_align=ft.TextAlign.CENTER)
     feedback = ft.Text("", size=16, weight=ft.FontWeight.BOLD)
     # Bei falscher Antwort: rotes Kreuz + Label + Augensymbol; Klick blendet
     # die eigene Antwort darunter ein, das Label wird „Meine Antwort:" und
@@ -710,6 +1083,7 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         if task is None:
             nav.go("Ergebnis", result_view(nav, store, session, title, make_tasks))
             return
+        shown["task"] = task
         done = len(session.answers)
         total = done + len(session.queue)
         progress_label.value = f"Aufgabe {done + 1} von {total}"
@@ -718,7 +1092,16 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         task_label.value = f"→ {task.label}"
         meaning.value = task.meaning
         answer.value = ""
-        btn_answer_play.visible = False
+        base_form.value = ""
+        session_answer["text"] = ""
+        # Griechische Vorgabe: das Wort ist sichtbar, Anhören/Wort-Info
+        # sofort erlaubt; die Beugungstabelle enthielte aber die Lösung
+        # und kommt erst mit dem Aufdecken
+        gr_visible = session.settings.direction == "gr"
+        btn_word_play.visible = gr_visible
+        btn_info.visible = gr_visible and etymology_for(task.card) is not None
+        btn_forms.visible = False
+        refresh_notes(revealed=False)
         feedback.value = ""
         btn_wrong.visible = False
         wrong_label.value = "Meine Antwort anzeigen"
@@ -741,18 +1124,92 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         if session.settings.mode == "typing":
             focus_answer()
 
-    # Gemeinsamer Lautsprecher: Gedrückthalten schaltet den app-weiten
-    # Langsam-Modus um — damit kann auch die Lösung langsam gehört werden
-    btn_answer_play = speaker_button(nav.page,
-                                     lambda: session_answer["text"])
-    btn_answer_play.visible = False
+    # Die aktuell angezeigte Aufgabe — session.current kann schon weiter sein
+    shown: dict = {"task": None}
+
+    def speak_text() -> str:
+        """Was der Lautsprecher spricht: die aufgedeckte Lösung, sonst
+        die griechische Vorgabe (bei deutscher Vorgabe erst nach dem
+        Aufdecken sichtbar)."""
+        if session_answer["text"]:
+            return session_answer["text"]
+        return shown["task"].prompt if shown["task"] else ""
+
+    # Symbolzeile wie im Vokabeltrainer unter der Aufgabe: Anhören,
+    # Beugungstabelle, Wortherkunft, Notizen bearbeiten
+    btn_word_play = speaker_button(nav.page, speak_text)
+    btn_forms = ft.IconButton(
+        ft.Icons.TABLE_CHART_OUTLINED, tooltip="Beugungsformen anzeigen",
+        visible=False,
+        on_click=lambda e: show_word_forms(nav.page, shown["task"].card))
+
+    def show_word_info(e):
+        entry = etymology_for(shown["task"].card) if shown["task"] else None
+        if entry is None:
+            return
+        # Lazy-Import: das Feature-Modul nur laden, wenn es gebraucht wird
+        from mathainoa1.ui.views.textanalyse import etymology_dialog
+        etymology_dialog(nav.page, entry)
+
+    btn_info = ft.IconButton(ft.Icons.INFO_OUTLINE,
+                             tooltip="Wortherkunft & Synonyme",
+                             visible=False, on_click=show_word_info)
+
+    def edit_notes(e):
+        task = shown["task"]
+        if task is None:
+            return
+        edit_notes_dialog(nav.page, store, task.card,
+                          on_saved=lambda: refresh_notes(
+                              revealed=bool(answer.value)))
+
+    btn_edit = ft.IconButton(ft.Icons.EDIT_NOTE,
+                             tooltip="Hinweise/Notizen bearbeiten",
+                             on_click=edit_notes)
+    icons_row = ft.Row([btn_word_play, btn_forms, btn_info, btn_edit],
+                       alignment=ft.MainAxisAlignment.CENTER, spacing=0)
+
+    def refresh_notes(revealed: bool):
+        task = shown["task"]
+        if task is None:
+            return
+        card = task.card
+        prompt_side = "gr" if session.settings.direction == "gr" else "de"
+        sides = ["gr", "de"] if revealed else [prompt_side]
+
+        def note_row(icon: str, text: str) -> ft.Row:
+            return ft.Row(
+                [ft.Icon(icon, size=16, color=ft.Colors.PRIMARY),
+                 ft.Text(text, size=14, italic=True, expand=True)],
+                spacing=6, vertical_alignment=ft.CrossAxisAlignment.START,
+            )
+
+        rows = []
+        for side in sides:
+            if card.notes_for(side):
+                rows.append(note_row(ft.Icons.STICKY_NOTE_2_OUTLINED,
+                                     card.notes_for(side)))
+            if card.hints_for(side):
+                rows.append(note_row(ft.Icons.LIGHTBULB_OUTLINE,
+                                     card.hints_for(side)))
+        notes_col.controls = rows
+        nav.page.update()
+
     # Die zuletzt aufgedeckte Lösung — session.current kann schon weiter sein
-    session_answer = {"text": ""}
+    session_answer = {"text": "", "card": None}
 
     def solution_shown(task):
         # Die griechische Lösungsform ist jetzt sichtbar
         session_answer["text"] = task.expected
-        btn_answer_play.visible = True
+        session_answer["card"] = task.card
+        btn_word_play.visible = True
+        btn_forms.visible = has_word_forms(task.card)
+        btn_info.visible = etymology_for(task.card) is not None
+        if session.settings.direction == "de":
+            # Grundform mit anzeigen — bei deutscher Vorgabe stünde sie
+            # sonst nirgends (z.B. "μένω" zu "μένετε")
+            base_form.value = f"Grundform: {task.card.with_plural(task.card.front)}"
+        refresh_notes(revealed=True)
         maybe_autoplay(nav.page, task.expected)
 
     def reveal(e):
@@ -803,10 +1260,13 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
             feedback.color = ft.Colors.GREEN
             action_area.controls = [weiter]
         elif result == Result.ALMOST:
-            if session.settings.accent_tolerant:
-                feedback.value = "Fast! Achte auf Akzente/Schluss-ς."
-            else:
-                feedback.value = "Fast — Akzent stimmt nicht"
+            kinds = [almost_kind(x, given)
+                     for x in [task.expected] + task.variants
+                     if check_greek(x, given) == Result.ALMOST]
+            kind = ("accent" if "accent" in kinds
+                    else "sigma" if "sigma" in kinds else "both")
+            feedback.value = almost_feedback(
+                kind, session.settings.accent_tolerant)
             feedback.color = ft.Colors.ORANGE
             action_area.controls = [weiter]
         elif result == Result.CASE:
@@ -829,17 +1289,16 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
     show_task()
     return ft.Column(
         [
-            # Lösungs-Audio oben in der Statuszeile, damit der Prüfen-
-            # Button bei eingeblendeter Tastatur sichtbar bleibt
             ft.Row([progress_label, round_label,
-                    ft.Row([btn_answer_play, autoplay_button(nav.page)],
-                           tight=True, spacing=0)],
+                    autoplay_button(nav.page)],
                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             seg_mode,
             ft.Container(prompt, padding=ft.Padding.only(top=8)),
             task_label, meaning,
-            answer,
+            notes_col,
+            icons_row,
+            answer, base_form,
             feedback, btn_wrong, own_answer,
             action_area,
         ],
@@ -852,10 +1311,16 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
 def result_view(nav, store: ContentStore, session: DeclensionSession,
                 title: str, make_tasks) -> ft.Control:
     stats = session.stats()
+    # Bei deutscher Vorgabe die Grundform mit auflisten — sie steht sonst
+    # nirgends in der Zeile
+    de_direction = session.settings.direction == "de"
     wrong_items = [
         ft.ListTile(
             title=ft.Text(f"{t.prompt} → {t.expected}"),
-            subtitle=ft.Text(" · ".join(x for x in (t.label, t.meaning) if x)),
+            subtitle=ft.Text(" · ".join(
+                x for x in (t.label, t.meaning,
+                            f"Grundform: {t.card.front}" if de_direction
+                            else "") if x)),
             leading=ft.Icon(ft.Icons.CLOSE, color=ft.Colors.ERROR),
         )
         for t in stats["wrong_tasks"]

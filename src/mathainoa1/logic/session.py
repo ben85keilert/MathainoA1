@@ -111,14 +111,25 @@ class TrainingSession:
     # App-Policy: strenger Akzent-/Groß-Klein-Fehler setzt die Box auf 1
     accent_resets_box: bool = False
     case_resets_box: bool = False
+    # App-Policy: darf eine richtige Antwort in der Fehlerrunde die alte
+    # Box wiederherstellen? "off" = nie (Standard), "on" = immer,
+    # "auto" = nur wenn keine neuen Wörter in der Runde sind
+    repeat_promotion: str = "off"
+    # Callback dafür: (card, alte Box) — z.B. ProgressStore.restore_box
+    on_repeat_correct: Callable[[VocabCard, int], None] | None = None
     queue: list[VocabCard] = field(init=False)
     answers: list[Answer] = field(default_factory=list)
     _wrong_pending: list[VocabCard] = field(default_factory=list)
+    # Box vor dem Fehler-Reset, je falsch beantworteter Karte der Erstrunde
+    _prev_box: dict[str, int] = field(default_factory=dict)
     in_repeat_round: bool = field(default=False)
 
     def __post_init__(self):
         self.queue = select_cards(self.cards, self.settings.word_count, self.progress)
         self.total_first_round = len(self.queue)
+        prog = self.progress or {}
+        self.had_new_words = any(
+            c.id not in prog or prog[c.id].seen == 0 for c in self.queue)
         # Bei "Gemischt": Richtung pro Karte einmal festlegen (bleibt auch in
         # der Fehlerrunde gleich)
         self._directions: dict[str, str] = {}
@@ -191,6 +202,12 @@ class TrainingSession:
             return self.settings.accent_tolerant
         return result == Result.CORRECT
 
+    def repeat_promotion_active(self) -> bool:
+        """Stellt eine richtige Fehlerrunden-Antwort die alte Box wieder her?"""
+        if self.repeat_promotion == "on":
+            return True
+        return self.repeat_promotion == "auto" and not self.had_new_words
+
     def _record(self, card: VocabCard, result: Result, given: str = "") -> None:
         self.answers.append(Answer(card, result, given))
         self.queue.pop(0)
@@ -210,8 +227,20 @@ class TrainingSession:
         prev = (self.progress or {}).get(card.id)
         if box_neutral and (prev is None or not prev.seen):
             box_neutral = False
+        if (not self.in_repeat_round and not box_neutral
+                and not self.counts_correct(result)
+                and prev is not None and prev.seen):
+            # Box vor dem Reset merken — für die mögliche
+            # Wiederherstellung in der Fehlerrunde
+            self._prev_box[card.id] = prev.box
         if self.on_result and not self.in_repeat_round and not box_neutral:
             self.on_result(card, self.counts_correct(result))
+        if (self.in_repeat_round and self.on_repeat_correct
+                and self.counts_correct(result)
+                and self.repeat_promotion_active()):
+            old = self._prev_box.get(card.id, 0)
+            if old > 1:
+                self.on_repeat_correct(card, old)
         if (not self.counts_correct(result) and self.settings.repeat_errors
                 and not self.in_repeat_round):
             self._wrong_pending.append(card)

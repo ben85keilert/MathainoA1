@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import flet as ft
 
-from mathainoa1.logic.answer_check import Result
+from mathainoa1.logic.answer_check import Result, almost_kind
 from mathainoa1.logic.session import TrainingSession, TrainingSettings, filter_cards
 from mathainoa1.models import WORD_TYPES, VocabCard
 from mathainoa1.storage.content import ContentStore, filter_level
@@ -20,6 +20,7 @@ from mathainoa1.ui.audio import (
     maybe_autoplay,
     speaker_button,
 )
+from mathainoa1.ui.views.reference import has_word_forms, show_word_forms
 
 ALL = "__all__"
 
@@ -30,7 +31,8 @@ def make_session(store: ContentStore, progress: ProgressStore,
     app = load_app_settings()
     session = TrainingSession(cards, settings, progress=progress.all(),
                               accent_resets_box=app.accent_resets_box,
-                              case_resets_box=app.case_resets_box)
+                              case_resets_box=app.case_resets_box,
+                              repeat_promotion=app.repeat_round_promotion)
 
     # Box-Deckel je Abfrageart (per Einstellungen abschaltbar); bei
     # "Gemischt" zählt die Richtung der jeweiligen Karte
@@ -44,7 +46,21 @@ def make_session(store: ContentStore, progress: ProgressStore,
 
     session.on_result = lambda card, ok: progress.record(
         card.id, ok, max_box=max_box_for(card))
+    # Richtig in der Fehlerrunde: alte Box wiederherstellen (je nach Policy)
+    session.on_repeat_correct = lambda card, box: progress.restore_box(
+        card.id, box)
     return session
+
+
+def almost_feedback(kind: str, tolerant: bool) -> str:
+    """Feedback-Text für ALMOST, je nach Fehlerart (Akzent / Schluss-ς)."""
+    if tolerant:
+        return {"accent": "Fast! Achte auf die Akzente.",
+                "sigma": "Fast! Achte auf das Schluss-ς."}.get(
+            kind, "Fast! Achte auf Akzente und Schluss-ς.")
+    return {"accent": "Fast — Akzent stimmt nicht",
+            "sigma": "Fast — Schluss-ς stimmt nicht"}.get(
+        kind, "Fast — Akzent und Schluss-ς stimmen nicht")
 
 
 def notes_text(card: VocabCard, sides: str = "gr,de") -> str:
@@ -134,7 +150,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         sorted(store.lists.values(),
                key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
         load_app_settings().level)
-    selections = sorted(store.selections.values(), key=lambda x: x.name)
+    selections = store.selections_of()
     if not lists:
         return ft.Text("Keine Vokabellisten gefunden.")
     valid_ids = {l.id for l in lists} | {x.id for x in selections}
@@ -365,7 +381,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     tf_answer = ft.TextField(label="Antwort", autofocus=True, on_submit=lambda e: check(e))
     # Die gerade angezeigte Karte — nach check_typed() ist session.current
     # bereits die nächste, daher eigene Referenz führen
-    shown: dict = {"card": None}
+    shown: dict = {"card": None, "has_forms": False}
 
     def focus_answer():
         # focus() ist in Flet eine Coroutine und muss über run_task laufen
@@ -401,8 +417,8 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     revealed = {"notes": False, "hints": False, "answered": False}
 
     # Lautsprecher neben dem Bearbeiten-Symbol: ein Symbol, Gedrückthalten
-    # schaltet den app-weiten Langsam-Modus um (spart ein Icon in der
-    # engen Zeile über dem Antwortfeld)
+    # oder Doppeltipp schaltet den app-weiten Langsam-Modus um (spart ein
+    # Icon in der engen Zeile über dem Antwortfeld)
     btn_play = speaker_button(nav.page, lambda: shown["card"].front)
 
     def show_word_info(e):
@@ -416,7 +432,10 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     btn_info = ft.IconButton(ft.Icons.INFO_OUTLINE,
                              tooltip="Wortherkunft & Synonyme",
                              on_click=show_word_info)
-    icons_row = ft.Row([btn_play, btn_info, btn_edit],
+    btn_forms = ft.IconButton(
+        ft.Icons.TABLE_CHART_OUTLINED, tooltip="Beugungsformen anzeigen",
+        on_click=lambda e: show_word_forms(nav.page, shown["card"]))
+    icons_row = ft.Row([btn_play, btn_forms, btn_info, btn_edit],
                        alignment=ft.MainAxisAlignment.CENTER, spacing=0)
 
     def update_audio_row():
@@ -428,6 +447,9 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         # Info-Button unter derselben Bedingung (griechische Seite sichtbar),
         # und nur wenn es zum Wort einen Etymologie-Eintrag gibt
         btn_info.visible = on and etymology_for(card) is not None
+        # Beugungstabelle würde bei DE->GR die Antwort verraten — gleiche
+        # Sichtbarkeit wie das Audio, und nur wenn ein Muster erkannt wird
+        btn_forms.visible = on and shown["has_forms"]
 
     def refresh_notes():
         card = shown["card"]
@@ -495,6 +517,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
             nav.go("Ergebnis", result_view(nav, store, progress, session))
             return
         shown["card"] = card
+        shown["has_forms"] = has_word_forms(card)
         revealed["notes"] = revealed["hints"] = revealed["answered"] = False
         done = len(session.answers)
         total = done + len(session.queue)
@@ -533,7 +556,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     def reveal(e):
         card = session.current
         answer.value = session.answer_display_for(card)
-        if session.in_repeat_round:
+        if session.in_repeat_round and not session.repeat_promotion_active():
             # Fehlerrunde zählt nicht — Selbstbewertung wäre Scheinauswahl
             action_area.controls = [
                 ft.FilledButton("Weiter", icon=ft.Icons.ARROW_FORWARD,
@@ -577,10 +600,9 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
             feedback.color = ft.Colors.GREEN
             action_area.controls = [weiter]
         elif result == Result.ALMOST:
-            if session.settings.accent_tolerant:
-                feedback.value = "Fast! Achte auf Akzente/Schluss-ς."
-            else:
-                feedback.value = "Fast - Akzent stimmt nicht"
+            kind = almost_kind(session.expected_for(card), given)
+            feedback.value = almost_feedback(
+                kind, session.settings.accent_tolerant)
             feedback.color = ft.Colors.ORANGE
             action_area.controls = [weiter]
         elif result == Result.CASE:

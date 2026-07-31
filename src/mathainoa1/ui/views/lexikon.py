@@ -32,7 +32,8 @@ ARBEITSANWEISUNG_IV = """\
 ARBEITSANWEISUNG IV: ETYMOLOGIE-PAKET FÜR DAS LEXIKON DER LERN-APP
 
 AUFGABE
-Du bekommst eine Liste neugriechischer Vokabeln als CSV-Zeilen im Format
+Du bekommst eine Liste neugriechischer Vokabeln: zuerst eine Zeile
+"Liste: <Name>" (die Quellliste), danach CSV-Zeilen im Format
 front,back,article,word_type. Erstelle zu JEDEM Wort den sprachlichen
 Hintergrund und gib EIN JSON-Objekt im folgenden Format aus. Gib nur das
 JSON aus, keinen weiteren Text. Bearbeite höchstens etwa 10 Wörter pro
@@ -40,7 +41,7 @@ Auftrag — ist die Liste länger, bitte um Aufteilung.
 
 SCHEMA (Beispiel mit allen Feldern)
 {
-  "title": "Alltag, Teil 1",
+  "title": "Kapitel 1",
   "etymology": [
     {"word": "ο σεισμός",
      "breakdown": [
@@ -84,8 +85,11 @@ REGELN
 4. Bedeutungen eigenständig prüfen; gängige Zusatzbedeutungen in "back"
    mit " / " ergänzen. word_type: Nomen, Verb, Adjektiv, Adverb,
    Präposition, Phrase, Zahl oder Sonstiges.
-5. "title": kurzer sprechender Paketname (z.B. Thema + Teil) — er wird
-   in der App der Name der Trainings-Auswahlliste.
+5. "title": EXAKT der Name aus der Eingabezeile "Liste: …" — die App
+   bündelt die Zusatzwörter aller Pakete dieser Quellliste damit in der
+   Vokabelliste "Zusatzwörter – <title>". Auch bei Aufteilung in
+   mehrere Pakete denselben title beibehalten. Fehlt die "Liste:"-Zeile,
+   wähle einen kurzen sprechenden Namen.
 6. KORREKTUR: Um einen Lexikon-Eintrag zu verbessern, liefere das Wort
    einfach in einem neuen Paket erneut — die App ersetzt Einträge
    wortweise, alle übrigen bleiben unverändert.
@@ -97,8 +101,8 @@ def _import_stats_text(stats: dict) -> str:
     if stats["extra_new"] or stats["extra_updated"]:
         parts.append(f"Zusatzwörter: {stats['extra_new']} neu, "
                      f"{stats['extra_updated']} aktualisiert")
-    if stats["selection"]:
-        parts.append(f"Auswahlliste „{stats['selection']}“ angelegt")
+    if stats.get("extra_list"):
+        parts.append(f"in Liste „{stats['extra_list']}“")
     return "Lexikon: " + " · ".join(parts)
 
 
@@ -106,9 +110,14 @@ def open_import_dialog(page: ft.Page, lex: LexiconStore,
                        on_done=None) -> None:
     """Paste-Dialog für Etymologie-Pakete — auch aus dem Listen-Menü
     erreichbar (der Import ist global, egal von wo er startet)."""
+    # Pakete mit ~25 Wörtern sind lange JSON-Texte: der Dialog nutzt fast
+    # den ganzen Bildschirm, das Feld selbst scrollt ab max_lines
+    w = getattr(page, "width", None) or 420
+    h = getattr(page, "height", None) or 700
     tf_text = ft.TextField(
         label="Etymologie-Paket (JSON) hier einfügen",
-        multiline=True, min_lines=8, max_lines=14,
+        multiline=True, min_lines=14,
+        max_lines=max(14, int((h - 260) / 22)),
     )
     error = ft.Text("", color=ft.Colors.ERROR, size=13)
 
@@ -131,8 +140,9 @@ def open_import_dialog(page: ft.Page, lex: LexiconStore,
 
     page.show_dialog(ft.AlertDialog(
         title=ft.Text("Wort-Infos importieren"),
+        inset_padding=ft.Padding.all(12),
         content=ft.Column([tf_text, error], tight=True, spacing=10,
-                          width=420, scroll=ft.ScrollMode.AUTO),
+                          width=w, scroll=ft.ScrollMode.AUTO),
         actions=[ft.TextButton("Abbrechen",
                                on_click=lambda e: page.pop_dialog()),
                  ft.FilledButton("Importieren", on_click=run_import)],

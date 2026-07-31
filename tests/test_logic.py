@@ -63,6 +63,18 @@ def test_greek_variants():
     assert "α1β" in ac.greek_variants("α(1)β(2)")
 
 
+def test_almost_kind_accent_vs_sigma():
+    # reiner Akzentfehler
+    assert ac.almost_kind("καλημέρα", "καλημερα") == "accent"
+    # reiner Schluss-Sigma-Fehler
+    assert ac.almost_kind("ο γύρος", "ο γύροσ") == "sigma"
+    # beides falsch
+    assert ac.almost_kind("ο γύρος", "ο γυροσ") == "both"
+    # auch über Alternativen und Klammervarianten
+    assert ac.almost_kind("τρεις / τρία", "τρια") == "accent"
+    assert ac.almost_kind("αγαπ(ά)ω", "αγαπαω") == "accent"
+
+
 # --- Deutsch-Prüfung ---
 
 def test_german_alternatives():
@@ -150,6 +162,65 @@ def test_session_repeat_round_keeps_error_order():
             s.mark(True)
     assert s.in_repeat_round
     assert [id(c) for c in s.queue] == [id(c) for c in wrong]
+
+
+def _trained_progress(cs, box=4):
+    from mathainoa1.storage.progress import CardProgress
+    return {c.id: CardProgress(card_id=c.id, box=box, correct=box) for c in cs}
+
+
+def test_repeat_round_promotion_restores_box():
+    cs = cards(2)
+    restored = []
+    s = TrainingSession(
+        cs, TrainingSettings(word_count=2, repeat_errors=True),
+        progress=_trained_progress(cs), repeat_promotion="on",
+        on_repeat_correct=lambda c, box: restored.append((c.id, box)))
+    wrong = s.current
+    s.mark(False)
+    s.mark(True)
+    assert s.in_repeat_round
+    s.mark(True)  # richtig in der Fehlerrunde -> alte Box zurück
+    assert restored == [(wrong.id, 4)]
+
+
+def test_repeat_round_promotion_off_by_default():
+    cs = cards(2)
+    restored = []
+    s = TrainingSession(
+        cs, TrainingSettings(word_count=2, repeat_errors=True),
+        progress=_trained_progress(cs),
+        on_repeat_correct=lambda c, box: restored.append((c.id, box)))
+    s.mark(False)
+    s.mark(True)
+    s.mark(True)
+    assert restored == []
+
+
+def test_repeat_round_promotion_not_on_wrong_answer():
+    cs = cards(2)
+    restored = []
+    s = TrainingSession(
+        cs, TrainingSettings(word_count=2, repeat_errors=True),
+        progress=_trained_progress(cs), repeat_promotion="on",
+        on_repeat_correct=lambda c, box: restored.append((c.id, box)))
+    s.mark(False)
+    s.mark(True)
+    s.mark(False)  # auch in der Fehlerrunde falsch -> nichts wiederherstellen
+    assert restored == []
+
+
+def test_repeat_round_promotion_auto_depends_on_new_words():
+    # "auto": Verbesserung nur, wenn keine neuen Wörter in der Runde sind
+    cs = cards(2)
+    prog = _trained_progress(cs)
+    s = TrainingSession(cs, TrainingSettings(word_count=2),
+                        progress=prog, repeat_promotion="auto")
+    assert s.repeat_promotion_active()
+    del prog[cs[0].id]  # eine Karte ist neu
+    s2 = TrainingSession(cs, TrainingSettings(word_count=2),
+                         progress=prog, repeat_promotion="auto")
+    assert not s2.repeat_promotion_active()
 
 
 def test_session_no_repeat_when_disabled():

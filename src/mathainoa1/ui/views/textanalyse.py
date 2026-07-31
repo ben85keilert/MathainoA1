@@ -482,12 +482,18 @@ def render_etymology(entry: EtymologyEntry,
 
 
 def etymology_dialog(page: ft.Page, entry: EtymologyEntry) -> None:
-    """Wortherkunft als Dialog — aus Trainer und Wortlisten erreichbar."""
+    """Wortherkunft als Dialog — aus Trainer und Wortlisten erreichbar.
+
+    Nutzt fast den ganzen Bildschirm (schmaler Rand), damit möglichst
+    wenig gescrollt werden muss."""
+    w = getattr(page, "width", None) or 420
+    h = getattr(page, "height", None) or 700
     page.show_dialog(ft.AlertDialog(
         title=ft.Text(entry.word, size=16),
+        inset_padding=ft.Padding.all(12),
         content=ft.Column(
             render_etymology(entry, with_title=False),
-            scroll=ft.ScrollMode.AUTO, width=420, height=440,
+            scroll=ft.ScrollMode.AUTO, width=w, height=h - 180,
         ),
         actions=[ft.TextButton("Schließen",
                                on_click=lambda e: page.pop_dialog())],

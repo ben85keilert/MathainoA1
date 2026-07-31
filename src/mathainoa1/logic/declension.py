@@ -474,6 +474,9 @@ class DeclensionSettings:
     word_count: int = 7  # Standard bei Neuinstallation; Änderungen werden gespeichert
     cases: list[str] = field(default_factory=lambda: ["acc"])
     numbers: list[str] = field(default_factory=lambda: ["sg", "pl"])
+    # Alt-Feld: Adjektiv-Zulosen im Nomentraining wurde durch das
+    # Adjektivtraining mit kuratierten Verbindungen ersetzt; das Feld
+    # bleibt nur für alte Settings-JSONs erhalten und wird ignoriert
     with_adjectives: bool = False
     repeat_errors: bool = True
     accent_tolerant: bool = True
@@ -571,29 +574,85 @@ def usable_adjectives(cards: list[VocabCard]) -> list[Adjective]:
     return [a for a in (parse_adjective(c) for c in cards) if a is not None]
 
 
+def usable_adjective_cards(
+        cards: list[VocabCard]) -> list[tuple[VocabCard, Adjective]]:
+    """Wie usable_adjectives, aber mit der Ursprungskarte (Adjektivtraining)."""
+    result = []
+    for c in cards:
+        adj = parse_adjective(c)
+        if adj is not None:
+            result.append((c, adj))
+    return result
+
+
+def _task_slots(noun: Noun, settings: DeclensionSettings):
+    """Sinnvolle (Fall, Zahl)-Kombinationen eines Nomens laut Einstellungen."""
+    # Eigennamen (Ιταλία, Κρήτη …): kein sinnvoller Plural
+    proper = noun.word[:1].isupper() and not noun.plural_only
+    for case in settings.cases:
+        for number in settings.numbers:
+            if proper and number == "pl":
+                continue
+            # Nominativ Singular ist die Vorgabe selbst — nur der Plural
+            # ist eine echte Aufgabe; bei reinen Pluralwörtern wäre auch
+            # der trivial (Vorgabe = Lösung)
+            if case == "nom" and (number == "sg" or noun.plural_only):
+                continue
+            yield case, number
+
+
 def generate_tasks(cards: list[VocabCard], settings: DeclensionSettings,
                    rng: random.Random | None = None) -> list[DeclensionTask]:
     """Alle Aufgaben für die Auswahl: je Nomen × Fall × Zahl (mischt selbst).
 
-    Bei "Adjektive mitdeklinieren" bekommt jede Aufgabe ein zufälliges
-    Adjektiv aus derselben Auswahl (sofern vorhanden).
+    Adjektive werden hier nicht mehr zugelost — dafür gibt es das
+    Adjektivtraining mit kuratierten Verbindungen (generate_adjective_tasks).
     """
     rng = rng or random.Random()
-    adjectives = usable_adjectives(cards) if settings.with_adjectives else []
     tasks = []
     for card, noun in declinable_nouns(cards):
-        # Eigennamen (Ιταλία, Κρήτη …): kein sinnvoller Plural
-        proper = noun.word[:1].isupper() and not noun.plural_only
-        for case in settings.cases:
-            for number in settings.numbers:
-                if proper and number == "pl":
-                    continue
-                # Nominativ Singular ist die Vorgabe selbst — nur der Plural
-                # ist eine echte Aufgabe; bei reinen Pluralwörtern wäre auch
-                # der trivial (Vorgabe = Lösung)
-                if case == "nom" and (number == "sg" or noun.plural_only):
-                    continue
-                adj = rng.choice(adjectives) if adjectives else None
+        for case, number in _task_slots(noun, settings):
+            task = build_task(card, noun, case, number,
+                              direction=settings.direction)
+            if task is not None:
+                tasks.append(task)
+    rng.shuffle(tasks)
+    return tasks
+
+
+def generate_adjective_tasks(
+        adj_items: list[tuple[VocabCard, Adjective]],
+        noun_items: list[tuple[VocabCard, Noun]],
+        pairs: dict[str, set[str]],
+        settings: DeclensionSettings,
+        rng: random.Random | None = None,
+        key=None) -> list[DeclensionTask]:
+    """Adjektivtraining: je Adjektiv × aktiviertes Nomen × Fall × Zahl.
+
+    pairs: adj_key -> aktivierte noun_keys (Whitelist, wortbasiert);
+    key(word) liefert den Schlüssel (Standard: storage.adjective_combos.
+    combo_key, hier injizierbar, um keine Storage-Abhängigkeit zu ziehen).
+    Nomen werden über alle Listen aufgelöst, je Wort nur einmal.
+    """
+    rng = rng or random.Random()
+    if key is None:
+        from mathainoa1.storage.adjective_combos import combo_key as key
+    nouns_by_key: dict[str, tuple[VocabCard, Noun]] = {}
+    for card, noun in noun_items:
+        nouns_by_key.setdefault(key(noun.word), (card, noun))
+    tasks = []
+    seen_adj: set[str] = set()
+    for _adj_card, adj in adj_items:
+        adj_key = key(adj.word)
+        if adj_key in seen_adj:
+            continue
+        seen_adj.add(adj_key)
+        for noun_key in pairs.get(adj_key, ()):
+            item = nouns_by_key.get(noun_key)
+            if item is None:
+                continue
+            card, noun = item
+            for case, number in _task_slots(noun, settings):
                 task = build_task(card, noun, case, number, adj,
                                   direction=settings.direction)
                 if task is not None:

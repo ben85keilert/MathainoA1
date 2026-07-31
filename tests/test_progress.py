@@ -29,6 +29,23 @@ def test_leitner_box_max(tmp_path):
     assert p.due == NOW + timedelta(days=BOX_INTERVALS[5])
 
 
+def test_restore_box_after_repeat_round(tmp_path):
+    s = store(tmp_path)
+    for _ in range(4):
+        s.record("c1", True, NOW)
+    p = s.record("c1", False, NOW)  # Leichtsinnsfehler -> Box 1
+    assert p.box == 1
+    p = s.restore_box("c1", 5, NOW)
+    assert p.box == 5
+    assert p.due == NOW + timedelta(days=BOX_INTERVALS[5])
+    # Zähler bleiben: der Fehler zählt weiterhin
+    assert (p.correct, p.wrong, p.streak) == (4, 1, 0)
+    # nie über MAX_BOX, nie nach unten, unbekannte Karte -> None
+    assert s.restore_box("c1", 99, NOW).box == 5
+    assert s.restore_box("c1", 2, NOW).box == 5
+    assert s.restore_box("unbekannt", 3, NOW) is None
+
+
 def test_max_box_caps(tmp_path):
     s = store(tmp_path)
     # Wiedererkennen (GR->DE) befördert höchstens bis Box 3

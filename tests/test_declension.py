@@ -8,6 +8,7 @@ from mathainoa1.logic.declension import (
     build_task,
     decline,
     decline_adjective,
+    generate_adjective_tasks,
     generate_tasks,
     parse_adjective,
     parse_noun,
@@ -529,9 +530,71 @@ def test_nominative_skips_plural_only_nouns():
     assert generate_tasks(cards, settings) == []
 
 
-def test_nominative_plural_with_adjective():
+def test_generate_tasks_ignores_adjectives():
+    # Adjektiv-Zulosen wurde durch das Adjektivtraining ersetzt — auch
+    # ein altes with_adjectives=True erzeugt keine Adjektivphrasen mehr
     cards = [noun("ο δρόμος", "ο", "-οι"), adj("μικρός")]
     settings = DeclensionSettings(cases=["nom"], numbers=["pl"],
                                   with_adjectives=True, word_count=10)
     tasks = generate_tasks(cards, settings, rng=random.Random(1))
-    assert tasks and tasks[0].expected == "οι μικροί δρόμοι"
+    assert tasks and tasks[0].expected == "οι δρόμοι"
+
+
+# --- Adjektivtraining (kuratierte Verbindungen) ---
+
+
+def _key(word: str) -> str:
+    from mathainoa1.logic.answer_check import normalize, strip_accents
+    return strip_accents(normalize(word))
+
+
+def _adj_items(*fronts):
+    return [(c, parse_adjective(c)) for c in map(adj, fronts)]
+
+
+def test_adjective_tasks_use_only_activated_pairs():
+    nouns = [(c, parse_noun(c)) for c in [noun("ο δρόμος", "ο", "-οι"),
+                                          noun("η ώρα", "η", "-ες")]]
+    pairs = {_key("μικρός"): {_key("δρόμος")}}
+    settings = DeclensionSettings(cases=["nom"], numbers=["pl"],
+                                  word_count=10)
+    tasks = generate_adjective_tasks(
+        _adj_items("μικρός", "ωραίος"), nouns, pairs, settings,
+        rng=random.Random(1), key=_key)
+    # nur die aktivierte Verbindung μικρός+δρόμος, ωραίος hat keine
+    assert [t.expected for t in tasks] == ["οι μικροί δρόμοι"]
+    assert tasks[0].prompt == "ο μικρός δρόμος"
+
+
+def test_adjective_tasks_empty_without_pairs():
+    nouns = [(c, parse_noun(c)) for c in [noun("ο δρόμος", "ο", "-οι")]]
+    settings = DeclensionSettings(cases=["acc"], numbers=["sg"])
+    assert generate_adjective_tasks(_adj_items("μικρός"), nouns, {},
+                                    settings, key=_key) == []
+
+
+def test_adjective_tasks_dedupe_and_all_slots():
+    # doppeltes Adjektiv (zwei Listen) zählt einmal; alle Fälle × Zahlen
+    nouns = [(c, parse_noun(c)) for c in [noun("ο δρόμος", "ο", "-οι")]]
+    pairs = {_key("μικρός"): {_key("δρόμος")}}
+    settings = DeclensionSettings(cases=["acc", "gen"], numbers=["sg", "pl"],
+                                  word_count=99)
+    tasks = generate_adjective_tasks(
+        _adj_items("μικρός", "μικρός"), nouns, pairs, settings, key=_key)
+    assert len(tasks) == 4
+    assert {t.expected for t in tasks} == {
+        "τον μικρό δρόμο", "τους μικρούς δρόμους",
+        "του μικρού δρόμου", "των μικρών δρόμων"}
+
+
+def test_prune_pairs_removes_dead_links(tmp_path, monkeypatch):
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.storage import adjective_combos as ac
+    pairs = {"μικρος": {"δρομος", "geloescht"}, "tot": {"δρομος"}}
+    assert ac.prune_pairs(pairs, {"μικρος"}, {"δρομος"}) is True
+    assert pairs == {"μικρος": {"δρομος"}}
+    # Roundtrip über die Datei
+    ac.save_pairs(pairs)
+    assert ac.load_pairs() == {"μικρος": {"δρομος"}}
+    # Schlüssel normalisiert Groß-/Kleinschreibung, Akzente und Schluss-ς
+    assert ac.combo_key("Δρόμος") == ac.combo_key("δρομος")

@@ -6,7 +6,11 @@ Grammatiktrainer für Deklination und Konjugation. Dieses Handbuch wird
 nach und nach ergänzt — die wichtigsten Punkte stehen auch in der App
 unter dem ?-Symbol oben rechts. Grammatik-Übersichtstabellen (Alphabet,
 Artikel, Deklinationen, Verben, Adjektive, Zahlen, Pronomen, Fragewörter
-+ Präpositionen) öffnet das Buchsymbol daneben.
++ Präpositionen) öffnet das Buchsymbol daneben. Zusätzlich zeigt in
+allen Trainern ein **Tabellen-Symbol** die Beugungsformen des gerade
+abgefragten Wortes (Deklination bei Nomen/Adjektiven, Konjugation bei
+Verben) — bei Deutsch → Griechisch erst nach dem Aufdecken, damit die
+Antwort nicht verraten wird.
 
 ## Stufen (A1/A2)
 
@@ -83,25 +87,56 @@ So kommt Inhalt hinein:
 3. Das Paket in der Lexikon-Ansicht (oder über das Listen-Menü:
    „Wort-Infos importieren“) **importieren**.
 
-Beim Import passiert dreierlei:
+Beim Import passiert zweierlei:
 
 - Die Einträge werden **wortweise ins Lexikon gemergt**: ein schon
   vorhandenes Wort wird ersetzt (so bessert man Einträge nach, indem
   man das Wort einfach erneut liefert), neue kommen dazu, alle übrigen
   bleiben unverändert.
 - Die **Zusatzwörter** des Pakets (lernwürdige Kognaten und Synonyme)
-  landen in der globalen, normal editierbaren Liste **„Lexikon –
-  Zusatzwörter“** — gebündelt nach Ursprungswort, ohne Dubletten;
-  bestehende Karten behalten beim Aktualisieren ihren Lernstand.
-- Pro Paket entsteht automatisch eine kleine **Auswahlliste**
-  („Lexikon: Paketname“) mit Verweisen auf genau diese Zusatzwörter —
-  ideal, um das Paket als überschaubare Portion zu trainieren. Die
-  Auswahl kann jederzeit gelöscht werden, die Karten bleiben.
+  landen in einer normal editierbaren Liste **„Zusatzwörter –
+  <Listenname>“** je Quellliste (der Export liefert den Namen in der
+  ersten Zeile mit, der Chatbot übernimmt ihn als „title“) — gebündelt
+  nach Ursprungswort, ohne Dubletten; bestehende Karten behalten beim
+  Aktualisieren ihren Lernstand. So bleibt der Stoff kapitelweise
+  überschaubar statt in einer Riesenliste. Zum Trainieren kleinerer
+  Portionen lassen sich daraus wie gewohnt manuell Auswahllisten
+  erstellen (Mehrfachauswahl → „Zur Auswahlliste hinzufügen“).
+
+**Geerbte Wort-Infos lösen:** Zusatzwörter zeigen per ⓘ auf den
+Eintrag ihres Ursprungsworts (πρωί → Eintrag πρωινό). Passt das nicht,
+markiert man die Wörter in der Liste (Mehrfachauswahl) und wählt
+**„Wort-Info-Verknüpfung lösen“** — sie gelten dann wieder als „ohne
+Eintrag“, erscheinen beim nächsten „Fehlende Wort-Infos exportieren“
+und bekommen so einen eigenen Eintrag; der gewinnt automatisch gegen
+den geerbten Verweis. Eigene (echte) Einträge lassen sich so nicht
+lösen — dafür gibt es das Löschen in der Lexikon-Ansicht.
 
 In der Lexikon-Ansicht lassen sich alle Einträge **durchsuchen**
 (alphabetisch sortiert), einzeln ansehen und löschen. Wortlisten mit
 Worthintergrund zeigen zusätzlich oben ein **Buchsymbol**, das den
 gesammelten Worthintergrund der ganzen Liste öffnet.
+
+## Adjektivtraining
+
+Das Adjektivtraining (eigener Hauptmenüpunkt) dekliniert **Adjektiv +
+Nomen zusammen** („ο μικρός δρόμος“ → „τους μικρούς δρόμους“). Damit
+keine unsinnigen oder unpassenden Kombinationen entstehen, werden nur
+**selbst aktivierte Verbindungen** abgefragt:
+
+- Unter **„Verbindungen festlegen…“** wählt man ein Adjektiv, blättert
+  durch die Listen und aktiviert die Nomen, zu denen es passt (mit
+  Beispielphrase in der Vorschau, „Alle an/aus“ je Liste). Die
+  Verbindungen gelten **listenübergreifend** — einmal aktiviert, egal
+  in welcher Liste das Nomen steckt.
+- Trainierbar sind normale Vokabellisten (es zählen ihre Adjektive)
+  und eigene **Adjektiv-Auswahllisten**, die nur im Adjektivtraining
+  erscheinen und dort auch erstellt werden.
+- Verschwindet ein Wort aus allen Listen, wird die tote Verbindung
+  automatisch aufgeräumt.
+
+Das frühere Zulosen zufälliger Adjektive im Nomentraining entfällt —
+das Nomentraining dekliniert jetzt nur noch Nomen.
 
 ## So wertet die Abfrage
 
@@ -214,14 +249,15 @@ Die App spricht jedes griechische Wort selbst. In den **Einstellungen**
 Bedienung:
 
 - **Lautsprecher-Symbol** (an jeder Karte, im Training, in der
-  Textanalyse): **kurz antippen** spielt ab, **lang drücken** schaltet
-  den **Langsam-Modus** um — danach spielt jedes Antippen überall
-  langsam (zum Nachsprechen), bis wieder lange gedrückt wird. Das
-  Symbol wechselt dabei zum Schneckentempo-Icon, und eine kurze
-  Meldung bestätigt das Umschalten; beim App-Start ist das Tempo
-  wieder normal. Im Vokabeltraining erscheint der Lautsprecher unter
-  der Karte erst, wenn die griechische Seite sichtbar ist, damit die
-  Antwort nicht verraten wird.
+  Textanalyse): **kurz antippen** spielt ab, **lang drücken oder
+  zweimal tippen** schaltet den **Langsam-Modus** um — danach spielt
+  jedes Antippen überall langsam (zum Nachsprechen), bis wieder
+  umgeschaltet wird. Das Symbol wird dabei zur Schildkröte 🐢, und
+  eine kurze Meldung bestätigt das Umschalten; beim App-Start ist das
+  Tempo wieder normal. Das Zeitfenster für den Doppeltipp lässt sich
+  in den Einstellungen ändern. Im Vokabeltraining erscheint der
+  Lautsprecher unter der Karte erst, wenn die griechische Seite
+  sichtbar ist, damit die Antwort nicht verraten wird.
 - Nur im Google-Modus: **„Audio vorbereiten"** im Listenmenü (⋮, auch
   bei Buchlisten) lädt alle Wörter einer Liste auf einmal in den
   Cache — praktisch vor einer Reise, damit die ganze Liste offline
@@ -312,7 +348,13 @@ falschen Antworten.
 
 - **Vokabeltraining**: Jede Antwort der ersten Runde zählt (richtig oder
   falsch). Die optionale **Fehlerrunde** am Ende zählt nicht noch einmal —
-  sie dient nur dem Wiederholen.
+  sie dient nur dem Wiederholen. Ausnahme: In den Einstellungen lässt
+  sich unter „Fehlerrunde“ erlauben, dass ein dort **richtig**
+  beantwortetes Wort seine **alte Box zurückbekommt** (Leichtsinnsfehler
+  werden so weniger hart bestraft). Drei Stufen: keine Verbesserung
+  (Standard), Verbesserung möglich, oder automatisch nur dann, wenn die
+  Runde keine neuen Wörter enthielt. Falsche Antworten in der
+  Fehlerrunde bleiben immer folgenlos.
   - Im Tipp-Modus zählt „Fast!“ (nur Akzent-/Schluss-ς-Fehler) als richtig.
   - Im Karteikarten-Modus zählt die Selbstbewertung („Gewusst“ /
     „Nicht gewusst“).

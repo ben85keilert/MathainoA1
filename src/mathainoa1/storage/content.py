@@ -128,15 +128,21 @@ class ContentStore:
         self._list_order = list(ids)
         self._write_order()
 
-    def ordered_selections(self) -> list[SelectionList]:
-        """Auswahllisten in gespeicherter Reihenfolge; neue hinten
-        (alphabetisch)."""
+    def ordered_selections(self, kind: str = "words") -> list[SelectionList]:
+        """Auswahllisten einer Art in gespeicherter Reihenfolge; neue
+        hinten (alphabetisch). Adjektiv-Auswahllisten (kind="adjektive")
+        erscheinen nur im Adjektivtraining."""
         known = [self.selections[i] for i in self._selection_order
                  if i in self.selections]
         seen = set(self._selection_order)
         rest = sorted((s for s in self.selections.values()
                        if s.id not in seen), key=lambda s: s.name)
-        return known + rest
+        return [s for s in known + rest if s.kind == kind]
+
+    def selections_of(self, kind: str = "words") -> list[SelectionList]:
+        """Auswahllisten einer Art, alphabetisch sortiert."""
+        return sorted((s for s in self.selections.values()
+                       if s.kind == kind), key=lambda s: s.name)
 
     def set_selection_order(self, ids: list[str]) -> None:
         self._selection_order = list(ids)
