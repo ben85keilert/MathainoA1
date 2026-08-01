@@ -77,8 +77,10 @@ def main() -> int:
         path.write_text(new_text, encoding="utf-8")
 
     git("commit", "-am", f"Version {new}")
-    git("tag", f"v{new}")
-    git("push", "origin", "main", "--follow-tags")
+    # Annotierter Tag + expliziter Push: "--follow-tags" würde
+    # leichtgewichtige Tags stillschweigend NICHT mitpushen
+    git("tag", "-a", f"v{new}", "-m", f"Version {new}")
+    git("push", "origin", "main", f"v{new}")
     print(f"{old} -> {new}: getaggt und gepusht. Die CI baut jetzt — "
           "Fortschritt: https://github.com/ben85keilert/MathainoA1/actions")
     return 0
