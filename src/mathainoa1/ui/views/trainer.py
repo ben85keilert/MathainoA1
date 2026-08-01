@@ -20,7 +20,11 @@ from mathainoa1.ui.audio import (
     maybe_autoplay,
     speaker_button,
 )
-from mathainoa1.ui.views.reference import has_word_forms, show_word_forms
+from mathainoa1.ui.views.reference import (
+    has_word_forms,
+    show_word_forms,
+    word_forms_content,
+)
 
 ALL = "__all__"
 
@@ -121,6 +125,66 @@ def edit_notes_dialog(page: ft.Page, store: ContentStore, card: VocabCard,
                           tight=True, spacing=12, width=400,
                           scroll=ft.ScrollMode.AUTO),
         actions=actions,
+    ))
+
+
+def hide_empty_texts(*texts: ft.Text) -> None:
+    """Leere Text-Platzhalter einklappen — sie belegen sonst Höhe und
+    drücken im Schreibmodus das Antwortfeld samt Prüfen-Button unter
+    die Tastatur (Antwort/Feedback erscheinen erst nach dem Prüfen)."""
+    for t in texts:
+        t.visible = bool(t.value)
+
+
+def update_word_details_button(btn: ft.IconButton, forms: bool,
+                               info: bool) -> None:
+    """Ein Symbol für Wort-Info und Beugungsformen — je nach Verfügbarkeit:
+    beides → Info-Symbol, nur Beugung → Tabellensymbol (wie Nomen-/
+    Verbtraining), nur Lexikoneintrag → Buchsymbol des Lexikons."""
+    btn.visible = forms or info
+    if forms and info:
+        btn.icon = ft.Icons.INFO_OUTLINE
+        btn.tooltip = "Wort-Info & Beugungsformen"
+    elif forms:
+        btn.icon = ft.Icons.TABLE_CHART_OUTLINED
+        btn.tooltip = "Beugungsformen anzeigen"
+    elif info:
+        btn.icon = ft.Icons.MENU_BOOK_OUTLINED
+        btn.tooltip = "Wortherkunft & Synonyme"
+
+
+def show_word_details(page: ft.Page, card, with_forms: bool = True) -> None:
+    """Wort-Info und/oder Beugungsformen als Dialog — gibt es beides,
+    steht die Beugungstabelle unter dem Lexikoneintrag, getrennt durch
+    einen Querbalken. with_forms=False, solange die Tabelle die Lösung
+    verraten würde (deutsche Vorgabe vor dem Aufdecken)."""
+    entry = etymology_for(card)
+    forms = word_forms_content(card) if with_forms else None
+    if forms is None and entry is None:
+        return
+    if entry is None:
+        show_word_forms(page, card)
+        return
+    if forms is None:
+        # Lazy-Import: das Feature-Modul nur laden, wenn es gebraucht wird
+        from mathainoa1.ui.views.textanalyse import etymology_dialog
+        etymology_dialog(page, entry)
+        return
+    from mathainoa1.ui.views.textanalyse import render_etymology
+    w = getattr(page, "width", None) or 420
+    h = getattr(page, "height", None) or 700
+    page.show_dialog(ft.AlertDialog(
+        title=ft.Text(card.with_plural(card.front), size=16),
+        inset_padding=ft.Padding.all(12),
+        content=ft.Column(
+            render_etymology(entry, with_title=False)
+            + [ft.Divider(thickness=2),
+               ft.Text("Beugungsformen", size=16, weight=ft.FontWeight.BOLD),
+               forms],
+            scroll=ft.ScrollMode.AUTO, width=w, height=h - 180,
+        ),
+        actions=[ft.TextButton("Schließen",
+                               on_click=lambda e: page.pop_dialog())],
     ))
 
 
@@ -432,21 +496,16 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     # Icon in der engen Zeile über dem Antwortfeld)
     btn_play = speaker_button(nav.page, lambda: shown["card"].front)
 
-    def show_word_info(e):
-        entry = etymology_for(shown["card"]) if shown["card"] else None
-        if entry is None:
+    def show_details(e):
+        card = shown["card"]
+        if card is None:
             return
-        # Lazy-Import: das Feature-Modul nur laden, wenn es gebraucht wird
-        from mathainoa1.ui.views.textanalyse import etymology_dialog
-        etymology_dialog(nav.page, entry)
+        show_word_details(nav.page, card, with_forms=shown["has_forms"])
 
-    btn_info = ft.IconButton(ft.Icons.INFO_OUTLINE,
-                             tooltip="Wortherkunft & Synonyme",
-                             on_click=show_word_info)
-    btn_forms = ft.IconButton(
-        ft.Icons.TABLE_CHART_OUTLINED, tooltip="Beugungsformen anzeigen",
-        on_click=lambda e: show_word_forms(nav.page, shown["card"]))
-    icons_row = ft.Row([btn_play, btn_forms, btn_info, btn_edit],
+    # Ein gemeinsames Symbol für Wort-Info und Beugungsformen — Icon je
+    # nach Verfügbarkeit (update_word_details_button)
+    btn_word = ft.IconButton(ft.Icons.INFO_OUTLINE, on_click=show_details)
+    icons_row = ft.Row([btn_play, btn_word, btn_edit],
                        alignment=ft.MainAxisAlignment.CENTER, spacing=0)
 
     def update_audio_row():
@@ -455,12 +514,12 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         card = shown["card"]
         on = session.prompt_side(card) == "gr" or revealed["answered"]
         btn_play.visible = on
-        # Info-Button unter derselben Bedingung (griechische Seite sichtbar),
-        # und nur wenn es zum Wort einen Etymologie-Eintrag gibt
-        btn_info.visible = on and etymology_for(card) is not None
-        # Beugungstabelle würde bei DE->GR die Antwort verraten — gleiche
-        # Sichtbarkeit wie das Audio, und nur wenn ein Muster erkannt wird
-        btn_forms.visible = on and shown["has_forms"]
+        # Wort-Info/Beugungstabelle unter derselben Bedingung (griechische
+        # Seite sichtbar) — die Tabelle würde sonst die Antwort verraten
+        update_word_details_button(
+            btn_word,
+            forms=on and shown["has_forms"],
+            info=on and etymology_for(card) is not None)
 
     def refresh_notes():
         card = shown["card"]
@@ -548,6 +607,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         else:
             tf_answer.value = ""
             action_area.controls = typing_controls(tf_answer, check)
+        hide_empty_texts(answer, feedback)
         refresh_notes()
         # GR->DE: das griechische Wort steht schon in der Frage
         if session.prompt_side(card) == "gr":
@@ -558,6 +618,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     def after_answer():
         """Nach Antwort/Aufdecken: alle Notizen/Hinweise beider Seiten zeigen."""
         revealed["answered"] = True
+        hide_empty_texts(answer, feedback)
         refresh_notes()
         # DE->GR: die griechische Seite erscheint erst jetzt mit der Antwort
         card = shown["card"]

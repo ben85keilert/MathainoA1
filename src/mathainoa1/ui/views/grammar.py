@@ -46,11 +46,14 @@ from mathainoa1.storage.settings import (
 )
 from mathainoa1.ui.audio import autoplay_button, maybe_autoplay, speaker_button
 from mathainoa1.storage.textanalyse import etymology_for
-from mathainoa1.ui.views.reference import has_word_forms, show_word_forms
+from mathainoa1.ui.views.reference import has_word_forms
 from mathainoa1.ui.views.trainer import (
     almost_feedback,
     edit_notes_dialog,
+    hide_empty_texts,
+    show_word_details,
     typing_controls,
+    update_word_details_button,
 )
 
 
@@ -1204,8 +1207,10 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         # und kommt erst mit dem Aufdecken
         gr_visible = session.settings.direction == "gr"
         btn_word_play.visible = gr_visible
-        btn_info.visible = gr_visible and etymology_for(task.card) is not None
-        btn_forms.visible = False
+        word_state["forms"] = False
+        update_word_details_button(
+            btn_word, forms=False,
+            info=gr_visible and etymology_for(task.card) is not None)
         refresh_notes(revealed=False)
         feedback.value = ""
         btn_wrong.visible = False
@@ -1225,6 +1230,7 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         else:
             tf_answer.value = ""
             action_area.controls = typing_controls(tf_answer, check)
+        hide_empty_texts(meaning, answer, base_form, feedback)
         nav.page.update()
         if session.settings.mode == "typing":
             focus_answer()
@@ -1241,24 +1247,21 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         return shown["task"].prompt if shown["task"] else ""
 
     # Symbolzeile wie im Vokabeltrainer unter der Aufgabe: Anhören,
-    # Beugungstabelle, Wortherkunft, Notizen bearbeiten
+    # Wort-Info/Beugungsformen (ein gemeinsames Symbol), Notizen bearbeiten.
+    # Die Beugungstabelle bleibt bis zum Aufdecken gesperrt (word_state),
+    # sie enthielte sonst die Lösung.
     btn_word_play = speaker_button(nav.page, speak_text)
-    btn_forms = ft.IconButton(
-        ft.Icons.TABLE_CHART_OUTLINED, tooltip="Beugungsformen anzeigen",
-        visible=False,
-        on_click=lambda e: show_word_forms(nav.page, shown["task"].card))
+    word_state = {"forms": False}
 
-    def show_word_info(e):
-        entry = etymology_for(shown["task"].card) if shown["task"] else None
-        if entry is None:
+    def show_details(e):
+        task = shown["task"]
+        if task is None:
             return
-        # Lazy-Import: das Feature-Modul nur laden, wenn es gebraucht wird
-        from mathainoa1.ui.views.textanalyse import etymology_dialog
-        etymology_dialog(nav.page, entry)
+        show_word_details(nav.page, task.card,
+                          with_forms=word_state["forms"])
 
-    btn_info = ft.IconButton(ft.Icons.INFO_OUTLINE,
-                             tooltip="Wortherkunft & Synonyme",
-                             visible=False, on_click=show_word_info)
+    btn_word = ft.IconButton(ft.Icons.INFO_OUTLINE, visible=False,
+                             on_click=show_details)
 
     def edit_notes(e):
         task = shown["task"]
@@ -1271,7 +1274,7 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
     btn_edit = ft.IconButton(ft.Icons.EDIT_NOTE,
                              tooltip="Hinweise/Notizen bearbeiten",
                              on_click=edit_notes)
-    icons_row = ft.Row([btn_word_play, btn_forms, btn_info, btn_edit],
+    icons_row = ft.Row([btn_word_play, btn_word, btn_edit],
                        alignment=ft.MainAxisAlignment.CENTER, spacing=0)
 
     def refresh_notes(revealed: bool):
@@ -1308,12 +1311,15 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         session_answer["text"] = task.expected
         session_answer["card"] = task.card
         btn_word_play.visible = True
-        btn_forms.visible = has_word_forms(task.card)
-        btn_info.visible = etymology_for(task.card) is not None
+        word_state["forms"] = has_word_forms(task.card)
+        update_word_details_button(
+            btn_word, forms=word_state["forms"],
+            info=etymology_for(task.card) is not None)
         if session.settings.direction == "de":
             # Grundform mit anzeigen — bei deutscher Vorgabe stünde sie
             # sonst nirgends (z.B. "μένω" zu "μένετε")
             base_form.value = f"Grundform: {task.card.with_plural(task.card.front)}"
+        hide_empty_texts(meaning, answer, base_form, feedback)
         refresh_notes(revealed=True)
         maybe_autoplay(nav.page, task.expected)
 

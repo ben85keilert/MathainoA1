@@ -498,10 +498,34 @@ def test_trainer_info_button_visible_with_feature(store_with_edge_cases,
         view = trainer.run_view(nav, store, progress, session)
         found: list[str] = []
         _collect_texts_and_tooltips(view, found)
-        assert "Wortherkunft & Synonyme" in found
+        # σεισμός hat Eintrag UND Beugungsformen → kombiniertes Symbol
+        assert "Wort-Info & Beugungsformen" in found
     finally:
         ta.invalidate_cache()
         progress.close()
+
+
+def test_update_word_details_button_states():
+    """Ein Symbol je nach Verfügbarkeit: beides → Info, nur Beugung →
+    Tabelle, nur Lexikoneintrag → Buch, nichts → unsichtbar."""
+    import flet as ft
+    btn = ft.IconButton()
+    trainer.update_word_details_button(btn, forms=True, info=True)
+    assert btn.visible and btn.icon == ft.Icons.INFO_OUTLINE
+    trainer.update_word_details_button(btn, forms=True, info=False)
+    assert btn.visible and btn.icon == ft.Icons.TABLE_CHART_OUTLINED
+    trainer.update_word_details_button(btn, forms=False, info=True)
+    assert btn.visible and btn.icon == ft.Icons.MENU_BOOK_OUTLINED
+    trainer.update_word_details_button(btn, forms=False, info=False)
+    assert not btn.visible
+
+
+def test_hide_empty_texts():
+    """Leere Platzhalter einklappen, gefüllte zeigen (Prüfen-Button-Höhe)."""
+    import flet as ft
+    empty, filled = ft.Text(""), ft.Text("τον μικρό δρόμο")
+    trainer.hide_empty_texts(empty, filled)
+    assert not empty.visible and filled.visible
 
 
 def test_result_view_lists_correct_answers(store_with_edge_cases, tmp_path):

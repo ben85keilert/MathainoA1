@@ -6,11 +6,15 @@ Grammatiktrainer für Deklination und Konjugation. Dieses Handbuch wird
 nach und nach ergänzt — die wichtigsten Punkte stehen auch in der App
 unter dem ?-Symbol oben rechts. Grammatik-Übersichtstabellen (Alphabet,
 Artikel, Deklinationen, Verben, Adjektive, Zahlen, Pronomen, Fragewörter
-+ Präpositionen) öffnet das Buchsymbol daneben. Zusätzlich zeigt in
-allen Trainern ein **Tabellen-Symbol** die Beugungsformen des gerade
-abgefragten Wortes (Deklination bei Nomen/Adjektiven, Konjugation bei
-Verben) — bei Deutsch → Griechisch erst nach dem Aufdecken, damit die
-Antwort nicht verraten wird.
++ Präpositionen) öffnet das Buchsymbol daneben. Zusätzlich gibt es in
+allen Trainern **ein gemeinsames Wort-Symbol** für Beugungsformen und
+Wort-Info: Gibt es beides, zeigt das **ⓘ-Symbol** einen Dialog mit dem
+Lexikoneintrag oben und der Beugungstabelle darunter (durch einen
+Querbalken getrennt); gibt es nur die Beugungsformen (Deklination bei
+Nomen/Adjektiven, Konjugation bei Verben), erscheint das
+**Tabellen-Symbol**, gibt es nur den Lexikoneintrag, das
+**Buch-Symbol**. Die Beugungstabelle ist bei Deutsch → Griechisch erst
+nach dem Aufdecken enthalten, damit die Antwort nicht verraten wird.
 
 ## Stufen (A1/A2)
 
