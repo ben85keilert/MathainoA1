@@ -54,7 +54,8 @@ _PART_DIRS = {
 _PART_FILES = {
     "notes": ("notes.json",),
     "settings": ("app_settings.json", "training_settings.json",
-                 "declension_settings.json", "conjugation_settings.json"),
+                 "declension_settings.json", "conjugation_settings.json",
+                 "adjective_settings.json", "adjective_combos.json"),
 }
 
 

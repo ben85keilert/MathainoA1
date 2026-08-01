@@ -309,6 +309,13 @@ def test_app_settings_roundtrip():
     assert d.high_boxes_need_production and d.top_box_needs_typing
 
 
+def test_app_settings_adjective_mode_default():
+    from mathainoa1.storage.settings import AppSettings
+    assert AppSettings().adjective_combos_mode == "whitelist"
+    s = AppSettings.from_dict({"adjective_combos_mode": "blacklist"})
+    assert s.adjective_combos_mode == "blacklist"
+
+
 def test_app_settings_migrates_repeat_round_promotion():
     from mathainoa1.storage.settings import AppSettings
     # alte 3-stufige Einstellung wird auf die neue 4-stufige abgebildet
@@ -356,3 +363,30 @@ def test_ordered_selections_default_and_persist(tmp_path):
     assert [s.name for s in fresh.ordered_selections()] == [
         "Zeta-Auswahl", "Alpha-Auswahl"]
     assert [l.name for l in fresh.ordered_lists()] == ["Buch", "Alpha"]
+
+
+def test_selection_order_per_kind(tmp_path):
+    # Sortieren der einen Art darf die Reihenfolge der anderen nicht
+    # verwerfen (eine Order-Datei führt beide Arten)
+    from mathainoa1.models import SelectionList
+    store = make_store(tmp_path, ["Alpha"])
+    w1 = SelectionList(name="Wörter B")
+    w2 = SelectionList(name="Wörter A")
+    a1 = SelectionList(name="Adjektive B", kind="adjektive")
+    a2 = SelectionList(name="Adjektive A", kind="adjektive")
+    for s in (w1, w2, a1, a2):
+        store.save_selection(s)
+    store.set_selection_order([a1.id, a2.id], kind="adjektive")
+    store.set_selection_order([w1.id, w2.id], kind="words")
+    assert [s.name for s in store.ordered_selections()] == [
+        "Wörter B", "Wörter A"]
+    assert [s.name for s in store.ordered_selections("adjektive")] == [
+        "Adjektive B", "Adjektive A"]
+    # umsortieren einer Art lässt die andere unangetastet — auch nach Reload
+    store.set_selection_order([w2.id, w1.id], kind="words")
+    fresh = content.ContentStore(store.book_dir, store.user_dir)
+    fresh.load_all()
+    assert [s.name for s in fresh.ordered_selections()] == [
+        "Wörter A", "Wörter B"]
+    assert [s.name for s in fresh.ordered_selections("adjektive")] == [
+        "Adjektive B", "Adjektive A"]

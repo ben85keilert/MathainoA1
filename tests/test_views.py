@@ -55,7 +55,8 @@ def test_reference_chapters_build():
         builder()
 
 
-def test_main_views_build(store_with_edge_cases, tmp_path):
+def test_main_views_build(store_with_edge_cases, tmp_path, monkeypatch):
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
     store, vlist = store_with_edge_cases
     nav = _fake_nav()
     nav.store = store
@@ -66,10 +67,38 @@ def test_main_views_build(store_with_edge_cases, tmp_path):
         stats.list_words_view(nav, vlist, progress.all())
         trainer.setup_view(nav, store, progress)
         grammar.setup_view(nav, store, progress)
+        grammar.adjective_setup_view(nav, store, progress)
+        grammar.combos_view(nav, store, vlist.id)
+        grammar.combos_view(nav, store, vlist.id, mode="blacklist")
         grammar.conjugation_setup_view(nav, store, progress)
         manager.manager_view(nav, store, progress)
         manager.list_view(nav, store, vlist, progress)
         manager.selection_editor(nav, store, None, lambda s: None, progress)
+    finally:
+        progress.close()
+
+
+def test_adjective_views_build_with_selection_and_blacklist(
+        store_with_edge_cases, tmp_path, monkeypatch):
+    """Adjektiv-Auswahlliste: erscheint in Verwaltung und Adjektivtraining,
+    Blacklist-Modus baut Setup- und Ausnahmen-View fehlerfrei."""
+    from mathainoa1.models import SelectionList
+    from mathainoa1.storage.settings import AppSettings, save_app_settings
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    store, vlist = store_with_edge_cases
+    adj_card = next(c for c in vlist.cards if c.word_type == "Adjektiv")
+    sel = SelectionList(name="Meine Adjektive", kind="adjektive",
+                        card_ids=[adj_card.id])
+    store.save_selection(sel)
+    save_app_settings(AppSettings(adjective_combos_mode="blacklist"))
+    nav = _fake_nav()
+    nav.store = store
+    progress = ProgressStore(tmp_path / "adj.db")
+    try:
+        manager.manager_view(nav, store, progress)
+        grammar.adjective_setup_view(nav, store, progress,
+                                     preselect_id=sel.id)
+        grammar.combos_view(nav, store, sel.id, mode="blacklist")
     finally:
         progress.close()
 

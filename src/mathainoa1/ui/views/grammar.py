@@ -29,9 +29,9 @@ from mathainoa1.logic.declension import (
 from mathainoa1.models import SelectionList
 from mathainoa1.storage.adjective_combos import (
     combo_key,
-    load_pairs,
-    prune_pairs,
-    save_pairs,
+    load_combos,
+    prune_combos,
+    save_combos,
 )
 from mathainoa1.storage.content import ContentStore, filter_level
 from mathainoa1.storage.progress import ProgressStore
@@ -372,11 +372,19 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             nav, store, session, title="Nomentraining",
             make_tasks=lambda s: decl.generate_tasks(store.cards_for(s.list_id), s)))
 
-    return ft.Column(
+    def edit_list(e):
+        from mathainoa1.ui.views.manager import open_source_editor
+        if dd_list.value:
+            open_source_editor(nav, store, progress, dd_list.value)
+
+    root = ft.Column(
         [
             # Lautsprecher (Auto-Vorlesen) oben rechts wie in der Übung;
             # gespeichert wie die anderen Einstellungen (app_settings.json)
             ft.Row([ft.Container(dd_list, expand=True),
+                    ft.IconButton(icon=ft.Icons.EDIT_OUTLINED,
+                                  tooltip="Liste bearbeiten",
+                                  on_click=edit_list),
                     autoplay_button(nav.page)],
                    spacing=8,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
@@ -404,6 +412,9 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         spacing=12,
         scroll=ft.ScrollMode.AUTO,
     )
+    # Beim Zurückkehren aus dem Editor die Nomen-Zählung auffrischen
+    root.on_reappear = refresh_info
+    return root
 
 
 def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
@@ -412,10 +423,12 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
     Verbindungen (combos_view). Trainierbar sind normale Listen (es zählen
     ihre Adjektive) und eigene Adjektiv-Auswahllisten (nur hier sichtbar)."""
     s = load_adjective_settings()
+    app_settings = load_app_settings()
+    combos_mode = app_settings.adjective_combos_mode
     lists = filter_level(
         sorted(store.lists.values(),
                key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
-        load_app_settings().level)
+        app_settings.level)
     selections = store.selections_of("adjektive")
     if not lists and not selections:
         return ft.Text("Keine Vokabellisten gefunden.")
@@ -486,11 +499,15 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
 
     def refresh_info(e=None):
         items = adj_items()
-        pairs = load_pairs()
+        pairs, blocked = load_combos()
         keys = {combo_key(a.word) for _, a in items}
-        n_pairs = sum(len(v) for k, v in pairs.items() if k in keys)
-        info_text.value = (f"{len(items)} Adjektive · "
-                           f"{n_pairs} aktivierte Verbindungen")
+        if combos_mode == "blacklist":
+            n = sum(len(v) for k, v in blocked.items() if k in keys)
+            info_text.value = f"{len(items)} Adjektive · {n} Ausnahmen"
+        else:
+            n = sum(len(v) for k, v in pairs.items() if k in keys)
+            info_text.value = (f"{len(items)} Adjektive · "
+                               f"{n} aktivierte Verbindungen")
         nav.page.update()
 
     # Flet-0.85-Dropdowns feuern on_select (on_change existiert nicht)
@@ -546,25 +563,49 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
                                 on_saved, progress))
 
     def open_combos(e):
-        nav.go("Adjektiv ↔ Nomen", combos_view(nav, store))
+        title = ("Ausnahmen: Adjektiv ↔ Nomen"
+                 if combos_mode == "blacklist" else "Adjektiv ↔ Nomen")
+        nav.go(title, combos_view(nav, store, dd_list.value, combos_mode))
 
-    def _prune_against_all() -> dict[str, set[str]]:
-        """pairs laden und tote Verbindungen entfernen (Wort weg = weg)."""
-        pairs = load_pairs()
+    def _prune_against_all() -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+        """Combos laden und tote Verbindungen entfernen (Wort weg = weg)."""
+        pairs, blocked = load_combos()
         all_cards = store.all_cards()
         valid_adj = {combo_key(a.word)
                      for _, a in decl.usable_adjective_cards(all_cards)}
         valid_nouns = {combo_key(n.word)
                        for _, n in decl.declinable_nouns(all_cards)}
-        if prune_pairs(pairs, valid_adj, valid_nouns):
-            save_pairs(pairs)
-        return pairs
+        if prune_combos(pairs, blocked, valid_adj, valid_nouns):
+            save_combos(pairs, blocked)
+        return pairs, blocked
+
+    def noun_pool(list_id) -> tuple[list, bool]:
+        """Blacklisting-Nomenquelle: Nomen der gewählten Liste — hat sie
+        keine (reine Adjektivliste), alle Nomen der App (True = Fallback)."""
+        nouns = decl.declinable_nouns(store.cards_for(list_id))
+        if nouns:
+            return nouns, False
+        return decl.declinable_nouns(store.all_cards()), True
+
+    def build_tasks(st: DeclensionSettings, items, pairs, blocked,
+                    notify: bool = False):
+        if combos_mode == "blacklist":
+            nouns, fallback = noun_pool(st.list_id)
+            if fallback and notify and nouns:
+                nav.page.show_dialog(ft.SnackBar(ft.Text(
+                    "Die Liste enthält keine Nomen — kombiniert wird mit "
+                    "allen Nomen der App."),
+                    duration=ft.Duration(milliseconds=1500)))
+            return decl.generate_adjective_tasks(
+                items, nouns, blocked, st, mode="blacklist")
+        return decl.generate_adjective_tasks(
+            items, decl.declinable_nouns(store.all_cards()), pairs, st)
 
     def make_tasks(st: DeclensionSettings):
-        return decl.generate_adjective_tasks(
-            decl.usable_adjective_cards(store.cards_for(st.list_id)),
-            decl.declinable_nouns(store.all_cards()),
-            load_pairs(), st)
+        pairs, blocked = load_combos()
+        return build_tasks(
+            st, decl.usable_adjective_cards(store.cards_for(st.list_id)),
+            pairs, blocked)
 
     def start(e):
         settings = current_settings()
@@ -575,13 +616,16 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
             error_text.value = "Keine Adjektive in dieser Auswahl."
             nav.page.update()
             return
-        pairs = _prune_against_all()
-        tasks = decl.generate_adjective_tasks(
-            items, decl.declinable_nouns(store.all_cards()), pairs, settings)
+        pairs, blocked = _prune_against_all()
+        tasks = build_tasks(settings, items, pairs, blocked, notify=True)
         if not tasks:
             if settings.cases == ["nom"] and settings.numbers == ["sg"]:
                 error_text.value = ("Nominativ wird nur im Plural abgefragt — "
                                     "bitte Plural dazuwählen.")
+            elif combos_mode == "blacklist":
+                error_text.value = (
+                    "Keine Aufgaben — alle Kombinationen sind als "
+                    "Ausnahme ausgeschlossen (oder es gibt keine Nomen).")
             else:
                 error_text.value = (
                     "Keine Aufgaben — bitte zuerst über „Verbindungen "
@@ -594,21 +638,37 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
             nav, store, session, title="Adjektivtraining",
             make_tasks=make_tasks))
 
-    return ft.Column(
+    def edit_list(e):
+        from mathainoa1.ui.views.manager import open_source_editor
+        if dd_list.value:
+            open_source_editor(nav, store, progress, dd_list.value)
+
+    if combos_mode == "blacklist":
+        combos_label, combos_icon = "Ausnahmen festlegen…", ft.Icons.LINK_OFF
+        hint = ("Abgefragt werden alle Adjektiv↔Nomen-Kombinationen der "
+                "Liste — außer den festgelegten Ausnahmen (gelten "
+                "listenübergreifend).")
+    else:
+        combos_label, combos_icon = "Verbindungen festlegen…", ft.Icons.LINK
+        hint = ("Abgefragt werden nur aktivierte Adjektiv↔Nomen-"
+                "Verbindungen (gelten listenübergreifend).")
+
+    root = ft.Column(
         [
             ft.Row([ft.Container(dd_list, expand=True),
+                    ft.IconButton(icon=ft.Icons.EDIT_OUTLINED,
+                                  tooltip="Liste bearbeiten",
+                                  on_click=edit_list),
                     autoplay_button(nav.page)],
                    spacing=8,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Row([ft.TextButton("Neue Adjektiv-Auswahlliste erstellen…",
                                   icon=ft.Icons.PLAYLIST_ADD,
                                   on_click=new_selection)]),
-            ft.Row([ft.TextButton("Verbindungen festlegen…",
-                                  icon=ft.Icons.LINK, on_click=open_combos)]),
+            ft.Row([ft.TextButton(combos_label,
+                                  icon=combos_icon, on_click=open_combos)]),
             info_text,
-            ft.Text("Abgefragt werden nur aktivierte Adjektiv↔Nomen-"
-                    "Verbindungen (gelten listenübergreifend).",
-                    size=13, italic=True),
+            ft.Text(hint, size=13, italic=True),
             ft.Divider(),
             ft.Row([seg_mode, tf_count], spacing=12,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
@@ -628,25 +688,36 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
         spacing=12,
         scroll=ft.ScrollMode.AUTO,
     )
+    # Beim Zurückkehren (Verbindungen/Editor) die Zählerzeile auffrischen
+    root.on_reappear = refresh_info
+    return root
 
 
-def combos_view(nav, store: ContentStore) -> ft.Control:
+def combos_view(nav, store: ContentStore, source_id: str | None = None,
+                mode: str = "whitelist") -> ft.Control:
     """Kuration der Adjektiv↔Nomen-Verbindungen: Adjektiv wählen, Listen
-    durchblättern, Nomen aktivieren/deaktivieren. Wortbasiert — eine
-    Verbindung gilt überall, egal aus welcher Liste die Karten stammen."""
+    durchblättern, Nomen antippen. Whitelisting aktiviert Verbindungen,
+    Blacklisting sperrt Ausnahmen. Wortbasiert — eine Verbindung gilt
+    überall, egal aus welcher Liste die Karten stammen. source_id: nur
+    die Adjektive dieser Liste stehen zur Auswahl (None = alle)."""
     page = nav.page
-    pairs = load_pairs()
+    blacklist = mode == "blacklist"
+    pairs, blocked = load_combos()
+    active_dict = blocked if blacklist else pairs
     all_cards = store.all_cards()
+    adj_cards = (store.cards_for(source_id) if source_id else all_cards)
     by_key: dict[str, tuple] = {}
-    for c, a in decl.usable_adjective_cards(all_cards):
+    for c, a in decl.usable_adjective_cards(adj_cards):
         by_key.setdefault(combo_key(a.word), (c, a))
     if not by_key:
-        return ft.Text("Keine Adjektive in den Listen gefunden.")
-    # tote Verbindungen gleich aufräumen
+        return ft.Text("Keine Adjektive in der gewählten Liste gefunden.")
+    # tote Verbindungen gleich aufräumen (Gültigkeit ist app-weit)
+    valid_adj = {combo_key(a.word)
+                 for _, a in decl.usable_adjective_cards(all_cards)}
     valid_nouns = {combo_key(n.word)
                    for _, n in decl.declinable_nouns(all_cards)}
-    if prune_pairs(pairs, set(by_key), valid_nouns):
-        save_pairs(pairs)
+    if prune_combos(pairs, blocked, valid_adj, valid_nouns):
+        save_combos(pairs, blocked)
 
     adj_sorted = sorted(by_key.items(), key=lambda kv: kv[0])
     dd_adj = ft.Dropdown(
@@ -661,9 +732,13 @@ def combos_view(nav, store: ContentStore) -> ft.Control:
                key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
         load_app_settings().level)
     selections = store.selections_of()
+    noun_list_ids = {l.id for l in lists} | {x.id for x in selections}
     dd_list = ft.Dropdown(
         label="Nomen aus Liste",
-        value=lists[0].id if lists else (selections[0].id if selections else None),
+        # die Trainingsliste vorwählen, wenn sie Nomen liefern kann
+        value=(source_id if source_id in noun_list_ids
+               else lists[0].id if lists
+               else (selections[0].id if selections else None)),
         options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists]
         + [ft.DropdownOption(key=x.id, text=f"★ {x.name}") for x in selections],
     )
@@ -686,34 +761,34 @@ def combos_view(nav, store: ContentStore) -> ft.Control:
 
     def toggle(noun_key: str):
         akey = combo_key(current_adj().word)
-        active = pairs.setdefault(akey, set())
+        active = active_dict.setdefault(akey, set())
         if noun_key in active:
             active.discard(noun_key)
             if not active:
-                del pairs[akey]
+                del active_dict[akey]
         else:
             active.add(noun_key)
-        save_pairs(pairs)
+        save_combos(pairs, blocked)
         refresh()
 
     def set_all(on: bool):
         akey = combo_key(current_adj().word)
         keys = {k for k, _c, _n in nouns_for_list()}
         if on:
-            pairs.setdefault(akey, set()).update(keys)
+            active_dict.setdefault(akey, set()).update(keys)
         else:
-            active = pairs.get(akey)
+            active = active_dict.get(akey)
             if active:
                 active -= keys
                 if not active:
-                    del pairs[akey]
-        save_pairs(pairs)
+                    del active_dict[akey]
+        save_combos(pairs, blocked)
         refresh()
 
     def refresh(e=None):
         adj = current_adj()
         akey = combo_key(adj.word)
-        active = pairs.get(akey, set())
+        active = active_dict.get(akey, set())
         tiles: list[ft.Control] = []
         for key, c, n in nouns_for_list():
             on = key in active
@@ -722,23 +797,35 @@ def combos_view(nav, store: ContentStore) -> ft.Control:
             phrase = (f"{art} "
                       f"{decl.decline_adjective(adj, n.gender, 'nom', base_number)} "
                       f"{n.word}")
+            if blacklist:
+                leading = ft.Icon(
+                    ft.Icons.BLOCK if on else ft.Icons.CHECK_BOX_OUTLINE_BLANK,
+                    color=ft.Colors.ERROR if on else None)
+                bgcolor = ft.Colors.ERROR_CONTAINER if on else None
+            else:
+                leading = ft.Icon(
+                    ft.Icons.CHECK_BOX if on
+                    else ft.Icons.CHECK_BOX_OUTLINE_BLANK,
+                    color=ft.Colors.PRIMARY if on else None)
+                bgcolor = ft.Colors.PRIMARY_CONTAINER if on else None
             tiles.append(ft.ListTile(
                 # key je Zustand: harter Austausch statt träger Animation
                 # (gleiches Muster wie die Mehrfachauswahl der Verwaltung)
                 key=f"combo-{c.id}-{int(on)}",
                 dense=True,
-                leading=ft.Icon(
-                    ft.Icons.CHECK_BOX if on
-                    else ft.Icons.CHECK_BOX_OUTLINE_BLANK,
-                    color=ft.Colors.PRIMARY if on else None),
+                leading=leading,
                 title=ft.Row([ft.Text(c.front, expand=1),
                               ft.Text(c.back, expand=1)], spacing=8),
                 subtitle=ft.Text(phrase, size=12),
-                bgcolor=ft.Colors.PRIMARY_CONTAINER if on else None,
+                bgcolor=bgcolor,
                 on_click=lambda e, k=key: toggle(k),
             ))
-        count_text.value = (f"{len(active)} Verbindungen für „{adj.word}“ "
-                            "aktiv (über alle Listen)")
+        if blacklist:
+            count_text.value = (f"{len(active)} Ausnahmen für „{adj.word}“ "
+                                "gesperrt (über alle Listen)")
+        else:
+            count_text.value = (f"{len(active)} Verbindungen für „{adj.word}“ "
+                                "aktiv (über alle Listen)")
         body.controls = tiles or [ft.Text(
             "Keine deklinierbaren Nomen in dieser Liste.", italic=True)]
         page.update()
@@ -747,17 +834,24 @@ def combos_view(nav, store: ContentStore) -> ft.Control:
     dd_adj.on_select = refresh
     dd_list.on_select = refresh
     refresh()
+    if blacklist:
+        intro = ("Antippen sperrt/entsperrt ein Nomen für das gewählte "
+                 "Adjektiv — gesperrte Kombinationen (Ausnahmen) werden "
+                 "im Adjektivtraining nicht abgefragt.")
+        all_on, all_off = "Alle sperren", "Alle freigeben"
+    else:
+        intro = ("Antippen aktiviert/deaktiviert ein Nomen für das "
+                 "gewählte Adjektiv — nur aktivierte Verbindungen "
+                 "werden im Adjektivtraining abgefragt.")
+        all_on, all_off = "Alle an", "Alle aus"
     return ft.Column(
         [
-            ft.Text("Antippen aktiviert/deaktiviert ein Nomen für das "
-                    "gewählte Adjektiv — nur aktivierte Verbindungen "
-                    "werden im Adjektivtraining abgefragt.",
-                    size=13, italic=True),
+            ft.Text(intro, size=13, italic=True),
             dd_adj,
             ft.Row([ft.Container(dd_list, expand=True),
-                    ft.TextButton("Alle an",
+                    ft.TextButton(all_on,
                                   on_click=lambda e: set_all(True)),
-                    ft.TextButton("Alle aus",
+                    ft.TextButton(all_off,
                                   on_click=lambda e: set_all(False))],
                    spacing=4, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             count_text,
@@ -972,11 +1066,19 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             nav, store, session, title="Verbtraining",
             make_tasks=lambda s: conj.generate_tasks(store.cards_for(s.list_id), s)))
 
-    return ft.Column(
+    def edit_list(e):
+        from mathainoa1.ui.views.manager import open_source_editor
+        if dd_list.value:
+            open_source_editor(nav, store, progress, dd_list.value)
+
+    root = ft.Column(
         [
             # Lautsprecher (Auto-Vorlesen) oben rechts wie in der Übung;
             # gespeichert wie die anderen Einstellungen (app_settings.json)
             ft.Row([ft.Container(dd_list, expand=True),
+                    ft.IconButton(icon=ft.Icons.EDIT_OUTLINED,
+                                  tooltip="Liste bearbeiten",
+                                  on_click=edit_list),
                     autoplay_button(nav.page)],
                    spacing=8,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
@@ -1005,6 +1107,9 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
         spacing=12,
         scroll=ft.ScrollMode.AUTO,
     )
+    # Beim Zurückkehren aus dem Editor die Verb-Zählung auffrischen
+    root.on_reappear = refresh_info
+    return root
 
 
 def run_view(nav, store: ContentStore, session: DeclensionSession,

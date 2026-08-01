@@ -61,6 +61,10 @@ class AppSettings:
     # Feature-Keys); leer = Standardreihenfolge. Unbekannte Keys werden
     # ignoriert, fehlende hängen sich hinten an.
     menu_order: list[str] = field(default_factory=list)
+    # Adjektivtraining: "whitelist" = nur explizit festgelegte
+    # Adjektiv↔Nomen-Verbindungen werden abgefragt (Standard);
+    # "blacklist" = alle Kombinationen außer festgelegten Ausnahmen
+    adjective_combos_mode: str = "whitelist"
 
     def to_dict(self) -> dict:
         return asdict(self)

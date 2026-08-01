@@ -316,12 +316,20 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         session = make_session(store, progress, settings)
         nav.go("Training", run_view(nav, store, progress, session))
 
-    return ft.Column(
+    def edit_list(e):
+        from mathainoa1.ui.views.manager import open_source_editor
+        if dd_list.value:
+            open_source_editor(nav, store, progress, dd_list.value)
+
+    root = ft.Column(
         [
             # Lautsprecher (Auto-Vorlesen) oben rechts — ungefähr dort,
             # wo er auch in der Trainingsrunde sitzt; gespeichert wie
             # die anderen Einstellungen (app_settings.json)
             ft.Row([ft.Container(dd_list, expand=True),
+                    ft.IconButton(icon=ft.Icons.EDIT_OUTLINED,
+                                  tooltip="Liste bearbeiten",
+                                  on_click=edit_list),
                     autoplay_button(nav.page)],
                    spacing=8,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
@@ -348,6 +356,9 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         spacing=12,
         scroll=ft.ScrollMode.AUTO,
     )
+    # Beim Zurückkehren aus dem Editor die Worttyp-Filter auffrischen
+    root.on_reappear = refresh_filters
+    return root
 
 
 def run_view(nav, store: ContentStore, progress: ProgressStore,

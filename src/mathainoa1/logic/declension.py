@@ -626,13 +626,17 @@ def generate_adjective_tasks(
         pairs: dict[str, set[str]],
         settings: DeclensionSettings,
         rng: random.Random | None = None,
-        key=None) -> list[DeclensionTask]:
-    """Adjektivtraining: je Adjektiv × aktiviertes Nomen × Fall × Zahl.
+        key=None,
+        mode: str = "whitelist") -> list[DeclensionTask]:
+    """Adjektivtraining: je Adjektiv × Nomen × Fall × Zahl.
 
-    pairs: adj_key -> aktivierte noun_keys (Whitelist, wortbasiert);
+    mode="whitelist": pairs sind die AKTIVIERTEN noun_keys je adj_key —
+    nur sie werden abgefragt. mode="blacklist": pairs sind die AUSNAHMEN —
+    abgefragt wird jedes Nomen aus noun_items, das nicht gesperrt ist
+    (die Nomenquelle bestimmt der Aufrufer).
     key(word) liefert den Schlüssel (Standard: storage.adjective_combos.
     combo_key, hier injizierbar, um keine Storage-Abhängigkeit zu ziehen).
-    Nomen werden über alle Listen aufgelöst, je Wort nur einmal.
+    Nomen zählen je Wort nur einmal.
     """
     rng = rng or random.Random()
     if key is None:
@@ -647,7 +651,12 @@ def generate_adjective_tasks(
         if adj_key in seen_adj:
             continue
         seen_adj.add(adj_key)
-        for noun_key in pairs.get(adj_key, ()):
+        if mode == "blacklist":
+            blocked = pairs.get(adj_key, set())
+            noun_keys = [k for k in nouns_by_key if k not in blocked]
+        else:
+            noun_keys = pairs.get(adj_key, ())
+        for noun_key in noun_keys:
             item = nouns_by_key.get(noun_key)
             if item is None:
                 continue

@@ -185,6 +185,27 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
 
     rg_repeat.on_change = on_repeat
 
+    # --- Adjektivtraining: Whitelisting oder Blacklisting ---
+    rg_adjective = ft.RadioGroup(
+        value=(s.adjective_combos_mode
+               if s.adjective_combos_mode in ("whitelist", "blacklist")
+               else "whitelist"),
+        content=ft.Column([
+            ft.Radio(value="whitelist",
+                     label="Whitelisting — nur festgelegte Verbindungen "
+                           "werden abgefragt (Standard)"),
+            ft.Radio(value="blacklist",
+                     label="Blacklisting — alle Kombinationen außer "
+                           "festgelegten Ausnahmen"),
+        ], spacing=4),
+    )
+
+    def on_adjective(e):
+        s.adjective_combos_mode = rg_adjective.value or "whitelist"
+        save_app_settings(s)
+
+    rg_adjective.on_change = on_adjective
+
     # --- Sprachausgabe: Doppeltipp-Zeit für langsames Abspielen ---
     dd_tap = ft.Dropdown(
         label="Doppeltipp-Zeitfenster (langsam abspielen)",
@@ -439,6 +460,15 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
                     "bedeutet eine Box unter der ursprünglichen.",
                     size=13, italic=True),
             rg_repeat,
+            ft.Divider(),
+            _h("Adjektivtraining"),
+            ft.Text("Whitelisting fragt nur selbst festgelegte Adjektiv↔"
+                    "Nomen-Verbindungen ab. Blacklisting kombiniert die "
+                    "Adjektive der gewählten Liste mit ihren Nomen — außer "
+                    "den festgelegten Ausnahmen; enthält die Liste keine "
+                    "Nomen, werden alle Nomen der App verwendet.",
+                    size=13, italic=True),
+            rg_adjective,
             ft.Divider(),
             _h("Sprachausgabe"),
             rg_tts,

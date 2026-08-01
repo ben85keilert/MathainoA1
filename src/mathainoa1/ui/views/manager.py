@@ -185,7 +185,13 @@ def manager_view(nav, store: ContentStore,
     def reorder_selections(e):
         ids = [s.id for s in store.ordered_selections()]
         ids.insert(e.new_index, ids.pop(e.old_index))
-        store.set_selection_order(ids)
+        store.set_selection_order(ids, kind="words")
+        refresh()
+
+    def reorder_adjective_selections(e):
+        ids = [s.id for s in store.ordered_selections("adjektive")]
+        ids.insert(e.new_index, ids.pop(e.old_index))
+        store.set_selection_order(ids, kind="adjektive")
         refresh()
 
     def refresh():
@@ -206,19 +212,21 @@ def manager_view(nav, store: ContentStore,
                 ft.FilledButton("Neue Liste", icon=ft.Icons.ADD, on_click=new_list_dialog),
                 ft.FilledButton("Neue Auswahlliste", icon=ft.Icons.PLAYLIST_ADD,
                                 on_click=new_selection),
+                ft.FilledButton("Neue Adjektiv-Liste", icon=ft.Icons.PALETTE_OUTLINED,
+                                on_click=new_adjective_selection),
                 ft.OutlinedButton("Importieren", icon=ft.Icons.UPLOAD_FILE,
                                   on_click=import_file),
                 ft.OutlinedButton("Als Text importieren", icon=ft.Icons.CONTENT_PASTE,
                                   on_click=import_text_dialog),
             ], spacing=8, wrap=True),
         ]
-        if store.selections:
+        ordered_sels = store.ordered_selections()
+        if ordered_sels:
             rows.append(ft.Text("Auswahllisten", size=16, weight=ft.FontWeight.BOLD))
-            ordered_sels = store.ordered_selections()
             if state["sort_mode"]:
                 # Auswahllisten im Sortiermodus ebenfalls verschiebbar;
-                # feste Höhe, damit sich die beiden Ziehlisten die
-                # Spalte teilen können
+                # feste Höhe, damit sich die Ziehlisten die Spalte
+                # teilen können
                 rows.append(ft.Container(
                     ft.ReorderableListView(
                         controls=[drag_row(s.name,
@@ -231,6 +239,26 @@ def manager_view(nav, store: ContentStore,
                 ))
             else:
                 for sel in ordered_sels:
+                    rows.append(selection_tile(sel))
+        # Adjektiv-Auswahllisten: eigener Abschnitt zwischen Auswahl-
+        # und Vokabellisten; dieselben Funktionen wie Auswahllisten
+        adjective_sels = store.ordered_selections("adjektive")
+        if adjective_sels:
+            rows.append(ft.Text("Adjektiv-Listen", size=16,
+                                weight=ft.FontWeight.BOLD))
+            if state["sort_mode"]:
+                rows.append(ft.Container(
+                    ft.ReorderableListView(
+                        controls=[drag_row(s.name,
+                                           f"Adjektive · {len(s.card_ids)} Karten")
+                                  for s in adjective_sels],
+                        show_default_drag_handles=False,
+                        on_reorder=reorder_adjective_selections,
+                    ),
+                    height=min(320, 72 * len(adjective_sels)),
+                ))
+            else:
+                for sel in adjective_sels:
                     rows.append(selection_tile(sel))
         rows.append(ft.Row([
             ft.Text("Vokabellisten", size=16, weight=ft.FontWeight.BOLD,
@@ -258,6 +286,13 @@ def manager_view(nav, store: ContentStore,
     def new_selection(e):
         nav.go("Neue Auswahlliste",
                selection_editor(nav, store, None, on_saved_selection, progress))
+
+    def new_adjective_selection(e):
+        # kind="adjektive": die Liste ist im Adjektivtraining wählbar
+        nav.go("Neue Adjektiv-Liste",
+               selection_editor(nav, store,
+                                SelectionList(name="", kind="adjektive"),
+                                on_saved_selection, progress))
 
     def on_saved_selection(sel):
         nav.back()
@@ -295,11 +330,15 @@ def manager_view(nav, store: ContentStore,
             ft.PopupMenuItem(content="Löschen", icon=ft.Icons.DELETE,
                              on_click=delete),
         ])
+        adjektiv = sel.kind == "adjektive"
         return ft.Card(
             content=ft.ListTile(
-                leading=ft.Icon(ft.Icons.STAR_OUTLINE),
+                leading=ft.Icon(ft.Icons.PALETTE_OUTLINED if adjektiv
+                                else ft.Icons.STAR_OUTLINE),
                 title=ft.Text(sel.name),
-                subtitle=ft.Text(f"Auswahl · {len(sel.card_ids)} Karten"),
+                subtitle=ft.Text(
+                    f"{'Adjektive' if adjektiv else 'Auswahl'} · "
+                    f"{len(sel.card_ids)} Karten"),
                 trailing=trailing,
                 on_click=lambda e, s=sel: nav.go(
                     s.name, selection_editor(nav, store, s, on_saved_selection,
@@ -1757,16 +1796,21 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
               "wird das Audio neu erzeugt.")
 
     def add_to_selection_selected(e):
+        # Wort- und Adjektiv-Auswahllisten anbieten (letztere markiert)
         sels = store.selections_of()
+        adj_sels = store.selections_of("adjektive")
         NEW = "__new__"
         dd = ft.Dropdown(
             label="Auswahlliste",
-            value=(sels[0].id if sels else NEW),
+            value=(sels[0].id if sels
+                   else adj_sels[0].id if adj_sels else NEW),
             options=[ft.DropdownOption(key=x.id, text=x.name) for x in sels]
+            + [ft.DropdownOption(key=x.id, text=f"{x.name} (Adjektive)")
+               for x in adj_sels]
             + [ft.DropdownOption(key=NEW, text="➕ Neue Auswahlliste…")],
         )
         tf_name = ft.TextField(label="Name der neuen Auswahlliste",
-                               visible=not sels)
+                               visible=not sels and not adj_sels)
         error = ft.Text("", color=ft.Colors.ERROR, size=13)
 
         def on_select(e=None):

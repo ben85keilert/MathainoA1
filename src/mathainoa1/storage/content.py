@@ -144,8 +144,13 @@ class ContentStore:
         return sorted((s for s in self.selections.values()
                        if s.kind == kind), key=lambda s: s.name)
 
-    def set_selection_order(self, ids: list[str]) -> None:
-        self._selection_order = list(ids)
+    def set_selection_order(self, ids: list[str], kind: str = "words") -> None:
+        """Reihenfolge einer Auswahllisten-Art speichern; die gespeicherte
+        Reihenfolge der anderen Art bleibt dabei erhalten (eine Datei
+        führt beide Arten)."""
+        others = [i for i in self._selection_order
+                  if i in self.selections and self.selections[i].kind != kind]
+        self._selection_order = others + list(ids)
         self._write_order()
 
     def move_list(self, list_id: str, delta: int) -> None:

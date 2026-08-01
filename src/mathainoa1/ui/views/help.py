@@ -212,8 +212,22 @@ def help_view(nav, store=None) -> ft.Control:
             "Akkusativ: der wichtigste Fall für A1 — nach σε, από, με, "
             "για … und für das direkte Objekt.",
             "Genitiv: für Besitz und Mengenangaben (του, της, των).",
-            "Optional werden Adjektive aus der Liste mitdekliniert "
-            "(ο μικρός δρόμος → τους μικρούς δρόμους).",
+        ]),
+        ft.Text("Adjektivtraining", size=14, weight=ft.FontWeight.BOLD),
+        _bullets([
+            "Dekliniert Adjektiv + Nomen zusammen (ο μικρός δρόμος → "
+            "τους μικρούς δρόμους).",
+            "Whitelisting (Standard): nur selbst festgelegte Adjektiv↔"
+            "Nomen-Verbindungen werden abgefragt („Verbindungen "
+            "festlegen…“). Blacklisting (umschaltbar in den "
+            "Einstellungen): alle Kombinationen außer den festgelegten "
+            "Ausnahmen — Nomen kommen aus der gewählten Liste, ohne "
+            "eigene Nomen aus allen Listen.",
+            "Im Festlegen-Dialog stehen nur die Adjektive der gerade "
+            "gewählten Liste zur Auswahl; Verbindungen und Ausnahmen "
+            "gelten listenübergreifend.",
+            "Adjektiv-Listen lassen sich im Adjektivtraining und in der "
+            "Listenverwaltung anlegen und bearbeiten.",
         ]),
         ft.Text("Verbtraining", size=14, weight=ft.FontWeight.BOLD),
         _bullets([

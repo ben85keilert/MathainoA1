@@ -587,14 +587,94 @@ def test_adjective_tasks_dedupe_and_all_slots():
         "του μικρού δρόμου", "των μικρών δρόμων"}
 
 
+def test_adjective_tasks_blacklist_excludes_blocked():
+    # Blacklisting: alle Kombinationen außer den gesperrten Ausnahmen
+    nouns = [(c, parse_noun(c)) for c in [noun("ο δρόμος", "ο", "-οι"),
+                                          noun("η ώρα", "η", "-ες")]]
+    blocked = {_key("μικρός"): {_key("δρόμος")}}
+    settings = DeclensionSettings(cases=["nom"], numbers=["pl"],
+                                  word_count=10)
+    tasks = generate_adjective_tasks(
+        _adj_items("μικρός", "ωραίος"), nouns, blocked, settings,
+        rng=random.Random(1), key=_key, mode="blacklist")
+    # μικρός+δρόμος ist gesperrt, die übrigen 3 Kombinationen laufen
+    assert {t.expected for t in tasks} == {
+        "οι μικρές ώρες", "οι ωραίοι δρόμοι", "οι ωραίες ώρες"}
+
+
+def test_adjective_tasks_blacklist_without_exceptions_full_cross():
+    nouns = [(c, parse_noun(c)) for c in [noun("ο δρόμος", "ο", "-οι"),
+                                          noun("η ώρα", "η", "-ες")]]
+    settings = DeclensionSettings(cases=["acc"], numbers=["sg"])
+    tasks = generate_adjective_tasks(
+        _adj_items("μικρός"), nouns, {}, settings, key=_key,
+        mode="blacklist")
+    assert {t.expected for t in tasks} == {"τον μικρό δρόμο",
+                                           "την μικρή ώρα"}
+
+
+def test_adjective_tasks_blacklist_all_blocked_is_empty():
+    nouns = [(c, parse_noun(c)) for c in [noun("ο δρόμος", "ο", "-οι")]]
+    blocked = {_key("μικρός"): {_key("δρόμος")}}
+    settings = DeclensionSettings(cases=["acc"], numbers=["sg"])
+    assert generate_adjective_tasks(
+        _adj_items("μικρός"), nouns, blocked, settings, key=_key,
+        mode="blacklist") == []
+
+
+def test_adjective_tasks_blacklist_dedupes_nouns():
+    # dasselbe Nomen aus zwei Listen zählt nur einmal
+    nouns = [(c, parse_noun(c)) for c in [noun("ο δρόμος", "ο", "-οι"),
+                                          noun("ο δρόμος", "ο", "-οι")]]
+    settings = DeclensionSettings(cases=["acc"], numbers=["sg"])
+    tasks = generate_adjective_tasks(
+        _adj_items("μικρός"), nouns, {}, settings, key=_key,
+        mode="blacklist")
+    assert [t.expected for t in tasks] == ["τον μικρό δρόμο"]
+
+
 def test_prune_pairs_removes_dead_links(tmp_path, monkeypatch):
     monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
     from mathainoa1.storage import adjective_combos as ac
     pairs = {"μικρος": {"δρομος", "geloescht"}, "tot": {"δρομος"}}
     assert ac.prune_pairs(pairs, {"μικρος"}, {"δρομος"}) is True
     assert pairs == {"μικρος": {"δρομος"}}
-    # Roundtrip über die Datei
-    ac.save_pairs(pairs)
-    assert ac.load_pairs() == {"μικρος": {"δρομος"}}
+    # Roundtrip über die Datei — beide Wörterbücher bleiben erhalten
+    blocked = {"μικρος": {"ωρα"}}
+    ac.save_combos(pairs, blocked)
+    assert ac.load_combos() == ({"μικρος": {"δρομος"}},
+                                {"μικρος": {"ωρα"}})
     # Schlüssel normalisiert Groß-/Kleinschreibung, Akzente und Schluss-ς
     assert ac.combo_key("Δρόμος") == ac.combo_key("δρομος")
+
+
+def test_load_combos_legacy_pairs_only(tmp_path, monkeypatch):
+    # Alt-Dateien enthalten nur "pairs" — "blocked" ist dann leer
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    import json
+    from mathainoa1.storage import adjective_combos as ac
+    (tmp_path / "adjective_combos.json").write_text(
+        json.dumps({"pairs": {"μικρος": ["δρομος"]}}), encoding="utf-8")
+    assert ac.load_combos() == ({"μικρος": {"δρομος"}}, {})
+
+
+def test_save_combos_preserves_other_dict(tmp_path, monkeypatch):
+    # Wer nur Ausnahmen bearbeitet, darf die Whitelist nicht verlieren
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.storage import adjective_combos as ac
+    ac.save_combos({"μικρος": {"δρομος"}}, {})
+    pairs, blocked = ac.load_combos()
+    blocked.setdefault("ωραιος", set()).add("ωρα")
+    ac.save_combos(pairs, blocked)
+    assert ac.load_combos() == ({"μικρος": {"δρομος"}},
+                                {"ωραιος": {"ωρα"}})
+
+
+def test_prune_combos_prunes_both(tmp_path, monkeypatch):
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.storage import adjective_combos as ac
+    pairs = {"μικρος": {"δρομος"}}
+    blocked = {"tot": {"δρομος"}}
+    assert ac.prune_combos(pairs, blocked, {"μικρος"}, {"δρομος"}) is True
+    assert pairs == {"μικρος": {"δρομος"}}
+    assert blocked == {}

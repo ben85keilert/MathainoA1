@@ -120,20 +120,39 @@ gesammelten Worthintergrund der ganzen Liste öffnet.
 ## Adjektivtraining
 
 Das Adjektivtraining (eigener Hauptmenüpunkt) dekliniert **Adjektiv +
-Nomen zusammen** („ο μικρός δρόμος“ → „τους μικρούς δρόμους“). Damit
-keine unsinnigen oder unpassenden Kombinationen entstehen, werden nur
-**selbst aktivierte Verbindungen** abgefragt:
+Nomen zusammen** („ο μικρός δρόμος“ → „τους μικρούς δρόμους“). Welche
+Kombinationen abgefragt werden, steuert die Einstellung
+**„Adjektivtraining“** im Zahnrad-Menü:
 
-- Unter **„Verbindungen festlegen…“** wählt man ein Adjektiv, blättert
-  durch die Listen und aktiviert die Nomen, zu denen es passt (mit
-  Beispielphrase in der Vorschau, „Alle an/aus“ je Liste). Die
-  Verbindungen gelten **listenübergreifend** — einmal aktiviert, egal
-  in welcher Liste das Nomen steckt.
+- **Whitelisting (Standard):** Es werden nur **selbst aktivierte
+  Verbindungen** abgefragt. Unter **„Verbindungen festlegen…“** wählt
+  man ein Adjektiv, blättert durch die Listen und aktiviert die Nomen,
+  zu denen es passt (mit Beispielphrase in der Vorschau, „Alle an/aus“
+  je Liste).
+- **Blacklisting:** Die Adjektive der gewählten Liste werden **beliebig
+  mit Nomen kombiniert** — außer mit den unter **„Ausnahmen
+  festlegen…“** gesperrten Kombinationen. Als Nomen dienen die Nomen
+  der gewählten Liste; enthält sie keine (z.B. eine reine
+  Adjektiv-Auswahlliste), werden **alle Nomen der App** verwendet —
+  ein kurzer Hinweis beim Rundenstart sagt das an.
+
+Verbindungen wie Ausnahmen gelten **listenübergreifend** — einmal
+festgelegt, egal in welcher Liste das Nomen steckt. Im Dialog stehen
+nur die **Adjektive der gerade gewählten Liste** zur Auswahl; wer alle
+Adjektive auf einmal kuratieren will, sammelt sie in einer gemeinsamen
+(Adjektiv-)Liste und wählt diese oben im Adjektivtraining aus.
+
 - Trainierbar sind normale Vokabellisten (es zählen ihre Adjektive)
-  und eigene **Adjektiv-Auswahllisten**, die nur im Adjektivtraining
-  erscheinen und dort auch erstellt werden.
-- Verschwindet ein Wort aus allen Listen, wird die tote Verbindung
-  automatisch aufgeräumt.
+  und eigene **Adjektiv-Listen**, die im Adjektivtraining und in der
+  **Listenverwaltung** (eigener Abschnitt zwischen Auswahl- und
+  Vokabellisten) erstellt, bearbeitet, umbenannt, sortiert und
+  gelöscht werden können.
+- Verschwindet ein Wort aus allen Listen, werden tote Verbindungen
+  und Ausnahmen automatisch aufgeräumt.
+
+In allen vier Trainings-Startdialogen führt der **Stift-Button** neben
+der Listenauswahl direkt in das Bearbeitungsmenü der gewählten Liste
+(Vokabelliste oder Auswahlliste).
 
 Das frühere Zulosen zufälliger Adjektive im Nomentraining entfällt —
 das Nomentraining dekliniert jetzt nur noch Nomen.
