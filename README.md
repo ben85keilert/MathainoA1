@@ -88,12 +88,26 @@ tests/        # pytest-Tests
 Der Workflow [`release.yml`](.github/workflows/release.yml) baut bei
 einem Versions-Tag (`v*`) oder manuell (workflow_dispatch) APK und AAB,
 lädt beide als Workflow-Artefakte hoch und legt beim Tag-Push ein
-GitHub-Release an. Der Tag muss zur Version in `pyproject.toml` passen:
+GitHub-Release an. Der Tag muss zur Version in `pyproject.toml` passen.
+Am einfachsten übernimmt das Release-Skript alles auf einmal
+(Version in `pyproject.toml` + `__init__.py` setzen, committen, taggen,
+pushen):
 
 ```bash
-git tag v0.3.0
-git push --tags
+python tools/release.py 0.8.2
 ```
+
+### In-App-Update-Check (Sideload-Provisorium)
+
+Die App prüft beim Start (höchstens einmal täglich, still bei Fehlern)
+das neueste GitHub-Release und bietet bei einer neueren Version den
+APK-Download an; zusätzlich gibt es in der Hilfe „Nach Updates suchen“
+(`storage/updates.py` + `ui/updates.py`). Da alle CI-Builds denselben
+Signierschlüssel tragen, installiert Android die neue APK über die
+bestehende App — Lernstand und Listen bleiben erhalten.
+Voraussetzung: das Repository ist öffentlich (die ungetokente
+GitHub-API liefert für private Repos 404 — der Check schlägt dann
+einfach still fehl).
 
 ### Play-Store-Veröffentlichung (Checkliste)
 

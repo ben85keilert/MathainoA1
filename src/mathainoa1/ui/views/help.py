@@ -13,6 +13,7 @@ from importlib import metadata
 import flet as ft
 
 from mathainoa1 import APP_NAME, __version__
+from mathainoa1.ui.updates import manual_check
 from mathainoa1.storage import content
 from mathainoa1.storage.content import CSV_FIELDS
 from mathainoa1.storage.settings import load_app_settings
@@ -586,9 +587,12 @@ def help_view(nav, store=None) -> ft.Control:
         ))
 
     about_row = ft.Row(
-        [ft.TextButton("Über diese App", icon=ft.Icons.INFO_OUTLINE,
+        [ft.TextButton("Nach Updates suchen",
+                       icon=ft.Icons.SYSTEM_UPDATE_ALT,
+                       on_click=lambda e: manual_check(nav.page)),
+         ft.TextButton("Über diese App", icon=ft.Icons.INFO_OUTLINE,
                        on_click=show_about)],
-        alignment=ft.MainAxisAlignment.END,
+        alignment=ft.MainAxisAlignment.END, wrap=True,
     )
 
     return ft.Column(

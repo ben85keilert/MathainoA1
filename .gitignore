@@ -11,6 +11,7 @@ dist/
 /storage/
 
 # Screenshots und Kram
+/temp/
 
 # Lokale Inhalte (Urheberrecht): bleiben lokal, kommen nie ins Repo
 /private/

@@ -18,6 +18,7 @@ from mathainoa1.storage.settings import (
     user_vocab_dir,
 )
 from mathainoa1.ui.features import enabled_features
+from mathainoa1.ui.updates import startup_checks
 from mathainoa1.ui.views import grammar, manager, stats, trainer
 from mathainoa1.ui.views.settings import apply_app_theme, settings_view
 from mathainoa1.ui.scale import sz
@@ -214,3 +215,4 @@ def main(page: ft.Page) -> None:
     nav = Navigator(page)
     nav.store = store
     nav.go(APP_NAME, home_view(nav, store, progress))
+    startup_checks(page)
