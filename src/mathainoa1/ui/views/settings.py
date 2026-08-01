@@ -21,6 +21,7 @@ from mathainoa1.storage.settings import (
 )
 from mathainoa1.ui.audio import set_slow_tap_seconds, set_tts_engine
 from mathainoa1.ui.features import FEATURES
+from mathainoa1.ui.scale import get_ui_scale, set_ui_scale, sz
 
 # Auswählbare Akzentfarben (Schlüssel wird in AppSettings.seed gespeichert)
 SEED_COLORS: dict[str, tuple[str, str]] = {
@@ -38,12 +39,83 @@ _THEME_MODES = {
 }
 
 
+def _scaled_text_theme() -> ft.TextTheme:
+    """Material-Textstile mit dem Zoomfaktor skaliert — damit auch Text,
+    der nicht durch sz() läuft (Radio-/Switch-Labels, Buttons, AppBar),
+    dem Zoom folgt. Größen/Gewichte = Material-Defaults, nur skaliert."""
+    def st(size: int, weight=ft.FontWeight.W_400) -> ft.TextStyle:
+        return ft.TextStyle(size=sz(size), weight=weight)
+
+    return ft.TextTheme(
+        body_large=st(16), body_medium=st(14), body_small=st(12),
+        label_large=st(14, ft.FontWeight.W_500),
+        label_medium=st(12, ft.FontWeight.W_500),
+        label_small=st(11, ft.FontWeight.W_500),
+        title_large=st(22),
+        title_medium=st(16, ft.FontWeight.W_500),
+        title_small=st(14, ft.FontWeight.W_500),
+    )
+
+
 def apply_app_theme(page: ft.Page, s: AppSettings) -> None:
-    """Setzt Theme-Modus und Akzentfarbe der App gemäß den Einstellungen."""
+    """Setzt Theme-Modus, Akzentfarbe und Zoomfaktor der ganzen App."""
+    set_ui_scale(s.ui_scale)
     page.theme_mode = _THEME_MODES.get(s.theme, ft.ThemeMode.SYSTEM)
     seed = SEED_COLORS.get(s.seed, SEED_COLORS["blue"])[1]
-    page.theme = ft.Theme(color_scheme_seed=seed)
-    page.dark_theme = ft.Theme(color_scheme_seed=seed)
+    # Bei 100 % kein text_theme setzen — so bleibt die Darstellung
+    # exakt wie ohne Zoom-Funktion
+    text_theme = _scaled_text_theme() if get_ui_scale() != 1.0 else None
+    page.theme = ft.Theme(color_scheme_seed=seed, text_theme=text_theme)
+    page.dark_theme = ft.Theme(color_scheme_seed=seed, text_theme=text_theme)
+
+
+def _wrapping_radio_group(value: str, options: list[tuple[str, str]],
+                          on_select, page: ft.Page) -> ft.RadioGroup:
+    """RadioGroup mit umbruchfähigen Labels.
+
+    Flet-Radio-Labels sind reine Strings ohne Umbruch und werden auf
+    schmalen Displays abgeschnitten — deshalb Radio ohne Label plus
+    Text(expand=True) in einer antippbaren Zeile. on_select(wert) ist
+    der eine Speicher-Callback für beide Wege (Radio-Tap über
+    rg.on_change, Zeilen-Klick programmatisch — das feuert kein
+    on_change von selbst)."""
+    rg: ft.RadioGroup
+
+    def pick(v: str):
+        def handler(e):
+            rg.value = v
+            on_select(v)
+            page.update()
+        return handler
+
+    rows = [
+        ft.Container(
+            ft.Row([ft.Radio(value=v),
+                    ft.Text(label, size=sz(14), expand=True)],
+                   spacing=6,
+                   vertical_alignment=ft.CrossAxisAlignment.START),
+            on_click=pick(v), ink=True)
+        for v, label in options
+    ]
+    rg = ft.RadioGroup(value=value, content=ft.Column(rows, spacing=4))
+    rg.on_change = lambda e: on_select(rg.value)
+    return rg
+
+
+def _switch_row(sw: ft.Switch, label: str, page: ft.Page) -> ft.Control:
+    """Switch mit umbruchfähigem Label (Flet-Switch-Labels brechen nicht
+    um): Switch ohne Label + Text(expand=True); Klick auf die ganze
+    Zeile schaltet um und feuert den on_change-Handler des Switch."""
+    def toggle(e):
+        sw.value = not sw.value
+        if sw.on_change:
+            sw.on_change(None)
+        page.update()
+
+    return ft.Container(
+        ft.Row([sw, ft.Text(label, size=sz(14), expand=True)],
+               spacing=6, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+        on_click=toggle, ink=True)
 
 
 def settings_view(nav, store=None, progress=None) -> ft.Control:
@@ -88,6 +160,31 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
 
     dd_color.on_select = on_color  # Flet 0.85: Dropdowns feuern on_select
 
+    # --- Ansicht: Zoomfaktor (echte Schriftgrößen-Skalierung) ---
+    _zoom_steps = ("0.7", "0.8", "0.9", "1", "1.1", "1.25", "1.5")
+    dd_zoom = ft.Dropdown(
+        label="Zoom",
+        value=(f"{s.ui_scale:g}" if f"{s.ui_scale:g}" in _zoom_steps
+               else "1"),
+        options=[ft.DropdownOption(key=k, text=f"{round(float(k) * 100)} %")
+                 for k in _zoom_steps],
+    )
+
+    def on_zoom(e):
+        try:
+            s.ui_scale = float(dd_zoom.value)
+        except (TypeError, ValueError):
+            s.ui_scale = 1.0
+        save_app_settings(s)
+        apply_app_theme(page, s)
+        # Einstellungsseite in place neu aufbauen — der neue Zoom ist
+        # sofort sichtbar; andere Ansichten folgen beim Navigieren
+        title = nav.stack[-1][0]
+        nav.stack[-1] = (title, settings_view(nav, store, progress))
+        nav._show()
+
+    dd_zoom.on_select = on_zoom  # Flet 0.85: Dropdowns feuern on_select
+
     # --- Ansicht: Reihenfolge der Hauptmenü-Kacheln (Drag & Drop) ---
     # Lazy-Import: app importiert dieses Modul (Importzirkel)
     from mathainoa1.ui.app import menu_tiles_meta, ordered_menu_keys
@@ -113,12 +210,10 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     rebuild_menu_rows()
 
     # --- Abfrage: Box-Reset bei strengen Fehlern ---
-    sw_accent = ft.Switch(
-        label="Akzentfehler setzt die Box zurück (auf Box 1)",
-        value=s.accent_resets_box)
-    sw_case = ft.Switch(
-        label="Groß-/Kleinfehler setzt die Box zurück (auf Box 1)",
-        value=s.case_resets_box)
+    # Lange Schalter-/Radio-Labels laufen über _switch_row bzw.
+    # _wrapping_radio_group, damit sie auf schmalen Displays umbrechen
+    sw_accent = ft.Switch(value=s.accent_resets_box)
+    sw_case = ft.Switch(value=s.case_resets_box)
 
     def on_accent(e):
         s.accent_resets_box = sw_accent.value
@@ -132,12 +227,8 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     sw_case.on_change = on_case
 
     # --- Abfrage: Beschränkungen durch die Abfragemodi ---
-    sw_high = ft.Switch(
-        label="Box 4 und 5 nur über Deutsch → Griechisch",
-        value=s.high_boxes_need_production)
-    sw_top = ft.Switch(
-        label="Box 5 nur über Deutsch → Griechisch mit Schreiben",
-        value=s.top_box_needs_typing)
+    sw_high = ft.Switch(value=s.high_boxes_need_production)
+    sw_top = ft.Switch(value=s.top_box_needs_typing)
 
     def on_high(e):
         s.high_boxes_need_production = sw_high.value
@@ -151,9 +242,7 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     sw_top.on_change = on_top
 
     # --- Abfrage: Prüfbutton-Stil beim Schreiben ---
-    sw_check = ft.Switch(
-        label="Prüf-Häkchen rechts neben dem Antwortfeld (kompakt)",
-        value=s.check_beside_field)
+    sw_check = ft.Switch(value=s.check_beside_field)
 
     def on_check(e):
         s.check_beside_field = sw_check.value
@@ -162,49 +251,40 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     sw_check.on_change = on_check
 
     # --- Abfrage: Fehlerrunde und Leitner-Box ---
-    rg_repeat = ft.RadioGroup(
+    def save_repeat(v):
+        s.repeat_round_box_policy = v or "step_down"
+        save_app_settings(s)
+
+    rg_repeat = _wrapping_radio_group(
         value=(s.repeat_round_box_policy
                if s.repeat_round_box_policy in ("none", "box2", "original",
                                                 "step_down") else "step_down"),
-        content=ft.Column([
-            ft.Radio(value="none",
-                     label="Keine Verbesserung — Wort bleibt in Box 1"),
-            ft.Radio(value="box2", label="Richtig in der Fehlerrunde → Box 2"),
-            ft.Radio(value="original",
-                     label="Richtig in der Fehlerrunde → zurück in die "
-                           "ursprüngliche Box"),
-            ft.Radio(value="step_down",
-                     label="Richtig in der Fehlerrunde → eine Box zurück "
-                           "(mindestens Box 2) (Standard)"),
-        ], spacing=4),
-    )
-
-    def on_repeat(e):
-        s.repeat_round_box_policy = rg_repeat.value or "step_down"
-        save_app_settings(s)
-
-    rg_repeat.on_change = on_repeat
+        options=[
+            ("none", "Keine Verbesserung — Wort bleibt in Box 1"),
+            ("box2", "Richtig in der Fehlerrunde → Box 2"),
+            ("original", "Richtig in der Fehlerrunde → zurück in die "
+                         "ursprüngliche Box"),
+            ("step_down", "Richtig in der Fehlerrunde → eine Box zurück "
+                          "(mindestens Box 2) (Standard)"),
+        ],
+        on_select=save_repeat, page=page)
 
     # --- Adjektivtraining: Whitelisting oder Blacklisting ---
-    rg_adjective = ft.RadioGroup(
+    def save_adjective(v):
+        s.adjective_combos_mode = v or "whitelist"
+        save_app_settings(s)
+
+    rg_adjective = _wrapping_radio_group(
         value=(s.adjective_combos_mode
                if s.adjective_combos_mode in ("whitelist", "blacklist")
                else "whitelist"),
-        content=ft.Column([
-            ft.Radio(value="whitelist",
-                     label="Whitelisting — nur festgelegte Verbindungen "
-                           "werden abgefragt (Standard)"),
-            ft.Radio(value="blacklist",
-                     label="Blacklisting — alle Kombinationen außer "
-                           "festgelegten Ausnahmen"),
-        ], spacing=4),
-    )
-
-    def on_adjective(e):
-        s.adjective_combos_mode = rg_adjective.value or "whitelist"
-        save_app_settings(s)
-
-    rg_adjective.on_change = on_adjective
+        options=[
+            ("whitelist", "Whitelisting — nur festgelegte Verbindungen "
+                          "werden abgefragt (Standard)"),
+            ("blacklist", "Blacklisting — alle Kombinationen außer "
+                          "festgelegten Ausnahmen"),
+        ],
+        on_select=save_adjective, page=page)
 
     # --- Sprachausgabe: Doppeltipp-Zeit für langsames Abspielen ---
     dd_tap = ft.Dropdown(
@@ -424,32 +504,48 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
             ft.Text("Design", size=13),
             seg_theme,
             dd_color,
+            ft.Text("Zoom", size=13),
+            ft.Text("Skaliert alle Schriften der App — kleiner, damit auf "
+                    "kleine Displays mehr passt, oder größer für bessere "
+                    "Lesbarkeit. Standard: 100 %.", size=13, italic=True),
+            dd_zoom,
             ft.Text("Hauptmenü-Reihenfolge", size=13),
             ft.Text("Kacheln am ≡ ziehen — die Startseite übernimmt die "
                     "neue Reihenfolge sofort.", size=13, italic=True),
+            # Zeilenhöhe ist textgetrieben und skaliert mit dem Zoom;
+            # der 480er-Deckel ist Bildschirmplatz und bleibt fix
             ft.Container(menu_list,
-                         height=min(480, 60 * max(1, len(menu_keys)))),
+                         height=min(480, sz(60) * max(1, len(menu_keys)))),
             ft.Divider(),
             _h("Abfrage"),
             ft.Text("Greift nur, wenn beim Training „Akzentfehler tolerieren“ "
                     "bzw. „Groß-/Kleinschreibung tolerieren“ ausgeschaltet ist. "
                     "Aus = die Box bleibt bei so einem Fehler unverändert.",
                     size=13, italic=True),
-            sw_accent,
-            sw_case,
+            _switch_row(sw_accent,
+                        "Akzentfehler setzt die Box zurück (auf Box 1)",
+                        page),
+            _switch_row(sw_case,
+                        "Groß-/Kleinfehler setzt die Box zurück (auf Box 1)",
+                        page),
             ft.Divider(),
             ft.Text("Beschränkung durch die Abfragemodi", size=13),
             ft.Text("Steuert, wie hoch eine Karte je nach Abfrageart steigen "
                     "kann. Beide aus = jede Abfrageart erreicht Box 5.",
                     size=13, italic=True),
-            sw_high,
-            sw_top,
+            _switch_row(sw_high,
+                        "Box 4 und 5 nur über Deutsch → Griechisch", page),
+            _switch_row(sw_top,
+                        "Box 5 nur über Deutsch → Griechisch mit Schreiben",
+                        page),
             ft.Divider(),
             ft.Text("Prüfen beim Schreiben", size=13),
             ft.Text("Aus = „Prüfen“-Button mittig unter dem Antwortfeld, "
                     "an = rundes Häkchen rechts daneben (spart Platz bei "
                     "eingeblendeter Tastatur).", size=13, italic=True),
-            sw_check,
+            _switch_row(sw_check,
+                        "Prüf-Häkchen rechts neben dem Antwortfeld (kompakt)",
+                        page),
             ft.Divider(),
             ft.Text("Fehlerrunde", size=13),
             ft.Text("Ein Fehler setzt die Box sofort auf 1. Hier lässt sich "

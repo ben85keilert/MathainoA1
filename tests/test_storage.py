@@ -316,6 +316,15 @@ def test_app_settings_adjective_mode_default():
     assert s.adjective_combos_mode == "blacklist"
 
 
+def test_app_settings_ui_scale_roundtrip():
+    from mathainoa1.storage.settings import AppSettings
+    assert AppSettings().ui_scale == 1.0
+    s = AppSettings.from_dict(AppSettings(ui_scale=1.25).to_dict())
+    assert s.ui_scale == 1.25
+    # Storage bleibt roh — geklemmt wird erst in ui/scale.set_ui_scale
+    assert AppSettings.from_dict({"ui_scale": 2.0}).ui_scale == 2.0
+
+
 def test_app_settings_migrates_repeat_round_promotion():
     from mathainoa1.storage.settings import AppSettings
     # alte 3-stufige Einstellung wird auf die neue 4-stufige abgebildet

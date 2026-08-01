@@ -528,6 +528,52 @@ def test_hide_empty_texts():
     assert not empty.visible and filled.visible
 
 
+def test_settings_view_builds(store_with_edge_cases, tmp_path, monkeypatch):
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.ui.views import settings as settings_mod
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "set.db")
+    try:
+        settings_mod.settings_view(nav, store, progress)
+    finally:
+        progress.close()
+
+
+def test_wrapping_radio_group_click_selects_and_saves():
+    """Klick auf die Text-Zeile wählt den Wert und feuert den
+    Speicher-Callback — Radio-Labels selbst können in Flet nicht
+    umbrechen, deshalb die eigene Zeilen-Konstruktion."""
+    from mathainoa1.ui.views.settings import _wrapping_radio_group
+    page = SimpleNamespace(update=lambda: None)
+    picked: list[str] = []
+    rg = _wrapping_radio_group(
+        "a", [("a", "Erste lange Option"), ("b", "Zweite lange Option")],
+        picked.append, page)
+    assert rg.value == "a"
+    # zweite Zeile antippen (Container.on_click)
+    rg.content.controls[1].on_click(None)
+    assert rg.value == "b" and picked == ["b"]
+    # Radio-Tap läuft über rg.on_change mit dem Gruppenwert
+    rg.value = "a"
+    rg.on_change(None)
+    assert picked == ["b", "a"]
+
+
+def test_switch_row_click_toggles_and_fires():
+    from mathainoa1.ui.views.settings import _switch_row
+    import flet as ft
+    page = SimpleNamespace(update=lambda: None)
+    fired: list[bool] = []
+    sw = ft.Switch(value=False)
+    sw.on_change = lambda e: fired.append(sw.value)
+    row = _switch_row(sw, "Sehr langes Schalter-Label zum Umbrechen", page)
+    row.on_click(None)
+    assert sw.value is True and fired == [True]
+    row.on_click(None)
+    assert sw.value is False and fired == [True, False]
+
+
 def test_result_view_lists_correct_answers(store_with_edge_cases, tmp_path):
     """Die Ergebnisansicht zeigt unter den Fehlern auch die richtig
     beantworteten Wörter (grüne Häkchen-Zeilen)."""

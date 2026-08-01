@@ -65,6 +65,9 @@ class AppSettings:
     # Adjektiv↔Nomen-Verbindungen werden abgefragt (Standard);
     # "blacklist" = alle Kombinationen außer festgelegten Ausnahmen
     adjective_combos_mode: str = "whitelist"
+    # App-weiter Zoomfaktor (1.0 = 100 %); geklemmt wird beim Anwenden
+    # in ui/scale.py, hier bleibt der Rohwert
+    ui_scale: float = 1.0
 
     def to_dict(self) -> dict:
         return asdict(self)
