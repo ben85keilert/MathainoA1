@@ -24,6 +24,7 @@ from mathainoa1.storage.textanalyse import (
     word_key,
 )
 from mathainoa1.ui.views.textanalyse import etymology_dialog
+from mathainoa1.ui.scale import sz
 
 # Arbeitsanweisung IV: eigenständige Etymologie-Pakete für das Lexikon.
 # Das Eintragsschema muss mit storage/textanalyse.EtymologyEntry
@@ -119,7 +120,7 @@ def open_import_dialog(page: ft.Page, lex: LexiconStore,
         multiline=True, min_lines=14,
         max_lines=max(14, int((h - 260) / 22)),
     )
-    error = ft.Text("", color=ft.Colors.ERROR, size=13)
+    error = ft.Text("", color=ft.Colors.ERROR, size=sz(13))
 
     def run_import(e):
         text = (tf_text.value or "").strip()
@@ -158,9 +159,9 @@ def open_prompt_dialog(page: ft.Page, clipboard: ft.Clipboard) -> None:
         page.show_dialog(ft.SnackBar(ft.Text("Prompt kopiert.")))
 
     page.show_dialog(ft.AlertDialog(
-        title=ft.Text("Arbeitsanweisung IV (Prompt)", size=16),
+        title=ft.Text("Arbeitsanweisung IV (Prompt)", size=sz(16)),
         content=ft.Column(
-            [ft.Text(ARBEITSANWEISUNG_IV, size=12, selectable=True)],
+            [ft.Text(ARBEITSANWEISUNG_IV, size=sz(12), selectable=True)],
             scroll=ft.ScrollMode.AUTO, width=420, height=440,
         ),
         actions=[
@@ -228,7 +229,7 @@ def lexikon_view(nav, store: ContentStore,
         return ft.Card(content=ft.ListTile(
             dense=True,
             title=ft.Text(entry.word, weight=ft.FontWeight.BOLD),
-            subtitle=ft.Text(subtitle, size=13) if subtitle else None,
+            subtitle=ft.Text(subtitle, size=sz(13)) if subtitle else None,
             trailing=ft.IconButton(
                 ft.Icons.DELETE_OUTLINE, tooltip="Eintrag löschen",
                 on_click=lambda e, x=entry: delete_dialog(x)),
@@ -263,7 +264,7 @@ def lexikon_view(nav, store: ContentStore,
             rows.append(tf_search)
             rows.append(ft.Text(
                 f"{len(entries)} von {len(lex.entries)} Einträgen"
-                if query else f"{len(lex.entries)} Einträge", size=13))
+                if query else f"{len(lex.entries)} Einträge", size=sz(13)))
             rows += [entry_tile(x) for x in entries]
         else:
             rows.append(ft.Text(
@@ -276,7 +277,7 @@ def lexikon_view(nav, store: ContentStore,
                 "Zusatzwörter in der Liste „Lexikon – Zusatzwörter“ und "
                 "legt pro Paket eine kleine Auswahlliste zum Trainieren "
                 "an. Ein Wort erneut zu liefern ersetzt seinen Eintrag.",
-                size=14))
+                size=sz(14)))
         body.controls = rows
         page.update()
 

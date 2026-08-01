@@ -55,6 +55,7 @@ from mathainoa1.ui.views.trainer import (
     typing_controls,
     update_word_details_button,
 )
+from mathainoa1.ui.scale import sz
 
 
 def _make_session(tasks, settings, on_result=None) -> DeclensionSession:
@@ -91,7 +92,7 @@ def _preview_header(nav, store: ContentStore, progress: ProgressStore,
     from mathainoa1.ui.views.manager import open_source_editor
     return ft.Row(
         [
-            ft.Text(title, size=16, weight=ft.FontWeight.BOLD, expand=True),
+            ft.Text(title, size=sz(16), weight=ft.FontWeight.BOLD, expand=True),
             *(extra or []),
             ft.OutlinedButton(
                 "Liste bearbeiten", icon=ft.Icons.EDIT_OUTLINED,
@@ -203,7 +204,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists]
         + [ft.DropdownOption(key=x.id, text=f"★ {x.name}") for x in selections],
     )
-    info_text = ft.Text("", size=13)
+    info_text = ft.Text("", size=sz(13))
     seg_mode = ft.SegmentedButton(
         selected=[s.mode],
         segments=[
@@ -331,7 +332,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
                 dense=True,
                 title=ft.Row([ft.Text(c.front, expand=1), ft.Text(c.back, expand=1)],
                              spacing=12),
-                subtitle=ft.Text(sub, size=12),
+                subtitle=ft.Text(sub, size=sz(12)),
             )
 
         sort_btns, word_rows = _grouped_word_rows(
@@ -447,7 +448,7 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
         options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists]
         + [ft.DropdownOption(key=x.id, text=f"★ {x.name}") for x in selections],
     )
-    info_text = ft.Text("", size=13)
+    info_text = ft.Text("", size=sz(13))
     seg_mode = ft.SegmentedButton(
         selected=[s.mode],
         segments=[
@@ -671,7 +672,7 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
             ft.Row([ft.TextButton(combos_label,
                                   icon=combos_icon, on_click=open_combos)]),
             info_text,
-            ft.Text(hint, size=13, italic=True),
+            ft.Text(hint, size=sz(13), italic=True),
             ft.Divider(),
             ft.Row([seg_mode, tf_count], spacing=12,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
@@ -745,7 +746,7 @@ def combos_view(nav, store: ContentStore, source_id: str | None = None,
         options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists]
         + [ft.DropdownOption(key=x.id, text=f"★ {x.name}") for x in selections],
     )
-    count_text = ft.Text("", size=13)
+    count_text = ft.Text("", size=sz(13))
     body = ft.Column(spacing=0)
 
     def current_adj():
@@ -819,7 +820,7 @@ def combos_view(nav, store: ContentStore, source_id: str | None = None,
                 leading=leading,
                 title=ft.Row([ft.Text(c.front, expand=1),
                               ft.Text(c.back, expand=1)], spacing=8),
-                subtitle=ft.Text(phrase, size=12),
+                subtitle=ft.Text(phrase, size=sz(12)),
                 bgcolor=bgcolor,
                 on_click=lambda e, k=key: toggle(k),
             ))
@@ -849,7 +850,7 @@ def combos_view(nav, store: ContentStore, source_id: str | None = None,
         all_on, all_off = "Alle an", "Alle aus"
     return ft.Column(
         [
-            ft.Text(intro, size=13, italic=True),
+            ft.Text(intro, size=sz(13), italic=True),
             dd_adj,
             ft.Row([ft.Container(dd_list, expand=True),
                     ft.TextButton(all_on,
@@ -888,7 +889,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
         options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists]
         + [ft.DropdownOption(key=x.id, text=f"★ {x.name}") for x in selections],
     )
-    info_text = ft.Text("", size=13)
+    info_text = ft.Text("", size=sz(13))
     seg_mode = ft.SegmentedButton(
         selected=[s.mode],
         segments=[
@@ -1026,7 +1027,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                 dense=True,
                 title=ft.Row([ft.Text(c.front, expand=1), ft.Text(c.back, expand=1)],
                              spacing=12),
-                subtitle=ft.Text(_verb_sample(v), size=12),
+                subtitle=ft.Text(_verb_sample(v), size=sz(12)),
             )
 
         sort_btns, word_rows = _grouped_word_rows(
@@ -1124,34 +1125,34 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
     "τους μικρούς δρόμους") lässt sich anhören — die Sprachausgabe spricht
     auch gebeugte Formen, nicht nur die Grundform.
     """
-    progress_label = ft.Text("", size=13)
-    round_label = ft.Text("", size=13, color=ft.Colors.PRIMARY)
-    prompt = ft.Text("", size=28, weight=ft.FontWeight.BOLD,
+    progress_label = ft.Text("", size=sz(13))
+    round_label = ft.Text("", size=sz(13), color=ft.Colors.PRIMARY)
+    prompt = ft.Text("", size=sz(28), weight=ft.FontWeight.BOLD,
                      text_align=ft.TextAlign.CENTER)
-    task_label = ft.Text("", size=16, color=ft.Colors.PRIMARY,
+    task_label = ft.Text("", size=sz(16), color=ft.Colors.PRIMARY,
                          weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER)
-    meaning = ft.Text("", size=14, italic=True, text_align=ft.TextAlign.CENTER)
+    meaning = ft.Text("", size=sz(14), italic=True, text_align=ft.TextAlign.CENTER)
     # Notizen/Hinweise der Karte — wie im Vokabeltrainer: vor der Antwort
     # nur die sichtbare Seite, nach dem Aufdecken beide Seiten
     notes_col = ft.Column(spacing=8,
                           horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-    answer = ft.Text("", size=22, text_align=ft.TextAlign.CENTER)
+    answer = ft.Text("", size=sz(22), text_align=ft.TextAlign.CENTER)
     # Bei deutscher Vorgabe steht das griechische Wort nirgends — nach dem
     # Aufdecken die Grundform (Lemma/Nominativ) mit einblenden
-    base_form = ft.Text("", size=14, italic=True,
+    base_form = ft.Text("", size=sz(14), italic=True,
                         text_align=ft.TextAlign.CENTER)
-    feedback = ft.Text("", size=16, weight=ft.FontWeight.BOLD)
+    feedback = ft.Text("", size=sz(16), weight=ft.FontWeight.BOLD)
     # Bei falscher Antwort: rotes Kreuz + Label + Augensymbol; Klick blendet
     # die eigene Antwort darunter ein, das Label wird „Meine Antwort:" und
     # das Auge verschwindet
-    own_answer = ft.Text("", size=14, italic=True, color=ft.Colors.ERROR,
+    own_answer = ft.Text("", size=sz(14), italic=True, color=ft.Colors.ERROR,
                          text_align=ft.TextAlign.CENTER, visible=False)
     wrong_label = ft.Text("Meine Antwort anzeigen", color=ft.Colors.ERROR)
     wrong_eye = ft.Icon(ft.Icons.VISIBILITY_OUTLINED, color=ft.Colors.ERROR,
-                        size=18)
+                        size=sz(18))
     btn_wrong = ft.TextButton(
         content=ft.Row(
-            [ft.Icon(ft.Icons.CLOSE, color=ft.Colors.ERROR, size=18),
+            [ft.Icon(ft.Icons.CLOSE, color=ft.Colors.ERROR, size=sz(18)),
              wrong_label, wrong_eye],
             tight=True, spacing=6,
         ),
@@ -1222,7 +1223,7 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         # Antwortfeld — getippt wird nur die Verbform (zählt auch so,
         # die Varianten ohne θα sind ohnehin gültig)
         tf_answer.prefix = (
-            ft.Text("θα ", size=16)
+            ft.Text("θα ", size=sz(16))
             if getattr(task, "tense", None) == "future" else None)
         if session.settings.mode == "flashcard":
             action_area.controls = [ft.FilledButton("Zeigen", icon=ft.Icons.VISIBILITY,
@@ -1287,8 +1288,8 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
 
         def note_row(icon: str, text: str) -> ft.Row:
             return ft.Row(
-                [ft.Icon(icon, size=16, color=ft.Colors.PRIMARY),
-                 ft.Text(text, size=14, italic=True, expand=True)],
+                [ft.Icon(icon, size=sz(16), color=ft.Colors.PRIMARY),
+                 ft.Text(text, size=sz(14), italic=True, expand=True)],
                 spacing=6, vertical_alignment=ft.CrossAxisAlignment.START,
             )
 
@@ -1470,7 +1471,7 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
     return ft.Column(
         [
             ft.Text(f"{stats['correct']} von {stats['total']} richtig",
-                    size=24, weight=ft.FontWeight.BOLD),
+                    size=sz(24), weight=ft.FontWeight.BOLD),
             ft.ProgressBar(value=stats["correct"] / max(1, stats["total"])),
             ft.Text("Falsche Aufgaben:" if wrong_items else "Alles richtig — μπράβο! 🎉"),
             *wrong_items,

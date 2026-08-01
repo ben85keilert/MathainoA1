@@ -20,6 +20,7 @@ from mathainoa1.storage.settings import (
 from mathainoa1.ui.features import enabled_features
 from mathainoa1.ui.views import grammar, manager, stats, trainer
 from mathainoa1.ui.views.settings import apply_app_theme, settings_view
+from mathainoa1.ui.scale import sz
 
 
 class Navigator:
@@ -154,7 +155,7 @@ def home_view(nav: Navigator, store: ContentStore, progress: ProgressStore) -> f
     def item(icon, title, subtitle, builder=None):
         return ft.Card(
             content=ft.ListTile(
-                leading=ft.Icon(icon, size=32),
+                leading=ft.Icon(icon, size=sz(32)),
                 title=ft.Text(title, weight=ft.FontWeight.BOLD),
                 subtitle=ft.Text(subtitle),
                 on_click=(lambda e: nav.go(title, builder(nav))) if builder else None,

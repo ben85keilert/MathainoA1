@@ -40,6 +40,7 @@ from mathainoa1.ui.views.wordlist import (
     group_heading,
     origin_names,
 )
+from mathainoa1.ui.scale import sz
 
 ARTICLES = ["", "ο", "η", "το", "οι", "τα"]
 
@@ -222,7 +223,7 @@ def manager_view(nav, store: ContentStore,
         ]
         ordered_sels = store.ordered_selections()
         if ordered_sels:
-            rows.append(ft.Text("Auswahllisten", size=16, weight=ft.FontWeight.BOLD))
+            rows.append(ft.Text("Auswahllisten", size=sz(16), weight=ft.FontWeight.BOLD))
             if state["sort_mode"]:
                 # Auswahllisten im Sortiermodus ebenfalls verschiebbar;
                 # feste Höhe, damit sich die Ziehlisten die Spalte
@@ -244,7 +245,7 @@ def manager_view(nav, store: ContentStore,
         # und Vokabellisten; dieselben Funktionen wie Auswahllisten
         adjective_sels = store.ordered_selections("adjektive")
         if adjective_sels:
-            rows.append(ft.Text("Adjektiv-Listen", size=16,
+            rows.append(ft.Text("Adjektiv-Listen", size=sz(16),
                                 weight=ft.FontWeight.BOLD))
             if state["sort_mode"]:
                 rows.append(ft.Container(
@@ -261,7 +262,7 @@ def manager_view(nav, store: ContentStore,
                 for sel in adjective_sels:
                     rows.append(selection_tile(sel))
         rows.append(ft.Row([
-            ft.Text("Vokabellisten", size=16, weight=ft.FontWeight.BOLD,
+            ft.Text("Vokabellisten", size=sz(16), weight=ft.FontWeight.BOLD,
                     expand=True),
             sort_btn,
         ], vertical_alignment=ft.CrossAxisAlignment.CENTER))
@@ -445,7 +446,7 @@ def manager_view(nav, store: ContentStore,
             label="CSV- oder JSON-Text hier einfügen",
             multiline=True, min_lines=8, max_lines=14,
         )
-        error = ft.Text("", color=ft.Colors.ERROR, size=13)
+        error = ft.Text("", color=ft.Colors.ERROR, size=sz(13))
 
         def do_import(e):
             text = (tf_text.value or "").strip()
@@ -513,7 +514,7 @@ def manager_view(nav, store: ContentStore,
         Auswahllisten gleichermaßen: cards sind die aufgelösten Karten."""
         checks = {key: ft.Checkbox(label=label, value=True)
                   for key, label in EXPORT_COLUMNS}
-        error = ft.Text("", color=ft.Colors.ERROR, size=13)
+        error = ft.Text("", color=ft.Colors.ERROR, size=sz(13))
         seg_format = ft.SegmentedButton(
             selected=["csv"],
             segments=[
@@ -635,7 +636,7 @@ def manager_view(nav, store: ContentStore,
 
         bar = ft.ProgressBar(value=0.0)
         status = ft.Text(f"{already} von {len(texts)} bereits vorhanden.",
-                         size=13)
+                         size=sz(13))
         btn_action = ft.TextButton("Abbrechen")
         state = {"cancel": False, "done": False}
 
@@ -736,11 +737,11 @@ def search_view(nav, store: ContentStore) -> ft.Control:
                     etymology_dialog(page, x)
 
                 trailing_items.append(ft.IconButton(
-                    ft.Icons.INFO_OUTLINE, icon_size=18,
+                    ft.Icons.INFO_OUTLINE, icon_size=sz(18),
                     tooltip="Wortherkunft & Synonyme", on_click=show_info))
             if in_selections:
                 trailing_items.append(ft.Icon(
-                    ft.Icons.STAR, color=ft.Colors.AMBER, size=18,
+                    ft.Icons.STAR, color=ft.Colors.AMBER, size=sz(18),
                     tooltip="In Auswahlliste: " + ", ".join(in_selections)))
             tiles.append(ft.ListTile(
                 dense=True,
@@ -750,7 +751,7 @@ def search_view(nav, store: ContentStore) -> ft.Control:
                     spacing=12,
                     vertical_alignment=ft.CrossAxisAlignment.START,
                 ),
-                subtitle=ft.Text(vlist.name, size=12),
+                subtitle=ft.Text(vlist.name, size=sz(12)),
                 trailing=(ft.Row(trailing_items, tight=True, spacing=0)
                           if trailing_items else None),
                 on_click=lambda e, v=vlist, c=card: open_hit(v, c),
@@ -853,8 +854,8 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
         return cards
     pick_box_row = ft.Row(spacing=6, wrap=True)
     sel_box_row = ft.Row(spacing=6, wrap=True)
-    counter = ft.Text("", size=13, weight=ft.FontWeight.BOLD)
-    error = ft.Text("", color=ft.Colors.ERROR, size=13)
+    counter = ft.Text("", size=sz(13), weight=ft.FontWeight.BOLD)
+    error = ft.Text("", color=ft.Colors.ERROR, size=sz(13))
     pick_col = ft.Column(spacing=0)
     selected_col = ft.Column(spacing=0)
     tab_selected = ft.Tab(label="Ausgewählt")
@@ -906,7 +907,7 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
         tab_selected.label = f"Ausgewählt ({len(selected_ids)})"
         def box_dot(c: VocabCard) -> ft.Icon:
             # Farbpunkt der Leitner-Box vor dem Wort (grau = untrainiert)
-            return ft.Icon(ft.Icons.CIRCLE, size=12,
+            return ft.Icon(ft.Icons.CIRCLE, size=sz(12),
                            color=box_color(box_of(c, all_progress)))
 
         # linker Reiter: Karten der gefilterten Liste antippen
@@ -1061,7 +1062,7 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             sel_box_row,
             ft.Text("Antippen markiert zum Entfernen — wirksam erst mit "
-                    "„Aktualisieren“.", size=13, italic=True),
+                    "„Aktualisieren“.", size=sz(13), italic=True),
             btn_apply,
             selected_col,
         ],
@@ -1084,7 +1085,7 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
     # Systemleiste den Button verdecken
     save_btn = ft.IconButton(
         icon=ft.Icons.SAVE, tooltip="Auswahlliste speichern", on_click=save,
-        icon_size=28, style=ft.ButtonStyle(bgcolor=ft.Colors.PRIMARY_CONTAINER),
+        icon_size=sz(28), style=ft.ButtonStyle(bgcolor=ft.Colors.PRIMARY_CONTAINER),
     )
     return ft.Column(
         [
@@ -1125,7 +1126,7 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
         "acc_pl": ft.TextField(label="Akkusativ Plural", hint_text="z.B. τους άντρες"),
     }
     noun_section = ft.Column(
-        [ft.Text("Deklination (nur bei Unregelmäßigkeit)", size=13,
+        [ft.Text("Deklination (nur bei Unregelmäßigkeit)", size=sz(13),
                  weight=ft.FontWeight.BOLD),
          *[noun_fields[k] for k in NOUN_EDITOR_KEYS]],
         spacing=10, visible=False,
@@ -1154,20 +1155,20 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
         helper="Nur ausfüllen, wenn es vom regelmäßigen Muster abweicht.",
     )
     verb_section = ft.Column(
-        [ft.Text("Konjugation", size=13, weight=ft.FontWeight.BOLD),
+        [ft.Text("Konjugation", size=sz(13), weight=ft.FontWeight.BOLD),
          tf_present, tf_stem2, tf_aorist_passive, tf_participle],
         spacing=10, visible=False,
     )
     tf_fem = ft.TextField(label="Femininum (unregelmäßig)",
                           hint_text="z.B. γλυκιά")
     adj_section = ft.Column(
-        [ft.Text("Deklination (nur bei Unregelmäßigkeit)", size=13,
+        [ft.Text("Deklination (nur bei Unregelmäßigkeit)", size=sz(13),
                  weight=ft.FontWeight.BOLD),
          tf_fem],
         spacing=10, visible=False,
     )
-    error = ft.Text("", color=ft.Colors.ERROR, size=13)
-    pos_label = ft.Text("", size=13)
+    error = ft.Text("", color=ft.Colors.ERROR, size=sz(13))
+    pos_label = ft.Text("", size=sz(13))
 
     def sync_type_fields(e=None):
         # Nur die zum Worttyp passenden Felder einblenden;
@@ -1441,7 +1442,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
 
         def cell(text: str, width: float, bold: bool = False) -> ft.Container:
             return ft.Container(
-                ft.Text(text or "", size=13, max_lines=2,
+                ft.Text(text or "", size=sz(13), max_lines=2,
                         overflow=ft.TextOverflow.ELLIPSIS,
                         weight=ft.FontWeight.BOLD if bold else None),
                 width=width,
@@ -1462,12 +1463,12 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         at_end = k + len(visible) - 1 >= max_k
         pager = ft.Row(
             [ft.Text("Antippen einer Zeile öffnet die Karte · "
-                     "◀ ▶ blättert durch die Spalten.", size=12,
+                     "◀ ▶ blättert durch die Spalten.", size=sz(12),
                      italic=True, expand=True),
-             ft.IconButton(ft.Icons.CHEVRON_LEFT, icon_size=20,
+             ft.IconButton(ft.Icons.CHEVRON_LEFT, icon_size=sz(20),
                            tooltip="Spalte zurück",
                            on_click=turn(-1), disabled=k == 0),
-             ft.IconButton(ft.Icons.CHEVRON_RIGHT, icon_size=20,
+             ft.IconButton(ft.Icons.CHEVRON_RIGHT, icon_size=sz(20),
                            tooltip="Nächste Spalte",
                            on_click=turn(1), disabled=at_end)],
             spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -1553,11 +1554,11 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
 
     filter_btn = ft.PopupMenuButton(icon=ft.Icons.FILTER_LIST,
                                     tooltip="Nach Worttyp filtern")
-    alpha_btn = ft.IconButton(ft.Icons.SORT_BY_ALPHA, icon_size=20,
+    alpha_btn = ft.IconButton(ft.Icons.SORT_BY_ALPHA, icon_size=sz(20),
                               tooltip="Alphabetisch sortieren",
                               on_click=toggle_alpha)
     box_sort_btn = ft.IconButton(
-        ft.Icons.SORT, icon_size=20,
+        ft.Icons.SORT, icon_size=sz(20),
         tooltip="Nach Lernstand sortieren (schlechteste zuerst)",
         on_click=toggle_box_sort)
     sort_btn = ft.IconButton(on_click=toggle_sort)
@@ -1576,10 +1577,10 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
             page.update()
         return handler
 
-    cards_btn = ft.IconButton(ft.Icons.VIEW_AGENDA_OUTLINED, icon_size=20,
+    cards_btn = ft.IconButton(ft.Icons.VIEW_AGENDA_OUTLINED, icon_size=sz(20),
                               tooltip="Kartenansicht",
                               on_click=switch_tab(0))
-    table_btn = ft.IconButton(ft.Icons.TABLE_ROWS_OUTLINED, icon_size=20,
+    table_btn = ft.IconButton(ft.Icons.TABLE_ROWS_OUTLINED, icon_size=sz(20),
                               tooltip="Tabellenansicht",
                               on_click=switch_tab(1))
 
@@ -1601,14 +1602,14 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
                 controls.append(ft.Divider())
             controls += render_etymology(entry)
         page.show_dialog(ft.AlertDialog(
-            title=ft.Text(f"Worthintergrund — {vlist.name}", size=16),
+            title=ft.Text(f"Worthintergrund — {vlist.name}", size=sz(16)),
             content=ft.Column(controls, scroll=ft.ScrollMode.AUTO,
                               width=420, height=440),
             actions=[ft.TextButton("Schließen",
                                    on_click=lambda e: page.pop_dialog())],
         ))
 
-    info_btn = ft.IconButton(ft.Icons.MENU_BOOK_OUTLINED, icon_size=20,
+    info_btn = ft.IconButton(ft.Icons.MENU_BOOK_OUTLINED, icon_size=sz(20),
                              tooltip="Worthintergrund dieser Liste",
                              on_click=show_word_info)
 
@@ -1811,7 +1812,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         )
         tf_name = ft.TextField(label="Name der neuen Auswahlliste",
                                visible=not sels and not adj_sels)
-        error = ft.Text("", color=ft.Colors.ERROR, size=13)
+        error = ft.Text("", color=ft.Colors.ERROR, size=sz(13))
 
         def on_select(e=None):
             tf_name.visible = dd.value == NEW
@@ -1902,7 +1903,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
             ]
         return ft.Column([
             ft.Row([
-                ft.Text(f"{len(selected)} markiert", size=13,
+                ft.Text(f"{len(selected)} markiert", size=sz(13),
                         weight=ft.FontWeight.BOLD),
                 ft.TextButton("Alle", on_click=lambda e: select_all(True)),
                 ft.TextButton("Keine", on_click=lambda e: select_all(False)),
@@ -1926,7 +1927,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
                     color=ft.Colors.PRIMARY if c.id in selected else None,
                 ),
                 title=ft.Row(
-                    [ft.Icon(ft.Icons.CIRCLE, size=12,
+                    [ft.Icon(ft.Icons.CIRCLE, size=sz(12),
                              color=box_color(box_of(c, all_progress))),
                      ft.Text(c.with_plural(c.front), expand=1),
                      ft.Text(c.back, expand=1)],
@@ -1949,14 +1950,14 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
             # selbst darf dann nicht auch noch scrollen
             cards_col.scroll = None
             rows.append(ft.Text("Sortiermodus: Karten am ≡ ziehen.",
-                                italic=True, size=13))
+                                italic=True, size=sz(13)))
             rows.append(sort_view())
         elif view_state["select_mode"]:
             cards_col.scroll = ft.ScrollMode.AUTO
             rows.append(select_action_bar())
             if view_state["wtype"]:
                 rows.append(ft.Text(f"Filter: {view_state['wtype']}",
-                                    italic=True, size=13))
+                                    italic=True, size=sz(13)))
             rows += select_tiles(shown)
             if vlist.cards and not shown:
                 rows.append(ft.Text("Keine Karten für diesen Worttyp.",
@@ -1970,10 +1971,10 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
                         page, store, vlist, None, on_saved=refresh)))
             else:
                 rows.append(ft.Text("Buchliste — Vokabeln fest, eigene Hinweise/Notizen "
-                                    "per Antippen ergänzbar", italic=True, size=13))
+                                    "per Antippen ergänzbar", italic=True, size=sz(13)))
             if view_state["wtype"]:
                 rows.append(ft.Text(f"Filter: {view_state['wtype']}",
-                                    italic=True, size=13))
+                                    italic=True, size=sz(13)))
             # Farbpunkt der Leitner-Box vorne statt Papierkorb hinten —
             # Löschen läuft über den Markiermodus (Mehrfachauswahl)
             rows += card_tiles(
@@ -2041,7 +2042,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
     # Umbenennen) links, Reiter-Umschalter Karten/Tabelle rechts. Der
     # Umbenennen-Klick liegt nur auf dem Namensbereich, damit er beim
     # Tippen auf die Reiter nicht mitfeuert.
-    name_text = ft.Text(vlist.name, size=16, weight=ft.FontWeight.BOLD,
+    name_text = ft.Text(vlist.name, size=sz(16), weight=ft.FontWeight.BOLD,
                         expand=True)
 
     def after_rename():
@@ -2052,7 +2053,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
     if vlist.editable:
         name_zone = ft.Container(
             ft.Row([name_text,
-                    ft.Icon(ft.Icons.EDIT_OUTLINED, size=18)],
+                    ft.Icon(ft.Icons.EDIT_OUTLINED, size=sz(18))],
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ink=True, border_radius=8,
             padding=ft.Padding.symmetric(horizontal=4, vertical=2),

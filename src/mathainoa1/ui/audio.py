@@ -26,6 +26,7 @@ from mathainoa1.storage.settings import (
     tts_cache_dir,
 )
 from mathainoa1.storage.tts import SLOW_FACTOR, TtsCache, TtsFetchError, speakable
+from mathainoa1.ui.scale import sz
 
 try:
     import flet_audio as fa
@@ -247,7 +248,7 @@ def speaker_button(page: ft.Page | None, text_provider,
 
     def symbol() -> ft.Control:
         if _slow_mode:
-            return ft.Text(TURTLE, size=icon_size or 20)
+            return ft.Text(TURTLE, size=icon_size or sz(20))
         return ft.Icon(ft.Icons.VOLUME_UP, size=icon_size, color=icon_color)
 
     holder = ft.Container(symbol(), padding=8, tooltip=SPEAKER_TOOLTIP)

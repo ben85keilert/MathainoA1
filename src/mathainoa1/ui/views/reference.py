@@ -12,18 +12,19 @@ import flet as ft
 from mathainoa1.logic import conjugation as conj
 from mathainoa1.logic import declension as decl
 from mathainoa1.models import VocabCard
+from mathainoa1.ui.scale import sz
 
 
 def _p(text: str) -> ft.Text:
-    return ft.Text(text, size=13)
+    return ft.Text(text, size=sz(13))
 
 
 def _h(text: str) -> ft.Text:
-    return ft.Text(text, size=15, weight=ft.FontWeight.BOLD)
+    return ft.Text(text, size=sz(15), weight=ft.FontWeight.BOLD)
 
 
 def _cell_content(v: str | ft.Control) -> ft.Control:
-    return v if isinstance(v, ft.Control) else ft.Text(v, size=13)
+    return v if isinstance(v, ft.Control) else ft.Text(v, size=sz(13))
 
 
 def _form_cell(form: str, stem: str, article: str = "") -> ft.Control:
@@ -36,9 +37,9 @@ def _form_cell(form: str, stem: str, article: str = "") -> ft.Control:
     s_form = decl.strip_acute(form).lower()
     s_stem = decl.strip_acute(stem).lower() if stem else ""
     if not s_stem or not s_form.startswith(s_stem) or len(form) <= len(stem):
-        return ft.Text(plain, size=13)
+        return ft.Text(plain, size=sz(13))
     head = (f"{article} " if article else "") + form[:len(stem)] + "-"
-    return ft.Text(size=13, spans=[
+    return ft.Text(size=sz(13), spans=[
         ft.TextSpan(head),
         ft.TextSpan(form[len(stem):],
                     ft.TextStyle(weight=ft.FontWeight.BOLD)),
@@ -47,7 +48,7 @@ def _form_cell(form: str, stem: str, article: str = "") -> ft.Control:
 
 def _table(headers: list[str], rows: list[list[str | ft.Control]]) -> ft.Control:
     table = ft.DataTable(
-        columns=[ft.DataColumn(ft.Text(h, weight=ft.FontWeight.BOLD, size=13))
+        columns=[ft.DataColumn(ft.Text(h, weight=ft.FontWeight.BOLD, size=sz(13)))
                  for h in headers],
         rows=[ft.DataRow(cells=[ft.DataCell(_cell_content(v)) for v in r])
               for r in rows],
@@ -67,7 +68,7 @@ def _frozen_table(corner: str, row_labels: list[str], headers: list[str],
                 data_row_min_height=34, data_row_max_height=34)
 
     def head(t: str) -> ft.DataColumn:
-        return ft.DataColumn(ft.Text(t, weight=ft.FontWeight.BOLD, size=13))
+        return ft.DataColumn(ft.Text(t, weight=ft.FontWeight.BOLD, size=sz(13)))
 
     def cell(t: str | ft.Control) -> ft.DataCell:
         return ft.DataCell(_cell_content(t))

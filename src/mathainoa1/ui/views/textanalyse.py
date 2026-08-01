@@ -27,6 +27,7 @@ from mathainoa1.storage.textanalyse import (
 )
 from mathainoa1.ui.audio import speaker_button
 from mathainoa1.ui.views.wordlist import word_list_panel
+from mathainoa1.ui.scale import sz
 
 # Arbeitsanweisung III: erweitert die Analyse-Prompts des Nutzers
 # (Arbeitsanweisung I/II) um den JSON-Export für diese App. Das Schema
@@ -148,7 +149,7 @@ def overview_view(nav, store: ContentStore,
             label="Analyse-JSON hier einfügen",
             multiline=True, min_lines=8, max_lines=14,
         )
-        error = ft.Text("", color=ft.Colors.ERROR, size=13)
+        error = ft.Text("", color=ft.Colors.ERROR, size=sz(13))
 
         def run_import(e):
             text = (tf_text.value or "").strip()
@@ -168,7 +169,7 @@ def overview_view(nav, store: ContentStore,
 
         content_items: list[ft.Control] = []
         if hint:
-            content_items.append(ft.Text(hint, size=13, italic=True))
+            content_items.append(ft.Text(hint, size=sz(13), italic=True))
         content_items += [tf_text, error]
         page.show_dialog(ft.AlertDialog(
             title=ft.Text("Analyse als Text importieren"),
@@ -210,9 +211,9 @@ def overview_view(nav, store: ContentStore,
             page.show_dialog(ft.SnackBar(ft.Text("Prompt kopiert.")))
 
         page.show_dialog(ft.AlertDialog(
-            title=ft.Text("Arbeitsanweisung III (Prompt)", size=16),
+            title=ft.Text("Arbeitsanweisung III (Prompt)", size=sz(16)),
             content=ft.Column(
-                [ft.Text(ARBEITSANWEISUNG_III, size=12, selectable=True)],
+                [ft.Text(ARBEITSANWEISUNG_III, size=sz(12), selectable=True)],
                 scroll=ft.ScrollMode.AUTO, width=420, height=440,
             ),
             actions=[
@@ -278,7 +279,7 @@ def overview_view(nav, store: ContentStore,
         return ft.Card(content=ft.ListTile(
             leading=ft.Icon(ft.Icons.ARTICLE_OUTLINED),
             title=ft.Text(analysis.title, weight=ft.FontWeight.BOLD),
-            subtitle=ft.Text(" · ".join(parts), size=13),
+            subtitle=ft.Text(" · ".join(parts), size=sz(13)),
             trailing=menu,
             on_click=lambda e, a=analysis: open_detail(a),
         ))
@@ -307,7 +308,7 @@ def overview_view(nav, store: ContentStore,
                 "App legt daraus die Analyse und passende Vokabellisten "
                 "an; eine korrigierte Fassung ersetzt die Analyse per "
                 "Reimport, der Lernstand bleibt erhalten.",
-                size=14))
+                size=sz(14)))
         body.controls = rows
         page.update()
 
@@ -324,7 +325,7 @@ def _section(nav, title: str, icon: str, build_controls) -> ft.Control:
     """
     return ft.Card(content=ft.ListTile(
         leading=ft.Icon(icon, color=ft.Colors.PRIMARY),
-        title=ft.Text(title, size=15, weight=ft.FontWeight.BOLD),
+        title=ft.Text(title, size=sz(15), weight=ft.FontWeight.BOLD),
         trailing=ft.Icon(ft.Icons.CHEVRON_RIGHT),
         on_click=lambda e: nav.go(title, ft.Column(
             build_controls(), spacing=10, scroll=ft.ScrollMode.AUTO)),
@@ -341,25 +342,25 @@ def detail_view(nav, astore: AnalysisStore, store: ContentStore,
         speaker = speaker_button(page, lambda: analysis.original_text,
                                  long_text=True)
         items: list[ft.Control] = [
-            ft.Row([ft.Text("Originaltext", size=15,
+            ft.Row([ft.Text("Originaltext", size=sz(15),
                             weight=ft.FontWeight.BOLD, expand=True), speaker],
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            ft.Text(analysis.original_text, size=14, selectable=True),
+            ft.Text(analysis.original_text, size=sz(14), selectable=True),
             ft.Divider(),
-            ft.Text("Inhaltliche Übersetzung", size=15,
+            ft.Text("Inhaltliche Übersetzung", size=sz(15),
                     weight=ft.FontWeight.BOLD),
-            ft.Text(analysis.translation, size=14, selectable=True),
+            ft.Text(analysis.translation, size=sz(14), selectable=True),
         ]
         if analysis.source or analysis.date:
             items.append(ft.Text(
                 " · ".join(p for p in (analysis.source, analysis.date) if p),
-                size=12, italic=True))
+                size=sz(12), italic=True))
         return items
 
     def segment_controls() -> list[ft.Control]:
         rows: list[ft.Control] = [ft.Text(
             "Kleine Sinneinheiten: links Griechisch, rechts wörtlich.",
-            size=13, italic=True)]
+            size=sz(13), italic=True)]
         for s in analysis.segments:
             title = ft.Row(
                 [ft.Text(s.gr, expand=1, selectable=True),
@@ -367,10 +368,10 @@ def detail_view(nav, astore: AnalysisStore, store: ContentStore,
                 spacing=12, vertical_alignment=ft.CrossAxisAlignment.START)
             rows.append(ft.ListTile(
                 dense=True, title=title,
-                subtitle=ft.Text(s.note, size=12, italic=True)
+                subtitle=ft.Text(s.note, size=sz(12), italic=True)
                 if s.note else None,
                 trailing=speaker_button(page, lambda s=s: s.gr,
-                                        long_text=True, icon_size=18),
+                                        long_text=True, icon_size=sz(18)),
             ))
         return rows
 
@@ -397,9 +398,9 @@ def detail_view(nav, astore: AnalysisStore, store: ContentStore,
                 title=ft.Text(p.gr, weight=ft.FontWeight.BOLD,
                               selectable=True),
                 subtitle=ft.Text(" — ".join(x for x in (p.de, p.note) if x),
-                                 size=13),
+                                 size=sz(13)),
                 trailing=speaker_button(page, lambda p=p: p.gr,
-                                        long_text=True, icon_size=18),
+                                        long_text=True, icon_size=sz(18)),
             ))
         return rows
 
@@ -442,9 +443,9 @@ def render_etymology(entry: EtymologyEntry,
                  bg: str | None = None) -> ft.Control:
         return ft.Container(
             ft.Row([
-                ft.Text(left, size=13, width=130,
+                ft.Text(left, size=sz(13), width=130,
                         weight=ft.FontWeight.BOLD if bold_left else None),
-                ft.Text(right, size=13, expand=True),
+                ft.Text(right, size=sz(13), expand=True),
             ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.START),
             bgcolor=bg, border_radius=6,
             padding=ft.Padding.symmetric(horizontal=6, vertical=4),
@@ -452,7 +453,7 @@ def render_etymology(entry: EtymologyEntry,
 
     rows: list[ft.Control] = []
     if with_title:
-        rows.append(ft.Text(entry.word, size=16, weight=ft.FontWeight.BOLD))
+        rows.append(ft.Text(entry.word, size=sz(16), weight=ft.FontWeight.BOLD))
     for part in entry.breakdown:
         rows.append(two_cols(str(part.get("element", "")),
                              str(part.get("meaning", ""))))
@@ -461,7 +462,7 @@ def render_etymology(entry: EtymologyEntry,
                              bg=ft.Colors.PRIMARY_CONTAINER))
     if entry.semantics:
         rows.append(ft.Text(f"Semantik: {entry.semantics}",
-                            size=13, italic=True))
+                            size=sz(13), italic=True))
     cognate_rows = [
         (label, ", ".join(
             " — ".join(x for x in (str(r.get("word", "")),
@@ -470,12 +471,12 @@ def render_etymology(entry: EtymologyEntry,
         for key, label in COGNATE_GROUPS
     ]
     if any(text for _label, text in cognate_rows):
-        rows.append(ft.Text("Kognaten", size=14, weight=ft.FontWeight.BOLD))
+        rows.append(ft.Text("Kognaten", size=sz(14), weight=ft.FontWeight.BOLD))
         for label, text in cognate_rows:
             if text:
                 rows.append(two_cols(label, text))
     if entry.synonyms:
-        rows.append(ft.Text("Synonyme", size=14, weight=ft.FontWeight.BOLD))
+        rows.append(ft.Text("Synonyme", size=sz(14), weight=ft.FontWeight.BOLD))
         for syn in entry.synonyms:
             rows.append(two_cols(syn.word, syn.nuance, bold_left=True))
     return rows
@@ -489,7 +490,7 @@ def etymology_dialog(page: ft.Page, entry: EtymologyEntry) -> None:
     w = getattr(page, "width", None) or 420
     h = getattr(page, "height", None) or 700
     page.show_dialog(ft.AlertDialog(
-        title=ft.Text(entry.word, size=16),
+        title=ft.Text(entry.word, size=sz(16)),
         inset_padding=ft.Padding.all(12),
         content=ft.Column(
             render_etymology(entry, with_title=False),

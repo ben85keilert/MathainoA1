@@ -16,6 +16,16 @@ Nomen/Adjektiven, Konjugation bei Verben), erscheint das
 **Buch-Symbol**. Die Beugungstabelle ist bei Deutsch → Griechisch erst
 nach dem Aufdecken enthalten, damit die Antwort nicht verraten wird.
 
+## Zoom
+
+In den **Einstellungen** (Zahnrad → Ansicht → **Zoom**) lassen sich
+alle Schriften der App skalieren: **70–150 %, Standard 100 %**. Kleinere
+Werte bringen auf kleinen Displays mehr auf den Bildschirm, größere
+verbessern die Lesbarkeit. Es handelt sich um echte
+Schriftgrößen-Skalierung — die Oberfläche ordnet sich neu an, nichts
+wird abgeschnitten. Die Änderung wirkt sofort auf die
+Einstellungsseite; andere Ansichten übernehmen sie beim Öffnen.
+
 ## Stufen (A1/A2)
 
 In den **Einstellungen** (Zahnrad) lässt sich die sichtbare **Stufe**

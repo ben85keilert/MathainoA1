@@ -16,6 +16,7 @@ from mathainoa1 import APP_NAME, __version__
 from mathainoa1.storage import content
 from mathainoa1.storage.content import CSV_FIELDS
 from mathainoa1.storage.settings import load_app_settings
+from mathainoa1.ui.scale import sz
 
 # Gemeinsamer Teil beider Chatbot-Prompts: Ausgabeformat, Spaltenregeln
 # und Beispielzeilen der Import-CSV
@@ -123,12 +124,12 @@ ZURÜCKFÜHREN AUF DIE GRUNDFORM
 
 
 def _p(text: str) -> ft.Text:
-    return ft.Text(text, size=14)
+    return ft.Text(text, size=sz(14))
 
 
 def _bullets(items: list[str]) -> ft.Column:
     return ft.Column(
-        [ft.Row([ft.Text("•", size=14), ft.Text(t, size=14, expand=True)],
+        [ft.Row([ft.Text("•", size=sz(14)), ft.Text(t, size=sz(14), expand=True)],
                 spacing=6, vertical_alignment=ft.CrossAxisAlignment.START)
          for t in items],
         spacing=6,
@@ -140,7 +141,7 @@ def _chapter(nav, title: str, icon: str,
     """Kapitel-Kachel: öffnet den Inhalt als eigene Seite (statt Aufklappen)."""
     return ft.Card(content=ft.ListTile(
         leading=ft.Icon(icon, color=ft.Colors.PRIMARY),
-        title=ft.Text(title, size=15, weight=ft.FontWeight.BOLD),
+        title=ft.Text(title, size=sz(15), weight=ft.FontWeight.BOLD),
         trailing=ft.Icon(ft.Icons.CHEVRON_RIGHT),
         on_click=lambda e: nav.go(title, ft.Column(
             list(controls), spacing=10, scroll=ft.ScrollMode.AUTO)),
@@ -178,9 +179,9 @@ def help_view(nav, store=None) -> ft.Control:
                 nav.page.pop_dialog()
                 nav.page.show_dialog(ft.SnackBar(ft.Text("Prompt kopiert.")))
             nav.page.show_dialog(ft.AlertDialog(
-                title=ft.Text(title, size=16),
+                title=ft.Text(title, size=sz(16)),
                 content=ft.Column(
-                    [ft.Text(text, size=12, selectable=True)],
+                    [ft.Text(text, size=sz(12), selectable=True)],
                     scroll=ft.ScrollMode.AUTO, width=420, height=440,
                 ),
                 actions=[
@@ -192,7 +193,7 @@ def help_view(nav, store=None) -> ft.Control:
         return handler
 
     trainings = _chapter(nav, "Trainingsbereiche", ft.Icons.SCHOOL_OUTLINED, [
-        ft.Text("Vokabeltraining", size=14, weight=ft.FontWeight.BOLD),
+        ft.Text("Vokabeltraining", size=sz(14), weight=ft.FontWeight.BOLD),
         _bullets([
             "Karteikarte (Selbstbewertung) oder Schreiben (Tippen), "
             "gefiltert nach Liste und Worttyp.",
@@ -201,7 +202,7 @@ def help_view(nav, store=None) -> ft.Control:
             "das bringt eine Karte in die hohen Boxen (siehe "
             "Leitner-Boxen).",
         ]),
-        ft.Text("Nomentraining", size=14, weight=ft.FontWeight.BOLD),
+        ft.Text("Nomentraining", size=sz(14), weight=ft.FontWeight.BOLD),
         _bullets([
             "Setzt Nomen (mit Artikel) in andere Formen — regelbasiert "
             "aus den Vokabelkarten, ohne eigene Formenlisten.",
@@ -213,7 +214,7 @@ def help_view(nav, store=None) -> ft.Control:
             "για … und für das direkte Objekt.",
             "Genitiv: für Besitz und Mengenangaben (του, της, των).",
         ]),
-        ft.Text("Adjektivtraining", size=14, weight=ft.FontWeight.BOLD),
+        ft.Text("Adjektivtraining", size=sz(14), weight=ft.FontWeight.BOLD),
         _bullets([
             "Dekliniert Adjektiv + Nomen zusammen (ο μικρός δρόμος → "
             "τους μικρούς δρόμους).",
@@ -229,7 +230,7 @@ def help_view(nav, store=None) -> ft.Control:
             "Adjektiv-Listen lassen sich im Adjektivtraining und in der "
             "Listenverwaltung anlegen und bearbeiten.",
         ]),
-        ft.Text("Verbtraining", size=14, weight=ft.FontWeight.BOLD),
+        ft.Text("Verbtraining", size=sz(14), weight=ft.FontWeight.BOLD),
         _bullets([
             "Vom deutschen Infinitiv zur konjugierten Form; Personen "
             "und Singular/Plural wählbar.",
@@ -276,7 +277,7 @@ def help_view(nav, store=None) -> ft.Control:
             "ursprüngliche Box oder eine Box darunter — mindestens "
             "Box 2 (Standard).",
         ]),
-        ft.Text("Akzent- und Groß-/Kleinschreibung tolerieren", size=14,
+        ft.Text("Akzent- und Groß-/Kleinschreibung tolerieren", size=sz(14),
                 weight=ft.FontWeight.BOLD),
         _bullets([
             "Beide Schalter (Vokabel- und Deklinationstraining) wirken "
@@ -344,7 +345,7 @@ def help_view(nav, store=None) -> ft.Control:
             "(z.B. „γλυκιά“).",
             "Worttyp „Sonstiges“ zeigt im Editor alle Felder.",
         ]),
-        ft.Text("Beispiele je Worttyp", size=14, weight=ft.FontWeight.BOLD),
+        ft.Text("Beispiele je Worttyp", size=sz(14), weight=ft.FontWeight.BOLD),
         _bullets([
             "Nomen, regelmäßig: „ο δρόμος“ – Straße, Plural „-οι“ — "
             "sonst nichts nötig.",
@@ -377,7 +378,7 @@ def help_view(nav, store=None) -> ft.Control:
            "JSON-Datei wählen. Die CSV braucht eine Kopfzeile mit diesen "
            "Spalten (nur front und back sind Pflicht):"),
         ft.Container(
-            ft.Text(",".join(CSV_FIELDS), size=12, selectable=True,
+            ft.Text(",".join(CSV_FIELDS), size=sz(12), selectable=True,
                     font_family="monospace"),
             bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             border_radius=8, padding=8,
@@ -422,7 +423,7 @@ def help_view(nav, store=None) -> ft.Control:
 
     stufen = _chapter(nav, "Stufen & erweiterte Funktionen",
                       ft.Icons.TUNE, [
-        ft.Text("Stufe (A1/A2)", size=14, weight=ft.FontWeight.BOLD),
+        ft.Text("Stufe (A1/A2)", size=sz(14), weight=ft.FontWeight.BOLD),
         _bullets([
             "In den Einstellungen umschaltbar: A1 zeigt nur A1-Listen, "
             "A2 zeigt A1- und A2-Listen. Eigene Listen ohne Stufe sind "
@@ -432,7 +433,13 @@ def help_view(nav, store=None) -> ft.Control:
             "Der Lernfortschritt hängt an der Karte und gilt "
             "stufenübergreifend.",
         ]),
-        ft.Text("Erweiterte Funktionen", size=14, weight=ft.FontWeight.BOLD),
+        ft.Text("Zoom", size=sz(14), weight=ft.FontWeight.BOLD),
+        _p("In den Einstellungen (Ansicht → Zoom) lassen sich alle "
+           "Schriften der App verkleinern oder vergrößern (70–150 %, "
+           "Standard 100 %) — kleiner, damit auf kleine Displays mehr "
+           "passt, größer für bessere Lesbarkeit. Die Änderung wirkt "
+           "sofort; andere Ansichten übernehmen sie beim Öffnen."),
+        ft.Text("Erweiterte Funktionen", size=sz(14), weight=ft.FontWeight.BOLD),
         _bullets([
             "Zusatzfunktionen für Fortgeschrittene — in den Einstellungen "
             "einzeln zuschaltbar (Standard: aus); eingeschaltete "
@@ -558,19 +565,19 @@ def help_view(nav, store=None) -> ft.Control:
             title=ft.Text(APP_NAME),
             content=ft.Column(
                 [
-                    ft.Text(f"Version {__version__}", size=14),
+                    ft.Text(f"Version {__version__}", size=sz(14)),
                     ft.Text("Lern-App für Griechisch (Niveau A1, mit "
                             "A2-Vorbereitung): Vokabeln, Deklination und "
-                            "Konjugation.", size=14),
+                            "Konjugation.", size=sz(14)),
                     ft.Divider(),
-                    ft.Text("Lizenz: MIT — © 2026 Benjamin Ebert", size=13),
+                    ft.Text("Lizenz: MIT — © 2026 Benjamin Ebert", size=sz(13)),
                     ft.Text("Quellcode:\n"
                             "github.com/ben85keilert/MathainoA1",
-                            size=13, selectable=True),
+                            size=sz(13), selectable=True),
                     ft.Text(f"Entwickelt mit Flet {flet_version} (Python).",
-                            size=13),
+                            size=sz(13)),
                     ft.Text("Alle Daten (Listen, Lernstand) bleiben lokal "
-                            "auf diesem Gerät.", size=13),
+                            "auf diesem Gerät.", size=sz(13)),
                 ],
                 tight=True, spacing=8, width=360,
             ),

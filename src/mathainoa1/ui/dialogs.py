@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import flet as ft
+from mathainoa1.ui.scale import sz
 
 
 def plaintext_dialog(page: ft.Page, title: str, text: str) -> None:
@@ -22,9 +23,9 @@ def plaintext_dialog(page: ft.Page, title: str, text: str) -> None:
             "Export in die Zwischenablage kopiert.")))
 
     page.show_dialog(ft.AlertDialog(
-        title=ft.Text(title, size=16),
+        title=ft.Text(title, size=sz(16)),
         content=ft.Column(
-            [ft.Text(text, size=12, selectable=True)],
+            [ft.Text(text, size=sz(12), selectable=True)],
             scroll=ft.ScrollMode.AUTO, width=420, height=440,
         ),
         actions=[

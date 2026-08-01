@@ -195,7 +195,7 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
 
     def rebuild_menu_rows():
         menu_list.controls = [
-            drag_row(ft.Row([ft.Icon(tile_meta[k][1], size=20),
+            drag_row(ft.Row([ft.Icon(tile_meta[k][1], size=sz(20)),
                              ft.Text(tile_meta[k][0])], spacing=8))
             for k in menu_keys]
 
@@ -313,14 +313,14 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
                     "installierte griechische Stimme (Android: meist schon "
                     "dabei; Windows: Sprachpaket „Ελληνικά“ hinzufügen). "
                     "Nicht verfügbar in der Entwicklungs-Vorschau und "
-                    "unter Linux.", size=13, italic=True),
+                    "unter Linux.", size=sz(13), italic=True),
             ft.Radio(value=TTS_GOOGLE, label="Google (online)"),
             ft.Text("Holt das Audio von Google-Servern — dabei werden der "
                     "gesprochene Text und die IP-Adresse an Google (USA) "
                     "übertragen. Danach liegt das Audio im lokalen Cache "
                     "und spielt offline. Für Geräte ohne griechische "
                     "Systemstimme; „Audio vorbereiten“ im Listenmenü lädt "
-                    "ganze Listen vor.", size=13, italic=True),
+                    "ganze Listen vor.", size=sz(13), italic=True),
         ], spacing=4),
     )
 
@@ -363,14 +363,14 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     feature_rows: list[ft.Control] = []
     for f in FEATURES:
         feature_rows.append(feature_switch(f))
-        feature_rows.append(ft.Text(f.subtitle, size=13, italic=True))
+        feature_rows.append(ft.Text(f.subtitle, size=sz(13), italic=True))
     if not feature_rows:
         feature_rows.append(ft.Text(
             "Noch keine Zusatzfunktionen verfügbar — weitere folgen in "
-            "künftigen Versionen.", size=13, italic=True))
+            "künftigen Versionen.", size=sz(13), italic=True))
 
     def _h(text: str) -> ft.Text:
-        return ft.Text(text, size=16, weight=ft.FontWeight.BOLD)
+        return ft.Text(text, size=sz(16), weight=ft.FontWeight.BOLD)
 
     # --- Backup: Export/Import der Nutzerdaten (kategorieweise) ---
     backup_rows: list[ft.Control] = []
@@ -411,11 +411,11 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
             page.show_dialog(ft.AlertDialog(
                 title=ft.Text("Backup erstellen"),
                 content=ft.Column(
-                    [ft.Text("Was soll in die Backup-Datei?", size=13),
+                    [ft.Text("Was soll in die Backup-Datei?", size=sz(13)),
                      *boxes.values(),
                      ft.Text("Heruntergeladenes Audio ist nie enthalten — "
                              "es wird bei Bedarf neu geladen.",
-                             size=13, italic=True)],
+                             size=sz(13), italic=True)],
                     tight=True, spacing=6, width=420,
                     scroll=ft.ScrollMode.AUTO),
                 actions=[ft.TextButton("Abbrechen",
@@ -481,7 +481,7 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
                     "für Sicherungskopien und den Umzug auf ein neues "
                     "Gerät. Beim Wiederherstellen werden genau die im "
                     "Backup enthaltenen Bereiche ersetzt.",
-                    size=13, italic=True),
+                    size=sz(13), italic=True),
             ft.Row([
                 ft.FilledButton("Backup erstellen", icon=ft.Icons.ARCHIVE,
                                 on_click=create_dialog),
@@ -497,21 +497,21 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
             ft.Text("Filtert, welche Vokabellisten in Training, Verwaltung "
                     "und Statistik erscheinen. A2 zeigt auch A1-Listen. "
                     "Eigene Listen ohne Stufe sind immer sichtbar.",
-                    size=13, italic=True),
+                    size=sz(13), italic=True),
             seg_level,
             ft.Divider(),
             _h("Ansicht"),
-            ft.Text("Design", size=13),
+            ft.Text("Design", size=sz(13)),
             seg_theme,
             dd_color,
-            ft.Text("Zoom", size=13),
+            ft.Text("Zoom", size=sz(13)),
             ft.Text("Skaliert alle Schriften der App — kleiner, damit auf "
                     "kleine Displays mehr passt, oder größer für bessere "
-                    "Lesbarkeit. Standard: 100 %.", size=13, italic=True),
+                    "Lesbarkeit. Standard: 100 %.", size=sz(13), italic=True),
             dd_zoom,
-            ft.Text("Hauptmenü-Reihenfolge", size=13),
+            ft.Text("Hauptmenü-Reihenfolge", size=sz(13)),
             ft.Text("Kacheln am ≡ ziehen — die Startseite übernimmt die "
-                    "neue Reihenfolge sofort.", size=13, italic=True),
+                    "neue Reihenfolge sofort.", size=sz(13), italic=True),
             # Zeilenhöhe ist textgetrieben und skaliert mit dem Zoom;
             # der 480er-Deckel ist Bildschirmplatz und bleibt fix
             ft.Container(menu_list,
@@ -521,7 +521,7 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
             ft.Text("Greift nur, wenn beim Training „Akzentfehler tolerieren“ "
                     "bzw. „Groß-/Kleinschreibung tolerieren“ ausgeschaltet ist. "
                     "Aus = die Box bleibt bei so einem Fehler unverändert.",
-                    size=13, italic=True),
+                    size=sz(13), italic=True),
             _switch_row(sw_accent,
                         "Akzentfehler setzt die Box zurück (auf Box 1)",
                         page),
@@ -529,32 +529,32 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
                         "Groß-/Kleinfehler setzt die Box zurück (auf Box 1)",
                         page),
             ft.Divider(),
-            ft.Text("Beschränkung durch die Abfragemodi", size=13),
+            ft.Text("Beschränkung durch die Abfragemodi", size=sz(13)),
             ft.Text("Steuert, wie hoch eine Karte je nach Abfrageart steigen "
                     "kann. Beide aus = jede Abfrageart erreicht Box 5.",
-                    size=13, italic=True),
+                    size=sz(13), italic=True),
             _switch_row(sw_high,
                         "Box 4 und 5 nur über Deutsch → Griechisch", page),
             _switch_row(sw_top,
                         "Box 5 nur über Deutsch → Griechisch mit Schreiben",
                         page),
             ft.Divider(),
-            ft.Text("Prüfen beim Schreiben", size=13),
+            ft.Text("Prüfen beim Schreiben", size=sz(13)),
             ft.Text("Aus = „Prüfen“-Button mittig unter dem Antwortfeld, "
                     "an = rundes Häkchen rechts daneben (spart Platz bei "
-                    "eingeblendeter Tastatur).", size=13, italic=True),
+                    "eingeblendeter Tastatur).", size=sz(13), italic=True),
             _switch_row(sw_check,
                         "Prüf-Häkchen rechts neben dem Antwortfeld (kompakt)",
                         page),
             ft.Divider(),
-            ft.Text("Fehlerrunde", size=13),
+            ft.Text("Fehlerrunde", size=sz(13)),
             ft.Text("Ein Fehler setzt die Box sofort auf 1. Hier lässt sich "
                     "einstellen, wohin ein Wort wandert, das in der "
                     "Fehlerrunde richtig beantwortet wird — Leichtsinns"
                     "fehler werden so weniger hart bestraft. „Ursprüngliche "
                     "Box“ ist die Box vor dem Fehler; „eine Box zurück“ "
                     "bedeutet eine Box unter der ursprünglichen.",
-                    size=13, italic=True),
+                    size=sz(13), italic=True),
             rg_repeat,
             ft.Divider(),
             _h("Adjektivtraining"),
@@ -563,7 +563,7 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
                     "Adjektive der gewählten Liste mit ihren Nomen — außer "
                     "den festgelegten Ausnahmen; enthält die Liste keine "
                     "Nomen, werden alle Nomen der App verwendet.",
-                    size=13, italic=True),
+                    size=sz(13), italic=True),
             rg_adjective,
             ft.Divider(),
             _h("Sprachausgabe"),
@@ -571,14 +571,14 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
             ft.Text("Doppeltipp auf einen Lautsprecher (oder langes "
                     "Drücken) schaltet die langsame Wiedergabe an/aus — "
                     "das Symbol wird dann zur Schildkröte 🐢.",
-                    size=13, italic=True),
+                    size=sz(13), italic=True),
             dd_tap,
             *backup_rows,
             ft.Divider(),
             _h("Erweiterte Funktionen"),
             ft.Text("Zusatzfunktionen für Fortgeschrittene. Eingeschaltete "
                     "Funktionen erscheinen als eigene Karte im Hauptmenü "
-                    "und gelten für alle Stufen.", size=13, italic=True),
+                    "und gelten für alle Stufen.", size=sz(13), italic=True),
             *feature_rows,
         ],
         spacing=12,

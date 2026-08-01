@@ -15,6 +15,7 @@ from mathainoa1.models import WORD_TYPES, VocabCard
 from mathainoa1.storage.progress import MAX_BOX, CardProgress
 from mathainoa1.storage.textanalyse import etymology_for
 from mathainoa1.ui.audio import speaker_button
+from mathainoa1.ui.scale import sz
 
 BOX_COLORS = [ft.Colors.RED, ft.Colors.ORANGE, ft.Colors.AMBER,
               ft.Colors.LIGHT_GREEN, ft.Colors.GREEN]
@@ -36,7 +37,7 @@ def box_chip_controls(active: set[int], on_toggle) -> list[ft.Control]:
     """Farbige Box-Umschalter (1–5 und „neu“) für Filterzeilen."""
     return [
         ft.Container(
-            ft.Text("neu" if b == 0 else str(b), size=12, color=ft.Colors.WHITE),
+            ft.Text("neu" if b == 0 else str(b), size=sz(12), color=ft.Colors.WHITE),
             bgcolor=box_color(b), border_radius=6,
             padding=ft.Padding.symmetric(horizontal=10, vertical=4),
             opacity=1.0 if b in active else 0.3,
@@ -69,7 +70,7 @@ def group_by_origin(cards: list[VocabCard],
 def group_heading(name: str) -> ft.Control:
     """Überschrift „Liste X“ über einer Ursprungsgruppe."""
     return ft.Container(
-        ft.Text(name, size=14, weight=ft.FontWeight.BOLD,
+        ft.Text(name, size=sz(14), weight=ft.FontWeight.BOLD,
                 color=ft.Colors.PRIMARY),
         padding=ft.Padding.only(top=8, bottom=2),
     )
@@ -91,7 +92,7 @@ def card_tiles(cards: list[VocabCard], on_click=None, on_delete=None,
         if all_progress is not None:
             p = all_progress.get(c.id)
             box = p.box if p and p.seen else 0
-            leading = ft.Icon(ft.Icons.CIRCLE, size=14, color=box_color(box))
+            leading = ft.Icon(ft.Icons.CIRCLE, size=sz(14), color=box_color(box))
         trailing_items: list[ft.Control] = []
         entry = etymology_for(c)  # None, wenn Feature Textanalyse aus
         if entry is not None:
@@ -126,7 +127,7 @@ def card_tiles(cards: list[VocabCard], on_click=None, on_delete=None,
                 vertical_alignment=ft.CrossAxisAlignment.START,
             ),
             subtitle=ft.Container(
-                ft.Text(extra, size=12),
+                ft.Text(extra, size=sz(12)),
                 padding=ft.Padding.only(top=4),
             ) if extra else None,
             leading=leading,
@@ -142,7 +143,7 @@ def drag_row(title: str | ft.Control, subtitle: str = "") -> ft.ListTile:
     keine Bearbeitung, man will ja sortieren."""
     return ft.ListTile(
         title=ft.Text(title) if isinstance(title, str) else title,
-        subtitle=ft.Text(subtitle, size=12) if subtitle else None,
+        subtitle=ft.Text(subtitle, size=sz(12)) if subtitle else None,
         trailing=ft.ReorderableDragHandle(
             content=ft.Icon(ft.Icons.DRAG_HANDLE),
         ),
@@ -238,7 +239,7 @@ def word_list_panel(page: ft.Page, cards: list[VocabCard],
         chip_row.controls = [
             ft.Container(
                 ft.Text(f"{counts[b]}" if b else f"neu {counts[b]}",
-                        size=12, color=ft.Colors.WHITE),
+                        size=sz(12), color=ft.Colors.WHITE),
                 bgcolor=box_color(b), border_radius=6,
                 padding=ft.Padding.symmetric(horizontal=10, vertical=5),
                 opacity=1.0 if b in active else 0.3,
@@ -273,7 +274,7 @@ def word_list_panel(page: ft.Page, cards: list[VocabCard],
     refresh()
     return ft.Column(
         [
-            ft.Text("Boxen an-/abwählen:", size=13),
+            ft.Text("Boxen an-/abwählen:", size=sz(13)),
             chip_row,
             ft.Row([dd_type, alpha_btn, sort_btn],
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),

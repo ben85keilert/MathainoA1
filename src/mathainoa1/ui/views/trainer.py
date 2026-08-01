@@ -25,6 +25,7 @@ from mathainoa1.ui.views.reference import (
     show_word_forms,
     word_forms_content,
 )
+from mathainoa1.ui.scale import sz
 
 ALL = "__all__"
 
@@ -174,12 +175,12 @@ def show_word_details(page: ft.Page, card, with_forms: bool = True) -> None:
     w = getattr(page, "width", None) or 420
     h = getattr(page, "height", None) or 700
     page.show_dialog(ft.AlertDialog(
-        title=ft.Text(card.with_plural(card.front), size=16),
+        title=ft.Text(card.with_plural(card.front), size=sz(16)),
         inset_padding=ft.Padding.all(12),
         content=ft.Column(
             render_etymology(entry, with_title=False)
             + [ft.Divider(thickness=2),
-               ft.Text("Beugungsformen", size=16, weight=ft.FontWeight.BOLD),
+               ft.Text("Beugungsformen", size=sz(16), weight=ft.FontWeight.BOLD),
                forms],
             scroll=ft.ScrollMode.AUTO, width=w, height=h - 180,
         ),
@@ -197,7 +198,7 @@ def typing_controls(tf_answer: ft.TextField, check) -> list[ft.Control]:
         return [ft.Row(
             [ft.Container(tf_answer, expand=True),
              ft.IconButton(
-                 ft.Icons.CHECK, tooltip="Prüfen", icon_size=28,
+                 ft.Icons.CHECK, tooltip="Prüfen", icon_size=sz(28),
                  style=ft.ButtonStyle(bgcolor=ft.Colors.PRIMARY_CONTAINER),
                  on_click=check)],
             spacing=8,
@@ -341,7 +342,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         header = ft.Row(
             [
                 ft.Text(f"{store.name_for(list_id)} — {len(cards)} Karten",
-                        size=16, weight=ft.FontWeight.BOLD, expand=True),
+                        size=sz(16), weight=ft.FontWeight.BOLD, expand=True),
                 ft.OutlinedButton(
                     "Liste bearbeiten", icon=ft.Icons.EDIT_OUTLINED,
                     on_click=lambda e: open_source_editor(
@@ -405,7 +406,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             seg_dir,
             sw_article, sw_repeat, sw_accent, sw_case,
-            ft.Text("Bei der Frage einblenden", size=13), seg_notes,
+            ft.Text("Bei der Frage einblenden", size=sz(13)), seg_notes,
             error_text,
             ft.Row(
                 [
@@ -427,24 +428,24 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
 
 def run_view(nav, store: ContentStore, progress: ProgressStore,
              session: TrainingSession) -> ft.Control:
-    progress_label = ft.Text("", size=13)
-    round_label = ft.Text("", size=13, color=ft.Colors.PRIMARY)
-    prompt = ft.Text("", size=28, weight=ft.FontWeight.BOLD,
+    progress_label = ft.Text("", size=sz(13))
+    round_label = ft.Text("", size=sz(13), color=ft.Colors.PRIMARY)
+    prompt = ft.Text("", size=sz(28), weight=ft.FontWeight.BOLD,
                      text_align=ft.TextAlign.CENTER)
     notes_col = ft.Column(spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-    answer = ft.Text("", size=22, text_align=ft.TextAlign.CENTER)
-    feedback = ft.Text("", size=16, weight=ft.FontWeight.BOLD)
+    answer = ft.Text("", size=sz(22), text_align=ft.TextAlign.CENTER)
+    feedback = ft.Text("", size=sz(16), weight=ft.FontWeight.BOLD)
     # Bei falscher Antwort: rotes Kreuz + Label + Augensymbol; Klick blendet
     # die eigene Antwort darunter ein, das Label wird „Meine Antwort:" und
     # das Auge verschwindet
-    own_answer = ft.Text("", size=14, italic=True, color=ft.Colors.ERROR,
+    own_answer = ft.Text("", size=sz(14), italic=True, color=ft.Colors.ERROR,
                          text_align=ft.TextAlign.CENTER, visible=False)
     wrong_label = ft.Text("Meine Antwort anzeigen", color=ft.Colors.ERROR)
     wrong_eye = ft.Icon(ft.Icons.VISIBILITY_OUTLINED, color=ft.Colors.ERROR,
-                        size=18)
+                        size=sz(18))
     btn_wrong = ft.TextButton(
         content=ft.Row(
-            [ft.Icon(ft.Icons.CLOSE, color=ft.Colors.ERROR, size=18),
+            [ft.Icon(ft.Icons.CLOSE, color=ft.Colors.ERROR, size=sz(18)),
              wrong_label, wrong_eye],
             tight=True, spacing=6,
         ),
@@ -536,8 +537,8 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         def note_row(icon: str, text: str) -> ft.Row:
             # dieselben Icons wie die Buttons "Notizen"/"Hinweis" (Primärblau)
             return ft.Row(
-                [ft.Icon(icon, size=16, color=ft.Colors.PRIMARY),
-                 ft.Text(text, size=14, italic=True, expand=True)],
+                [ft.Icon(icon, size=sz(16), color=ft.Colors.PRIMARY),
+                 ft.Text(text, size=sz(14), italic=True, expand=True)],
                 spacing=6, vertical_alignment=ft.CrossAxisAlignment.START,
             )
 
@@ -753,7 +754,7 @@ def result_view(nav, store: ContentStore, progress: ProgressStore,
     return ft.Column(
         [
             ft.Text(f"{stats['correct']} von {stats['total']} richtig",
-                    size=24, weight=ft.FontWeight.BOLD),
+                    size=sz(24), weight=ft.FontWeight.BOLD),
             ft.ProgressBar(value=stats["correct"] / max(1, stats["total"])),
             ft.Text("Falsche Karten:" if wrong_items else "Alles richtig — μπράβο! 🎉"),
             *wrong_items,

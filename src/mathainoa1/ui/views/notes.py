@@ -10,6 +10,7 @@ from __future__ import annotations
 import flet as ft
 
 from mathainoa1.storage.notes import Note, load_notes, now_iso, save_notes
+from mathainoa1.ui.scale import sz
 
 
 def _save_note_dialog(page: ft.Page, data, tf_draft: ft.TextField,
@@ -113,7 +114,7 @@ def notes_view(nav) -> ft.Control:
 
     tf.on_change = on_draft_change
 
-    notes_header = ft.Text("Gespeicherte Notizen", size=16,
+    notes_header = ft.Text("Gespeicherte Notizen", size=sz(16),
                            weight=ft.FontWeight.BOLD, visible=False)
     notes_col = ft.Column(spacing=6, scroll=ft.ScrollMode.AUTO, expand=True,
                           horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
@@ -126,7 +127,7 @@ def notes_view(nav) -> ft.Control:
             content=ft.Column([
                 ft.Row([
                     ft.Text(note.title, weight=ft.FontWeight.BOLD, expand=True),
-                    ft.Text(_short_date(note.created), size=12,
+                    ft.Text(_short_date(note.created), size=sz(12),
                             color=ft.Colors.OUTLINE),
                     ft.IconButton(
                         ft.Icons.EDIT_OUTLINED, tooltip="Notiz bearbeiten",
@@ -139,7 +140,7 @@ def notes_view(nav) -> ft.Control:
                             page, data, n, refresh),
                     ),
                 ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                ft.Text(note.text, size=14, selectable=True),
+                ft.Text(note.text, size=sz(14), selectable=True),
             ], spacing=4),
         )
 
