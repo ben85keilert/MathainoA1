@@ -31,19 +31,50 @@ def test_leitner_box_max(tmp_path):
 
 def test_restore_box_after_repeat_round(tmp_path):
     s = store(tmp_path)
-    for _ in range(4):
+    for _ in range(3):
         s.record("c1", True, NOW)
     p = s.record("c1", False, NOW)  # Leichtsinnsfehler -> Box 1
     assert p.box == 1
-    p = s.restore_box("c1", 5, NOW)
-    assert p.box == 5
-    assert p.due == NOW + timedelta(days=BOX_INTERVALS[5])
+    p = s.restore_box("c1", 4, NOW)
+    assert p.box == 4
+    assert p.due == NOW + timedelta(days=BOX_INTERVALS[4])
     # Zähler bleiben: der Fehler zählt weiterhin
-    assert (p.correct, p.wrong, p.streak) == (4, 1, 0)
+    assert (p.correct, p.wrong, p.streak) == (3, 1, 0)
     # nie über MAX_BOX, nie nach unten, unbekannte Karte -> None
     assert s.restore_box("c1", 99, NOW).box == 5
     assert s.restore_box("c1", 2, NOW).box == 5
     assert s.restore_box("unbekannt", 3, NOW) is None
+
+
+def test_box5_clears_wrong_counter(tmp_path):
+    # Box 5 erreicht = gelernt: der Fehlerzähler wird gelöscht, das Wort
+    # verschwindet aus den Problemwörtern
+    s = store(tmp_path)
+    s.record("c1", False, NOW)
+    for _ in range(3):
+        p = s.record("c1", True, NOW)
+    assert p.box == 4 and p.wrong == 1
+    p = s.record("c1", True, NOW)  # erreicht Box 5
+    assert p.box == 5 and p.wrong == 0
+
+
+def test_max_box_cap_keeps_wrong_counter(tmp_path):
+    # Modus-Deckel unter Box 5 löscht den Fehlerzähler nicht
+    s = store(tmp_path)
+    s.record("c1", False, NOW)
+    for _ in range(6):
+        p = s.record("c1", True, NOW, max_box=3)
+    assert p.box == 3 and p.wrong == 1
+
+
+def test_restore_box_to_5_clears_wrong_counter(tmp_path):
+    # Fehlerrunden-Variante "ursprüngliche Box" bei einem Box-5-Wort
+    s = store(tmp_path)
+    for _ in range(4):
+        s.record("c1", True, NOW)   # Box 5 (Fehlerzähler ist 0)
+    s.record("c1", False, NOW)      # -> Box 1, wrong = 1
+    p = s.restore_box("c1", 5, NOW)
+    assert p.box == 5 and p.wrong == 0
 
 
 def test_max_box_caps(tmp_path):

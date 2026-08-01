@@ -342,19 +342,21 @@ Karten zuerst** gezogen, dann neue (noch nie trainierte), dann der Rest.
 
 In der Statistik-Ansicht gilt eine Karte als „sicher“, wenn sie in
 Box 4 oder 5 liegt. Die „Problemwörter“ sind die Karten mit den meisten
-falschen Antworten.
+falschen Antworten. Erreicht eine Karte **Box 5**, wird ihr
+Fehlerzähler gelöscht — sie gilt als gelernt und verschwindet aus den
+Problemwörtern (erst ein neuer Fehler zählt wieder).
 
 ### Was zählt in die Statistik — und was nicht?
 
 - **Vokabeltraining**: Jede Antwort der ersten Runde zählt (richtig oder
   falsch). Die optionale **Fehlerrunde** am Ende zählt nicht noch einmal —
   sie dient nur dem Wiederholen. Ausnahme: In den Einstellungen lässt
-  sich unter „Fehlerrunde“ erlauben, dass ein dort **richtig**
-  beantwortetes Wort seine **alte Box zurückbekommt** (Leichtsinnsfehler
-  werden so weniger hart bestraft). Drei Stufen: keine Verbesserung
-  (Standard), Verbesserung möglich, oder automatisch nur dann, wenn die
-  Runde keine neuen Wörter enthielt. Falsche Antworten in der
-  Fehlerrunde bleiben immer folgenlos.
+  sich unter „Fehlerrunde“ wählen, wohin ein dort **richtig**
+  beantwortetes Wort wandert (Leichtsinnsfehler werden so weniger hart
+  bestraft). Vier Stufen: keine Verbesserung (Wort bleibt in Box 1),
+  Box 2, zurück in die ursprüngliche Box, oder eine Box unter der
+  ursprünglichen — mindestens Box 2 (Standard). Falsche Antworten in
+  der Fehlerrunde bleiben immer folgenlos.
   - Im Tipp-Modus zählt „Fast!“ (nur Akzent-/Schluss-ς-Fehler) als richtig.
   - Im Karteikarten-Modus zählt die Selbstbewertung („Gewusst“ /
     „Nicht gewusst“).

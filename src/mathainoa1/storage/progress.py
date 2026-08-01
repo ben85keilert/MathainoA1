@@ -100,6 +100,10 @@ class ProgressStore:
             p.box = min(cap, p.box + 1)
             p.correct += 1
             p.streak += 1
+            if p.box == MAX_BOX:
+                # Gelernt: Fehlerzähler löschen — das Wort verschwindet
+                # aus den Problemwörtern (Statistik)
+                p.wrong = 0
         else:
             p.box = 1
             p.wrong += 1
@@ -111,15 +115,19 @@ class ProgressStore:
 
     def restore_box(self, card_id: str, box: int,
                     now: datetime | None = None) -> CardProgress | None:
-        """Box nach richtiger Antwort in der Fehlerrunde wiederherstellen.
+        """Zielbox nach richtiger Antwort in der Fehlerrunde setzen.
 
-        Macht den Box-1-Reset eines Leichtsinnsfehlers rückgängig (Zähler
-        und Streak bleiben unverändert — der Fehler zählt weiterhin)."""
+        Mildert den Box-1-Reset eines Leichtsinnsfehlers je nach
+        Fehlerrunden-Einstellung ab (Zähler und Streak bleiben
+        unverändert — der Fehler zählt weiterhin; Ausnahme Box 5:
+        dort wird der Fehlerzähler wie in record() gelöscht)."""
         p = self.get(card_id)
         if p is None:
             return None
         now = now or datetime.now()
         p.box = max(p.box, min(box, MAX_BOX))
+        if p.box == MAX_BOX:
+            p.wrong = 0
         p.last_seen = now
         p.due = now + timedelta(days=BOX_INTERVALS[p.box])
         self._save(p)

@@ -48,10 +48,12 @@ class AppSettings:
     # Eingeschaltete erweiterte Funktionen (Schlüssel aus ui/features.FEATURES).
     # Unbekannte Schlüssel (z.B. entfernte Features) werden ignoriert.
     enabled_features: list[str] = field(default_factory=list)
-    # Fehlerrunde: darf eine richtige Antwort die alte Box wiederherstellen?
-    # "off" = nie (Standard), "on" = immer, "auto" = nur wenn keine neuen
-    # Wörter in der Runde sind (Liste schon einmal durchgearbeitet)
-    repeat_round_promotion: str = "off"
+    # Fehlerrunde: wohin wandert ein Wort, das in der ersten Runde falsch
+    # (→ Box 1) und in der Fehlerrunde richtig beantwortet wurde?
+    # "none" = keine Verbesserung (bleibt Box 1), "box2" = immer Box 2,
+    # "original" = zurück in die ursprüngliche Box, "step_down" = eine Box
+    # unter der ursprünglichen, mindestens Box 2 (Standard)
+    repeat_round_box_policy: str = "step_down"
     # Doppeltipp-Fenster (Sekunden) für "langsam abspielen" auf dem
     # Lautsprecher der Wortlisten (zusätzlich zum langen Drücken)
     slow_double_tap_seconds: float = 0.5
@@ -66,7 +68,13 @@ class AppSettings:
     @classmethod
     def from_dict(cls, d: dict) -> "AppSettings":
         known = {f for f in cls.__dataclass_fields__}
-        return cls(**{k: v for k, v in d.items() if k in known})
+        data = {k: v for k, v in d.items() if k in known}
+        # Migration der alten 3-stufigen Einstellung repeat_round_promotion
+        if "repeat_round_box_policy" not in data and "repeat_round_promotion" in d:
+            data["repeat_round_box_policy"] = {
+                "off": "none", "on": "original", "auto": "step_down",
+            }.get(d["repeat_round_promotion"], "step_down")
+        return cls(**data)
 
 
 def app_data_dir() -> Path:

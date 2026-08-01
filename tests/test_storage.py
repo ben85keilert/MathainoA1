@@ -309,6 +309,22 @@ def test_app_settings_roundtrip():
     assert d.high_boxes_need_production and d.top_box_needs_typing
 
 
+def test_app_settings_migrates_repeat_round_promotion():
+    from mathainoa1.storage.settings import AppSettings
+    # alte 3-stufige Einstellung wird auf die neue 4-stufige abgebildet
+    old_to_new = {"off": "none", "on": "original", "auto": "step_down"}
+    for old, new in old_to_new.items():
+        s = AppSettings.from_dict({"repeat_round_promotion": old})
+        assert s.repeat_round_box_policy == new, old
+    # ohne alten Key gilt der neue Default
+    assert AppSettings().repeat_round_box_policy == "step_down"
+    assert AppSettings.from_dict({}).repeat_round_box_policy == "step_down"
+    # ist der neue Key schon gespeichert, gewinnt er gegen den alten
+    s = AppSettings.from_dict(
+        {"repeat_round_promotion": "off", "repeat_round_box_policy": "box2"})
+    assert s.repeat_round_box_policy == "box2"
+
+
 def test_card_ids_survive_json_roundtrip():
     # Lernstand (progress.db) hängt an den Karten-IDs — sie müssen den
     # Export/Import-Rundweg unverändert überstehen
