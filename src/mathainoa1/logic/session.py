@@ -111,11 +111,13 @@ class TrainingSession:
     # App-Policy: strenger Akzent-/Groß-Klein-Fehler setzt die Box auf 1
     accent_resets_box: bool = False
     case_resets_box: bool = False
-    # App-Policy: darf eine richtige Antwort in der Fehlerrunde die alte
-    # Box wiederherstellen? "off" = nie (Standard), "on" = immer,
-    # "auto" = nur wenn keine neuen Wörter in der Runde sind
-    repeat_promotion: str = "off"
-    # Callback dafür: (card, alte Box) — z.B. ProgressStore.restore_box
+    # App-Policy: wohin wandert ein Wort, das in der ersten Runde falsch
+    # (→ Box 1) und in der Fehlerrunde richtig beantwortet wurde?
+    # "none" = bleibt Box 1, "box2" = immer Box 2, "original" = zurück in
+    # die ursprüngliche Box, "step_down" = eine Box unter der
+    # ursprünglichen, mindestens Box 2 (Standard)
+    repeat_box_policy: str = "step_down"
+    # Callback dafür: (card, Zielbox) — z.B. ProgressStore.restore_box
     on_repeat_correct: Callable[[VocabCard, int], None] | None = None
     queue: list[VocabCard] = field(init=False)
     answers: list[Answer] = field(default_factory=list)
@@ -127,9 +129,6 @@ class TrainingSession:
     def __post_init__(self):
         self.queue = select_cards(self.cards, self.settings.word_count, self.progress)
         self.total_first_round = len(self.queue)
-        prog = self.progress or {}
-        self.had_new_words = any(
-            c.id not in prog or prog[c.id].seen == 0 for c in self.queue)
         # Bei "Gemischt": Richtung pro Karte einmal festlegen (bleibt auch in
         # der Fehlerrunde gleich)
         self._directions: dict[str, str] = {}
@@ -202,11 +201,17 @@ class TrainingSession:
             return self.settings.accent_tolerant
         return result == Result.CORRECT
 
-    def repeat_promotion_active(self) -> bool:
-        """Stellt eine richtige Fehlerrunden-Antwort die alte Box wieder her?"""
-        if self.repeat_promotion == "on":
-            return True
-        return self.repeat_promotion == "auto" and not self.had_new_words
+    def repeat_target_box(self, card: VocabCard) -> int | None:
+        """Zielbox für eine richtige Fehlerrunden-Antwort — None = keine
+        Verbesserung. Neue Wörter (ohne gemerkte Box) gelten als Box 1."""
+        old = self._prev_box.get(card.id, 1)
+        if self.repeat_box_policy == "box2":
+            return 2
+        if self.repeat_box_policy == "original":
+            return old if old > 1 else None
+        if self.repeat_box_policy == "step_down":
+            return max(2, old - 1)
+        return None
 
     def _record(self, card: VocabCard, result: Result, given: str = "") -> None:
         self.answers.append(Answer(card, result, given))
@@ -236,11 +241,10 @@ class TrainingSession:
         if self.on_result and not self.in_repeat_round and not box_neutral:
             self.on_result(card, self.counts_correct(result))
         if (self.in_repeat_round and self.on_repeat_correct
-                and self.counts_correct(result)
-                and self.repeat_promotion_active()):
-            old = self._prev_box.get(card.id, 0)
-            if old > 1:
-                self.on_repeat_correct(card, old)
+                and self.counts_correct(result)):
+            target = self.repeat_target_box(card)
+            if target is not None:
+                self.on_repeat_correct(card, target)
         if (not self.counts_correct(result) and self.settings.repeat_errors
                 and not self.in_repeat_round):
             self._wrong_pending.append(card)

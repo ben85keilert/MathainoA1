@@ -256,7 +256,11 @@ def help_view(nav, store=None) -> ft.Control:
             "Karteikarten-Modus: Die Selbstbewertung „Gewusst“/„Nicht "
             "gewusst“ zählt wie eine getippte Antwort.",
             "Die Fehlerrunde am Ende zählt nie in die Statistik — sie "
-            "dient nur dem Wiederholen.",
+            "dient nur dem Wiederholen. In den Einstellungen (Zahnrad) "
+            "lässt sich aber wählen, wohin ein dort richtig beantwortetes "
+            "Wort wandert: Box 1 (keine Verbesserung), Box 2, die "
+            "ursprüngliche Box oder eine Box darunter — mindestens "
+            "Box 2 (Standard).",
         ]),
         ft.Text("Akzent- und Groß-/Kleinschreibung tolerieren", size=14,
                 weight=ft.FontWeight.BOLD),
@@ -289,7 +293,9 @@ def help_view(nav, store=None) -> ft.Control:
             "Deutsch → Griechisch getippt (schreiben können) bis Box 5. "
             "Diese beiden Beschränkungen lassen sich in den Einstellungen "
             "(Zahnrad) abschalten.",
-            "„Sicher“ ist eine Karte ab Box 4.",
+            "„Sicher“ ist eine Karte ab Box 4. Erreicht eine Karte "
+            "Box 5, wird ihr Fehlerzähler gelöscht — sie verschwindet "
+            "aus den Problemwörtern der Statistik.",
             "Die Fehlerrunde wiederholt falsche Karten sofort in der "
             "Reihenfolge der Fehler; in der nächsten Runde sind sie "
             "garantiert wieder dabei, gemischt zwischen den übrigen und "

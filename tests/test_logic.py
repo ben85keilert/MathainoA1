@@ -169,58 +169,98 @@ def _trained_progress(cs, box=4):
     return {c.id: CardProgress(card_id=c.id, box=box, correct=box) for c in cs}
 
 
-def test_repeat_round_promotion_restores_box():
+def _repeat_session(cs, policy=None, progress=None, restored=None):
+    kwargs = {} if policy is None else {"repeat_box_policy": policy}
+    return TrainingSession(
+        cs, TrainingSettings(word_count=len(cs), repeat_errors=True),
+        progress=progress,
+        on_repeat_correct=lambda c, box: restored.append((c.id, box)),
+        **kwargs)
+
+
+def test_repeat_round_step_down_is_default():
+    # Standard "step_down": eine Box unter der ursprünglichen (Box 4 -> 3)
     cs = cards(2)
     restored = []
-    s = TrainingSession(
-        cs, TrainingSettings(word_count=2, repeat_errors=True),
-        progress=_trained_progress(cs), repeat_promotion="on",
-        on_repeat_correct=lambda c, box: restored.append((c.id, box)))
+    s = _repeat_session(cs, progress=_trained_progress(cs), restored=restored)
     wrong = s.current
     s.mark(False)
     s.mark(True)
     assert s.in_repeat_round
+    s.mark(True)
+    assert restored == [(wrong.id, 3)]
+
+
+def test_repeat_round_policy_none():
+    cs = cards(2)
+    restored = []
+    s = _repeat_session(cs, "none", _trained_progress(cs), restored)
+    s.mark(False)
+    s.mark(True)
+    s.mark(True)  # richtig in der Fehlerrunde -> trotzdem keine Verbesserung
+    assert restored == []
+
+
+def test_repeat_round_policy_box2():
+    cs = cards(2)
+    restored = []
+    s = _repeat_session(cs, "box2", _trained_progress(cs), restored)
+    wrong = s.current
+    s.mark(False)
+    s.mark(True)
+    s.mark(True)  # richtig in der Fehlerrunde -> immer Box 2
+    assert restored == [(wrong.id, 2)]
+
+
+def test_repeat_round_policy_original():
+    cs = cards(2)
+    restored = []
+    s = _repeat_session(cs, "original", _trained_progress(cs), restored)
+    wrong = s.current
+    s.mark(False)
+    s.mark(True)
     s.mark(True)  # richtig in der Fehlerrunde -> alte Box zurück
     assert restored == [(wrong.id, 4)]
 
 
-def test_repeat_round_promotion_off_by_default():
+def test_repeat_round_step_down_minimum_box2():
+    # Ursprüngliche Box 2: eine zurück wäre Box 1 — Minimum ist Box 2
     cs = cards(2)
     restored = []
-    s = TrainingSession(
-        cs, TrainingSettings(word_count=2, repeat_errors=True),
-        progress=_trained_progress(cs),
-        on_repeat_correct=lambda c, box: restored.append((c.id, box)))
+    s = _repeat_session(cs, "step_down", _trained_progress(cs, box=2), restored)
+    wrong = s.current
     s.mark(False)
     s.mark(True)
     s.mark(True)
-    assert restored == []
+    assert restored == [(wrong.id, 2)]
 
 
-def test_repeat_round_promotion_not_on_wrong_answer():
+def test_repeat_round_new_words():
+    # Neue Wörter (ohne Lernstand): "step_down"/"box2" heben auf Box 2,
+    # "original" und "none" lassen sie in Box 1 (kein Callback)
+    for policy, expected_box in (("step_down", 2), ("box2", 2),
+                                 ("original", None), ("none", None)):
+        cs = cards(2)
+        restored = []
+        s = _repeat_session(cs, policy, None, restored)
+        wrong = s.current
+        s.mark(False)
+        s.mark(True)
+        s.mark(True)
+        if expected_box is None:
+            assert restored == [], policy
+        else:
+            assert restored == [(wrong.id, expected_box)], policy
+
+
+def test_repeat_round_not_on_wrong_answer():
     cs = cards(2)
     restored = []
-    s = TrainingSession(
-        cs, TrainingSettings(word_count=2, repeat_errors=True),
-        progress=_trained_progress(cs), repeat_promotion="on",
-        on_repeat_correct=lambda c, box: restored.append((c.id, box)))
+    s = _repeat_session(cs, "original", _trained_progress(cs), restored)
     s.mark(False)
     s.mark(True)
     s.mark(False)  # auch in der Fehlerrunde falsch -> nichts wiederherstellen
     assert restored == []
-
-
-def test_repeat_round_promotion_auto_depends_on_new_words():
-    # "auto": Verbesserung nur, wenn keine neuen Wörter in der Runde sind
-    cs = cards(2)
-    prog = _trained_progress(cs)
-    s = TrainingSession(cs, TrainingSettings(word_count=2),
-                        progress=prog, repeat_promotion="auto")
-    assert s.repeat_promotion_active()
-    del prog[cs[0].id]  # eine Karte ist neu
-    s2 = TrainingSession(cs, TrainingSettings(word_count=2),
-                         progress=prog, repeat_promotion="auto")
-    assert not s2.repeat_promotion_active()
 
 
 def test_session_no_repeat_when_disabled():

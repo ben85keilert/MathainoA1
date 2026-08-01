@@ -163,18 +163,24 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
 
     # --- Abfrage: Fehlerrunde und Leitner-Box ---
     rg_repeat = ft.RadioGroup(
-        value=(s.repeat_round_promotion
-               if s.repeat_round_promotion in ("off", "on", "auto") else "off"),
+        value=(s.repeat_round_box_policy
+               if s.repeat_round_box_policy in ("none", "box2", "original",
+                                                "step_down") else "step_down"),
         content=ft.Column([
-            ft.Radio(value="off", label="Keine Verbesserung (Standard)"),
-            ft.Radio(value="on", label="Verbesserung möglich"),
-            ft.Radio(value="auto",
-                     label="Automatisch: nur wenn keine neuen Wörter dabei sind"),
+            ft.Radio(value="none",
+                     label="Keine Verbesserung — Wort bleibt in Box 1"),
+            ft.Radio(value="box2", label="Richtig in der Fehlerrunde → Box 2"),
+            ft.Radio(value="original",
+                     label="Richtig in der Fehlerrunde → zurück in die "
+                           "ursprüngliche Box"),
+            ft.Radio(value="step_down",
+                     label="Richtig in der Fehlerrunde → eine Box zurück "
+                           "(mindestens Box 2) (Standard)"),
         ], spacing=4),
     )
 
     def on_repeat(e):
-        s.repeat_round_promotion = rg_repeat.value or "off"
+        s.repeat_round_box_policy = rg_repeat.value or "step_down"
         save_app_settings(s)
 
     rg_repeat.on_change = on_repeat
@@ -425,12 +431,12 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
             sw_check,
             ft.Divider(),
             ft.Text("Fehlerrunde", size=13),
-            ft.Text("Ein Fehler setzt die Box auf 1. Hier lässt sich "
-                    "einstellen, ob ein in der Fehlerrunde richtig "
-                    "beantwortetes Wort seine alte Box zurückbekommt — "
-                    "Leichtsinnsfehler werden so weniger hart bestraft. "
-                    "„Automatisch“ erlaubt das nur, wenn die Runde keine "
-                    "neuen (untrainierten) Wörter enthält.",
+            ft.Text("Ein Fehler setzt die Box sofort auf 1. Hier lässt sich "
+                    "einstellen, wohin ein Wort wandert, das in der "
+                    "Fehlerrunde richtig beantwortet wird — Leichtsinns"
+                    "fehler werden so weniger hart bestraft. „Ursprüngliche "
+                    "Box“ ist die Box vor dem Fehler; „eine Box zurück“ "
+                    "bedeutet eine Box unter der ursprünglichen.",
                     size=13, italic=True),
             rg_repeat,
             ft.Divider(),

@@ -32,7 +32,7 @@ def make_session(store: ContentStore, progress: ProgressStore,
     session = TrainingSession(cards, settings, progress=progress.all(),
                               accent_resets_box=app.accent_resets_box,
                               case_resets_box=app.case_resets_box,
-                              repeat_promotion=app.repeat_round_promotion)
+                              repeat_box_policy=app.repeat_round_box_policy)
 
     # Box-Deckel je Abfrageart (per Einstellungen abschaltbar); bei
     # "Gemischt" zählt die Richtung der jeweiligen Karte
@@ -46,7 +46,7 @@ def make_session(store: ContentStore, progress: ProgressStore,
 
     session.on_result = lambda card, ok: progress.record(
         card.id, ok, max_box=max_box_for(card))
-    # Richtig in der Fehlerrunde: alte Box wiederherstellen (je nach Policy)
+    # Richtig in der Fehlerrunde: Zielbox laut Policy setzen
     session.on_repeat_correct = lambda card, box: progress.restore_box(
         card.id, box)
     return session
@@ -556,8 +556,8 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     def reveal(e):
         card = session.current
         answer.value = session.answer_display_for(card)
-        if session.in_repeat_round and not session.repeat_promotion_active():
-            # Fehlerrunde zählt nicht — Selbstbewertung wäre Scheinauswahl
+        if session.in_repeat_round and session.repeat_box_policy == "none":
+            # Ohne mögliche Verbesserung wäre die Selbstbewertung Scheinauswahl
             action_area.controls = [
                 ft.FilledButton("Weiter", icon=ft.Icons.ARROW_FORWARD,
                                 on_click=lambda e: judge(True))
