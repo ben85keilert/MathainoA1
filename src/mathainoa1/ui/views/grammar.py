@@ -34,7 +34,7 @@ from mathainoa1.storage.adjective_combos import (
     save_combos,
 )
 from mathainoa1.storage.content import ContentStore, filter_level
-from mathainoa1.storage.progress import ProgressStore
+from mathainoa1.storage.progress import ProgressStore, max_box_for_mode
 from mathainoa1.storage.settings import (
     load_adjective_settings,
     load_app_settings,
@@ -61,12 +61,42 @@ from mathainoa1.ui.word_details import (
 )
 
 
-def _make_session(tasks, settings, on_result=None) -> DeclensionSession:
-    """DeclensionSession mit der App-Box-Reset-Policy (Akzent/Groß-Klein)."""
+def _make_session(tasks, settings, on_result=None, progress=None,
+                  on_repeat_correct=None) -> DeclensionSession:
+    """DeclensionSession mit den App-Policies: Box-Reset bei strengen
+    Fehlern und Fehlerrunden-Wiederherstellung (wie Vokabeltraining)."""
     app = load_app_settings()
     return DeclensionSession(tasks, settings, on_result=on_result,
                              accent_resets_box=app.accent_resets_box,
-                             case_resets_box=app.case_resets_box)
+                             case_resets_box=app.case_resets_box,
+                             progress=progress.all() if progress else None,
+                             repeat_box_policy=app.repeat_round_box_policy,
+                             on_repeat_correct=on_repeat_correct)
+
+
+def _leitner_wiring(progress, settings, mode_of):
+    """Volle Leitner-Aufzeichnung fürs Beugungstraining — nur bei Vorgabe
+    „Deutsch“ (aktives Erinnern des griechischen Worts): richtig = eine
+    Box rauf (gedeckelt), falsch = zurück in Box 1; dazu die
+    Fehlerrunden-Wiederherstellung. Bei Vorgabe „Griechisch“ (None, None).
+
+    mode_of() liefert den aktuellen Abfragemodus („typing“/„flashcard“) —
+    als Callable, weil er im Lauf umschaltbar ist."""
+    if settings.direction != "de":
+        return None, None
+    app = load_app_settings()
+
+    def cap() -> int:
+        return max_box_for_mode(
+            production=True, typed=(mode_of() == "typing"),
+            inflection=True,
+            high_needs_production=app.high_boxes_need_production,
+            top_needs_typing=app.top_box_needs_typing,
+            top_needs_inflection=app.top_box_needs_inflection)
+
+    on_result = lambda card, ok: progress.record(card.id, ok, max_box=cap())
+    on_repeat_correct = lambda card, box: progress.restore_box(card.id, box)
+    return on_result, on_repeat_correct
 
 
 def _verb_sample(verb: conj.Verb) -> str:
@@ -367,18 +397,17 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             nav.page.update()
             return
         save_declension_settings(settings)
-        # Bei deutscher Vorgabe zählt eine richtig deklinierte Antwort auch
-        # als gewusste Vokabel (nur positiv — Deklinationsfehler setzen die
-        # Vokabel-Box nicht zurück)
-        def record_vocab(card, correct):
-            if correct:
-                progress.record(card.id, True)
-
-        on_result = record_vocab if settings.direction == "de" else None
-        session = _make_session(tasks, settings, on_result=on_result)
+        # Bei deutscher Vorgabe volle Leitner-Wertung: richtig = Box rauf
+        # (gedeckelt), falsch = Box 1, Fehlerrunde stellt gemäß Policy her
+        on_result, on_repeat = _leitner_wiring(
+            progress, settings, lambda: settings.mode)
+        session = _make_session(tasks, settings, on_result=on_result,
+                                progress=progress,
+                                on_repeat_correct=on_repeat)
         nav.go("Nomentraining", run_view(
             nav, store, session, title="Nomentraining",
-            make_tasks=lambda s: decl.generate_tasks(store.cards_for(s.list_id), s)))
+            make_tasks=lambda s: decl.generate_tasks(store.cards_for(s.list_id), s),
+            progress=progress))
 
     def edit_list(e):
         from mathainoa1.ui.views.manager import open_source_editor
@@ -641,10 +670,16 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
             nav.page.update()
             return
         save_adjective_settings(settings)
-        session = _make_session(tasks, settings)
+        # Adjektivaufgaben werten Nomen- UND Adjektivkarte gemeinsam
+        # (task.scored_cards in der Session)
+        on_result, on_repeat = _leitner_wiring(
+            progress, settings, lambda: settings.mode)
+        session = _make_session(tasks, settings, on_result=on_result,
+                                progress=progress,
+                                on_repeat_correct=on_repeat)
         nav.go("Adjektivtraining", run_view(
             nav, store, session, title="Adjektivtraining",
-            make_tasks=make_tasks))
+            make_tasks=make_tasks, progress=progress))
 
     def edit_list(e):
         from mathainoa1.ui.views.manager import open_source_editor
@@ -1070,10 +1105,15 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             nav.page.update()
             return
         save_conjugation_settings(settings)
-        session = _make_session(tasks, settings)
+        on_result, on_repeat = _leitner_wiring(
+            progress, settings, lambda: settings.mode)
+        session = _make_session(tasks, settings, on_result=on_result,
+                                progress=progress,
+                                on_repeat_correct=on_repeat)
         nav.go("Verbtraining", run_view(
             nav, store, session, title="Verbtraining",
-            make_tasks=lambda s: conj.generate_tasks(store.cards_for(s.list_id), s)))
+            make_tasks=lambda s: conj.generate_tasks(store.cards_for(s.list_id), s),
+            progress=progress))
 
     def edit_list(e):
         from mathainoa1.ui.views.manager import open_source_editor
@@ -1122,10 +1162,12 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
 
 
 def run_view(nav, store: ContentStore, session: DeclensionSession,
-             title: str, make_tasks) -> ft.Control:
+             title: str, make_tasks,
+             progress: ProgressStore | None = None) -> ft.Control:
     """Trainingsrunde — gemeinsam für Deklination und Konjugation.
 
-    make_tasks(settings) erzeugt die Aufgaben für "Neue Runde".
+    make_tasks(settings) erzeugt die Aufgaben für "Neue Runde";
+    progress wird für deren frische Lernstand-Momentaufnahme gebraucht.
     Die aufgedeckte Lösungsform (task.expected, z.B. "θα γράψετε" oder
     "τους μικρούς δρόμους") lässt sich anhören — die Sprachausgabe spricht
     auch gebeugte Formen, nicht nur die Grundform.
@@ -1195,7 +1237,8 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
     def show_task():
         task = session.current
         if task is None:
-            nav.go("Ergebnis", result_view(nav, store, session, title, make_tasks))
+            nav.go("Ergebnis", result_view(nav, store, session, title,
+                                           make_tasks, progress=progress))
             return
         shown["task"] = task
         done = len(session.answers)
@@ -1333,8 +1376,11 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         task = session.current
         answer.value = task.expected
         solution_shown(task)
-        if session.in_repeat_round:
-            # Fehlerrunde zählt nicht — Selbstbewertung wäre Scheinauswahl
+        if session.in_repeat_round and (
+                session.on_repeat_correct is None
+                or session.repeat_box_policy == "none"):
+            # Ohne mögliche Box-Verbesserung (griechische Vorgabe oder
+            # Policy „keine“) wäre die Selbstbewertung Scheinauswahl
             action_area.controls = [
                 ft.FilledButton("Weiter", icon=ft.Icons.ARROW_FORWARD,
                                 on_click=lambda e: judge(True))
@@ -1426,7 +1472,8 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
 
 
 def result_view(nav, store: ContentStore, session: DeclensionSession,
-                title: str, make_tasks) -> ft.Control:
+                title: str, make_tasks,
+                progress: ProgressStore | None = None) -> ft.Control:
     stats = session.stats()
     # Bei deutscher Vorgabe die Grundform mit auflisten — sie steht sonst
     # nirgends in der Zeile
@@ -1468,8 +1515,11 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
                 if (t.prompt, t.expected) not in seen]
         tasks = (wrong + fill)[: max(1, settings.word_count)]
         random.shuffle(tasks)
-        session2 = _make_session(tasks, settings, on_result=session.on_result)
-        nav.go(title, run_view(nav, store, session2, title, make_tasks))
+        session2 = _make_session(tasks, settings, on_result=session.on_result,
+                                 progress=progress,
+                                 on_repeat_correct=session.on_repeat_correct)
+        nav.go(title, run_view(nav, store, session2, title, make_tasks,
+                               progress=progress))
 
     def home(e):
         del nav.stack[1:]

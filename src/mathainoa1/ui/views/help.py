@@ -305,7 +305,9 @@ def help_view(nav, store=None) -> ft.Control:
             "lässt sich aber wählen, wohin ein dort richtig beantwortetes "
             "Wort wandert: Box 1 (keine Verbesserung), Box 2, die "
             "ursprüngliche Box oder eine Box darunter — mindestens "
-            "Box 2 (Standard).",
+            "Box 2 (Standard). Dieselbe Regel gilt auch in den "
+            "Fehlerrunden des Nomen-/Adjektiv-/Verbtrainings mit "
+            "Vorgabe Deutsch.",
         ]),
         ft.Text("Akzent- und Groß-/Kleinschreibung tolerieren", size=sz(14),
                 weight=ft.FontWeight.BOLD),
@@ -336,8 +338,18 @@ def help_view(nav, store=None) -> ft.Control:
             "ab: Griechisch → Deutsch (Wiedererkennen) höchstens Box 3, "
             "Deutsch → Griechisch als Karteikarte höchstens Box 4, "
             "Deutsch → Griechisch getippt (schreiben können) bis Box 5. "
-            "Diese beiden Beschränkungen lassen sich in den Einstellungen "
+            "Diese Beschränkungen lassen sich in den Einstellungen "
             "(Zahnrad) abschalten.",
+            "Zusätzlich einschaltbar: „Box 5 nur über das "
+            "Beugungstraining“ — dann rücken alle Obergrenzen eine Box "
+            "nach unten (Wiedererkennen Box 2, Karteikarte Box 3, "
+            "Schreiben Box 4) und nur das Nomen-/Adjektiv-/Verbtraining "
+            "mit Vorgabe Deutsch führt bis Box 5.",
+            "Beugungstraining mit Vorgabe Deutsch wertet voll wie das "
+            "Vokabeltraining: richtig = Box rauf, falsch = zurück in "
+            "Box 1. Im Adjektivtraining wandern Adjektiv- und Nomenkarte "
+            "gemeinsam. Mit Vorgabe Griechisch bleibt es reines "
+            "Formentraining ohne Wirkung auf die Boxen.",
             "„Sicher“ ist eine Karte ab Box 4. Erreicht eine Karte "
             "Box 5, wird ihr Fehlerzähler gelöscht — sie verschwindet "
             "aus den Problemwörtern der Statistik.",

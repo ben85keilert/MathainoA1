@@ -239,6 +239,7 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     # --- Abfrage: Beschränkungen durch die Abfragemodi ---
     sw_high = ft.Switch(value=s.high_boxes_need_production)
     sw_top = ft.Switch(value=s.top_box_needs_typing)
+    sw_infl = ft.Switch(value=s.top_box_needs_inflection)
 
     def on_high(e):
         s.high_boxes_need_production = sw_high.value
@@ -248,8 +249,13 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
         s.top_box_needs_typing = sw_top.value
         save_app_settings(s)
 
+    def on_infl(e):
+        s.top_box_needs_inflection = sw_infl.value
+        save_app_settings(s)
+
     sw_high.on_change = on_high
     sw_top.on_change = on_top
+    sw_infl.on_change = on_infl
 
     # --- Abfrage: Prüfbutton-Stil beim Schreiben ---
     sw_check = ft.Switch(value=s.check_beside_field)
@@ -541,12 +547,21 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
             ft.Divider(),
             ft.Text("Beschränkung durch die Abfragemodi", size=sz(13)),
             ft.Text("Steuert, wie hoch eine Karte je nach Abfrageart steigen "
-                    "kann. Beide aus = jede Abfrageart erreicht Box 5.",
+                    "kann. Alle aus = jede Abfrageart erreicht Box 5. Ist "
+                    "„nur über das Beugungstraining“ an, rücken die übrigen "
+                    "Obergrenzen eine Box nach unten: Griechisch → Deutsch "
+                    "höchstens Box 2, Karteikarte Box 3, Schreiben Box 4 — "
+                    "Box 5 erreicht nur das Nomen-/Adjektiv-/Verbtraining "
+                    "mit Vorgabe Deutsch.",
                     size=sz(13), italic=True),
             _switch_row(sw_high,
                         "Box 4 und 5 nur über Deutsch → Griechisch", page),
             _switch_row(sw_top,
                         "Box 5 nur über Deutsch → Griechisch mit Schreiben",
+                        page),
+            _switch_row(sw_infl,
+                        "Box 5 nur über das Beugungstraining "
+                        "(Nomen/Adjektiv/Verb, Vorgabe Deutsch)",
                         page),
             ft.Divider(),
             ft.Text("Prüfen beim Schreiben", size=sz(13)),

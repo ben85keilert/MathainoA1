@@ -483,6 +483,28 @@ def test_declension_case_tolerant_default():
 
 
 def test_declension_case_leitner_neutral():
+    """Box-Neutralität schützt nur Karten MIT Lernstand — wie im
+    Vokabeltraining (TrainingSession)."""
+    from mathainoa1.storage.progress import CardProgress
+
+    cards = [noun("η Αθήνα", "η", "-", back="Athen")]
+    settings = DeclensionSettings(cases=["acc"], numbers=["sg"], direction="de",
+                                  case_tolerant=False, repeat_errors=False,
+                                  word_count=5)
+    tasks = generate_tasks(cards, settings)
+    card_id = tasks[0].card.id
+    recorded = []
+    session = DeclensionSession(
+        tasks, settings,
+        progress={card_id: CardProgress(card_id, box=3, correct=2)},
+        on_result=lambda card, ok: recorded.append(ok))
+    session.check_typed(session.current.expected.lower())  # CASE
+    assert recorded == []  # kein on_result -> Vokabel-Box unverändert
+
+
+def test_declension_case_error_new_card_starts_box1():
+    """Eine neue Karte (ohne Lernstand) hat keine Box zu schützen — der
+    strenge Fehler wird normal als falsch verbucht."""
     cards = [noun("η Αθήνα", "η", "-", back="Athen")]
     settings = DeclensionSettings(cases=["acc"], numbers=["sg"], direction="de",
                                   case_tolerant=False, repeat_errors=False,
@@ -492,7 +514,7 @@ def test_declension_case_leitner_neutral():
         generate_tasks(cards, settings), settings,
         on_result=lambda card, ok: recorded.append(ok))
     session.check_typed(session.current.expected.lower())  # CASE
-    assert recorded == []  # kein on_result -> Vokabel-Box unverändert
+    assert recorded == [False]
 
 
 def test_declension_accent_resets_box_policy():
@@ -678,3 +700,92 @@ def test_prune_combos_prunes_both(tmp_path, monkeypatch):
     assert ac.prune_combos(pairs, blocked, {"μικρος"}, {"δρομος"}) is True
     assert pairs == {"μικρος": {"δρομος"}}
     assert blocked == {}
+
+
+# --- Volle Leitner-Wertung: scored_cards und Fehlerrunden-Policy ---
+
+
+def test_adjective_tasks_carry_adj_card():
+    nouns = [(c, parse_noun(c)) for c in [noun("ο δρόμος", "ο", "-οι")]]
+    pairs = {_key("μικρός"): {_key("δρόμος")}}
+    settings = DeclensionSettings(cases=["acc"], numbers=["sg"], word_count=9)
+    tasks = generate_adjective_tasks(
+        _adj_items("μικρός"), nouns, pairs, settings, key=_key)
+    assert tasks and tasks[0].adj_card is not None
+    assert tasks[0].adj_card.front == "μικρός"
+    # scored_cards: Nomen- und Adjektivkarte gemeinsam
+    assert [c.front for c in tasks[0].scored_cards] == ["ο δρόμος", "μικρός"]
+
+
+def test_noun_tasks_score_only_noun():
+    cards = [noun("ο δρόμος", "ο", "-οι")]
+    settings = DeclensionSettings(cases=["acc"], numbers=["sg"], word_count=9)
+    tasks = generate_tasks(cards, settings)
+    assert tasks and tasks[0].adj_card is None
+    assert [c.front for c in tasks[0].scored_cards] == ["ο δρόμος"]
+
+
+def _adjective_session(settings=None, **kw):
+    nouns = [(c, parse_noun(c)) for c in [noun("ο δρόμος", "ο", "-οι")]]
+    pairs = {_key("μικρός"): {_key("δρόμος")}}
+    settings = settings or DeclensionSettings(
+        cases=["acc"], numbers=["sg"], direction="de", word_count=5)
+    tasks = generate_adjective_tasks(
+        _adj_items("μικρός"), nouns, pairs, settings, key=_key)
+    return DeclensionSession(tasks, settings, **kw), tasks
+
+
+def test_adjective_session_records_both_cards():
+    recorded = []
+    session, _tasks = _adjective_session(
+        on_result=lambda card, ok: recorded.append((card.front, ok)))
+    session.check_typed(session.current.expected)  # richtig
+    assert recorded == [("ο δρόμος", True), ("μικρός", True)]
+
+
+def test_adjective_session_records_both_cards_wrong():
+    settings = DeclensionSettings(cases=["acc"], numbers=["sg"],
+                                  direction="de", repeat_errors=False,
+                                  word_count=5)
+    recorded = []
+    session, _tasks = _adjective_session(
+        settings,
+        on_result=lambda card, ok: recorded.append((card.front, ok)))
+    session.check_typed("falsch")
+    assert recorded == [("ο δρόμος", False), ("μικρός", False)]
+
+
+def test_declension_repeat_round_restores_box():
+    """Fehlerrunde: richtig beantwortet -> Policy step_down stellt eine
+    Box unter der ursprünglichen wieder her (mindestens 2) — für Nomen-
+    UND Adjektivkarte."""
+    from mathainoa1.storage.progress import CardProgress
+
+    settings = DeclensionSettings(cases=["acc"], numbers=["sg"],
+                                  direction="de", repeat_errors=True,
+                                  word_count=5)
+    restored = []
+    session, _tasks = _adjective_session(
+        settings,
+        on_repeat_correct=lambda card, box: restored.append((card.front, box)))
+    # Lernstand nachreichen: Nomen Box 4, Adjektiv ohne Lernstand
+    noun_id = session.queue[0].card.id
+    session.progress = {noun_id: CardProgress(noun_id, box=4, correct=3)}
+    session.check_typed("falsch")           # Erstrunde: falsch -> Fehlerrunde
+    assert session.in_repeat_round
+    session.check_typed(session.current.expected)  # Fehlerrunde: richtig
+    # Nomen: Box vor Fehler 4 -> step_down = 3; Adjektiv neu -> max(2, 0) = 2
+    assert restored == [("ο δρόμος", 3), ("μικρός", 2)]
+
+
+def test_declension_repeat_round_policy_none():
+    settings = DeclensionSettings(cases=["acc"], numbers=["sg"],
+                                  direction="de", repeat_errors=True,
+                                  word_count=5)
+    restored = []
+    session, _tasks = _adjective_session(
+        settings, repeat_box_policy="none",
+        on_repeat_correct=lambda card, box: restored.append((card.front, box)))
+    session.check_typed("falsch")
+    session.check_typed(session.current.expected)
+    assert restored == []

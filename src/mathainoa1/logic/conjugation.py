@@ -245,6 +245,12 @@ class ConjugationTask:
     tense: str = "present"
 
     @property
+    def scored_cards(self) -> list[VocabCard]:
+        """Karten, deren Lernstand diese Aufgabe bewegt (gemeinsame
+        Schnittstelle mit DeclensionTask für die geteilte Session)."""
+        return [self.card]
+
+    @property
     def label(self) -> str:
         # Emoji zur schnellen Erkennung: einer 👤 = Singular, viele 👥 = Plural.
         # Die 2. Person Plural ist im Griechischen zugleich die höfliche

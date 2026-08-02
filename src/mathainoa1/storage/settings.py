@@ -32,6 +32,10 @@ class AppSettings:
     # Box 4+5 nur über D->G; Box 5 nur über getipptes D->G
     high_boxes_need_production: bool = True
     top_box_needs_typing: bool = True
+    # Box 5 nur über das Beugungstraining (Nomen/Adjektiv/Verb, Vorgabe
+    # Deutsch) — alle übrigen Obergrenzen rücken eine Box nach unten
+    # (siehe storage/progress.max_box_for_mode). Standard aus.
+    top_box_needs_inflection: bool = False
     # Wort-Audio automatisch abspielen, sobald im Training die
     # griechische Seite sichtbar wird (Umschalter in den Trainings-Views)
     autoplay_audio: bool = False
