@@ -24,6 +24,7 @@ from mathainoa1.ui.views.reference import has_word_forms
 from mathainoa1.ui.word_details import (  # noqa: F401 — Re-Export für grammar
     show_word_details,
     update_word_details_button,
+    word_details_button,
 )
 from mathainoa1.ui.scale import sz
 
@@ -671,10 +672,14 @@ def result_view(nav, store: ContentStore, progress: ProgressStore,
             title=ft.Text(c.front),
             subtitle=ft.Text(c.back),
             leading=ft.Icon(ft.Icons.CLOSE, color=ft.Colors.ERROR),
-            trailing=ft.IconButton(
-                ft.Icons.EDIT_NOTE, tooltip="Hinweise/Notizen bearbeiten",
-                on_click=lambda e, c=c: edit_notes_dialog(nav.page, store, c),
-            ),
+            trailing=ft.Row([b for b in (
+                word_details_button(c),
+                ft.IconButton(
+                    ft.Icons.EDIT_NOTE,
+                    tooltip="Hinweise/Notizen bearbeiten",
+                    on_click=lambda e, c=c: edit_notes_dialog(
+                        nav.page, store, c)),
+            ) if b is not None], tight=True, spacing=0),
         )
         for c in stats["wrong_cards"]
     ]
@@ -684,6 +689,7 @@ def result_view(nav, store: ContentStore, progress: ProgressStore,
             title=ft.Text(a.card.front),
             subtitle=ft.Text(a.card.back),
             leading=ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN),
+            trailing=word_details_button(a.card),
         )
         for a in session.answers[: session.total_first_round]
         if session.counts_correct(a.result)

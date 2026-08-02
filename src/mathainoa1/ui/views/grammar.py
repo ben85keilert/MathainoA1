@@ -51,11 +51,14 @@ from mathainoa1.ui.views.trainer import (
     almost_feedback,
     edit_notes_dialog,
     hide_empty_texts,
-    show_word_details,
     typing_controls,
-    update_word_details_button,
 )
 from mathainoa1.ui.scale import sz
+from mathainoa1.ui.word_details import (
+    show_word_details,
+    update_word_details_button,
+    word_details_button,
+)
 
 
 def _make_session(tasks, settings, on_result=None) -> DeclensionSession:
@@ -333,6 +336,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
                 title=ft.Row([ft.Text(c.front, expand=1), ft.Text(c.back, expand=1)],
                              spacing=12),
                 subtitle=ft.Text(sub, size=sz(12)),
+                trailing=word_details_button(c),
             )
 
         sort_btns, word_rows = _grouped_word_rows(
@@ -1028,6 +1032,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                 title=ft.Row([ft.Text(c.front, expand=1), ft.Text(c.back, expand=1)],
                              spacing=12),
                 subtitle=ft.Text(_verb_sample(v), size=sz(12)),
+                trailing=word_details_button(c),
             )
 
         sort_btns, word_rows = _grouped_word_rows(
@@ -1434,6 +1439,7 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
                             f"Grundform: {t.card.front}" if de_direction
                             else "") if x)),
             leading=ft.Icon(ft.Icons.CLOSE, color=ft.Colors.ERROR),
+            trailing=word_details_button(t.card),
         )
         for t in stats["wrong_tasks"]
     ]
@@ -1444,6 +1450,7 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
             subtitle=ft.Text(" · ".join(
                 x for x in (a.task.label, a.task.meaning) if x)),
             leading=ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN),
+            trailing=word_details_button(a.task.card),
         )
         for a in session.answers[: session.total_first_round]
         if session.counts_correct(a.result)

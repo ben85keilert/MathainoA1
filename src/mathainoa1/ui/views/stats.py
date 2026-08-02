@@ -14,6 +14,7 @@ from mathainoa1.storage.progress import MAX_BOX, CardProgress, ProgressStore
 from mathainoa1.storage.settings import load_app_settings
 from mathainoa1.ui.views.wordlist import BOX_COLORS, word_list_panel
 from mathainoa1.ui.scale import sz
+from mathainoa1.ui.word_details import word_details_button
 
 
 def summarize_list(vlist: VocabList,
@@ -125,8 +126,11 @@ def stats_view(nav, store: ContentStore, progress: ProgressStore) -> ft.Control:
             leading=ft.Icon(ft.Icons.PRIORITY_HIGH, color=ft.Colors.ERROR),
             title=ft.Text(by_id[p.card_id].front),
             subtitle=ft.Text(by_id[p.card_id].back),
-            trailing=ft.Text(f"{p.wrong}× falsch\nBox {p.box}", size=sz(12),
-                             text_align=ft.TextAlign.RIGHT),
+            trailing=ft.Row([b for b in (
+                word_details_button(by_id[p.card_id]),
+                ft.Text(f"{p.wrong}× falsch\nBox {p.box}", size=sz(12),
+                        text_align=ft.TextAlign.RIGHT),
+            ) if b is not None], tight=True, spacing=0),
         )
         for p in problems
     ]
