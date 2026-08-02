@@ -1018,3 +1018,117 @@ def test_setup_views_have_options_card(store_with_edge_cases, tmp_path,
             assert "Fehler am Ende wiederholen" not in found
     finally:
         progress.close()
+
+def test_box_transition_dot_colors_and_tooltip():
+    """Zweigeteilter Boxen-Punkt: linke Hälfte = vorher, rechte = nachher;
+    Tooltip nennt beide Zustände (optional mit Wort-Label)."""
+    from mathainoa1.ui.views import wordlist
+
+    dot = wordlist.box_transition_dot(0, 1)
+    left, right = dot.content.controls
+    assert left.bgcolor == wordlist.UNTRAINED_COLOR
+    assert right.bgcolor == wordlist.BOX_COLORS[0]
+    assert dot.tooltip == "neu → Box 1"
+    labeled = wordlist.box_transition_dot(2, 3, label="ο δρόμος")
+    assert labeled.tooltip == "ο δρόμος: Box 2 → Box 3"
+
+
+def _collect_deep(ctrl, out):
+    """Wie _collect_texts_and_tooltips, aber auch durch leading/actions."""
+    import flet as ft
+    if isinstance(ctrl, ft.Text) and ctrl.value:
+        out.append(ctrl.value)
+    if getattr(ctrl, "tooltip", None):
+        out.append(ctrl.tooltip)
+    for attr in ("controls", "content", "title", "subtitle", "leading",
+                 "trailing", "actions"):
+        sub = getattr(ctrl, attr, None)
+        subs = sub if isinstance(sub, list) else [sub]
+        for s in subs:
+            if isinstance(s, ft.Control):
+                _collect_deep(s, out)
+
+
+def test_result_view_box_dots_and_edit_for_correct(store_with_edge_cases,
+                                                   tmp_path, monkeypatch):
+    """Ergebnisliste des Vokabeltrainings: zweigeteilter Boxen-Punkt
+    (vorher → nachher) je Wort und Bearbeiten-Stift auch bei den richtig
+    beantworteten Wörtern."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.logic.session import TrainingSession, TrainingSettings
+
+    store, vlist = store_with_edge_cases
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "dots.db")
+    try:
+        def make_finished_session():
+            session = TrainingSession(
+                vlist.cards[:2],
+                TrainingSettings(mode="flashcard", word_count=2,
+                                 repeat_errors=False),
+                progress=progress.all(),
+            )
+            session.on_result = lambda card, ok: progress.record(card.id, ok)
+            session.mark(False)  # neues Wort falsch -> Box 1
+            session.mark(True)  # neues Wort richtig -> Box 2
+            return session
+
+        view = trainer.result_view(nav, store, progress,
+                                   make_finished_session())
+        found: list[str] = []
+        _collect_deep(view, found)
+        assert "neu → Box 1" in found
+        assert "neu → Box 2" in found
+        # Stift bei falschen UND richtigen Wörtern
+        assert found.count("Hinweise/Notizen bearbeiten") == 2
+
+        # Abschaltbar über die App-Einstellung (Haupteinstellungen)
+        from mathainoa1.storage.settings import AppSettings, save_app_settings
+        save_app_settings(AppSettings(result_box_dots=False))
+        view = trainer.result_view(nav, store, progress,
+                                   make_finished_session())
+        found = []
+        _collect_deep(view, found)
+        assert not any("→ Box" in x for x in found)
+        assert found.count("Hinweise/Notizen bearbeiten") == 2
+    finally:
+        progress.close()
+
+
+def test_declension_result_view_dots_per_scored_card(store_with_edge_cases,
+                                                     tmp_path, monkeypatch):
+    """Beugungs-Ergebnisliste (Vorgabe Deutsch): ein Boxen-Punkt je
+    mitwandernder Karte — im Adjektivtraining also zwei (Nomen und
+    Adjektiv, per Tooltip unterscheidbar) — und ein Bearbeiten-Stift."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.logic.declension import (
+        DeclensionSession,
+        DeclensionSettings,
+        DeclensionTask,
+    )
+
+    store, vlist = store_with_edge_cases
+    noun = next(c for c in vlist.cards if c.front == "το μετρό")
+    adj = next(c for c in vlist.cards if c.front == "μικρός")
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "decl.db")
+    try:
+        task = DeclensionTask(
+            card=noun, case="acc", number="sg", prompt="Metro (Akkusativ)",
+            meaning="Metro", expected="το μικρό μετρό", adj_card=adj)
+        settings = DeclensionSettings(mode="typing", direction="de",
+                                      word_count=1, repeat_errors=False)
+        session = DeclensionSession(
+            [task], settings, progress=progress.all(),
+            on_result=lambda card, ok: progress.record(card.id, ok))
+        session.check_typed("το μικρό μετρό")
+        assert session.finished
+        view = grammar.result_view(nav, store, session, "Adjektivtraining",
+                                   make_tasks=lambda s: [], progress=progress)
+        found: list[str] = []
+        _collect_deep(view, found)
+        assert f"{noun.front}: neu → Box 2" in found
+        assert f"{adj.front}: neu → Box 2" in found
+        assert "Hinweise/Notizen bearbeiten" in found
+    finally:
+        progress.close()

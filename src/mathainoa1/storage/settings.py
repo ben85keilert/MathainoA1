@@ -58,6 +58,10 @@ class AppSettings:
     # "original" = zurück in die ursprüngliche Box, "step_down" = eine Box
     # unter der ursprünglichen, mindestens Box 2 (Standard)
     repeat_round_box_policy: str = "step_down"
+    # Ergebnisliste nach jeder Runde: zweigeteilter Farbpunkt je Wort —
+    # linke Hälfte = Box vor der Runde, rechte = Box danach. Gilt für
+    # alle Trainings gleichermaßen (Vokabel/Nomen/Adjektiv/Verb).
+    result_box_dots: bool = True
     # Doppeltipp-Fenster (Sekunden) für "langsam abspielen" auf dem
     # Lautsprecher der Wortlisten (zusätzlich zum langen Drücken)
     slow_double_tap_seconds: float = 0.5

@@ -189,8 +189,11 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
   Satzzeichen sind reine Zusatzinfo, z.B. „Sie (Akk.)“.
 - **Eckige Klammern im Satz**: genau eine Variante muss genannt werden —
   „Ich spreche [nicht/kein] Chinesisch.“ akzeptiert beide vollständigen
-  Sätze, „Πώς [είσαι/είστε];“ ebenso. Ein nacktes „A / B“ auf oberster
-  Ebene trennt dagegen komplette Alternativantworten („και / κι“).
+  Sätze, „Πώς [είσαι/είστε];“ ebenso. Das gilt auf beiden Sprachseiten,
+  auch mit mehr als zwei Varianten („[α/β/γ]“) und mit mehreren Gruppen
+  im selben Satz; anders als bei runden Klammern ist die Angabe Pflicht.
+  Ein nacktes „A / B“ auf oberster Ebene trennt dagegen komplette
+  Alternativantworten („και / κι“).
 - **Griechisch**: fehlende oder falsche Akzente und ein falsches
   Schluss-ς ergeben „Fast!“. Mit „Akzentfehler tolerieren“ zählt das als
   richtig. Ist die Toleranz **aus**, zählt der Akzentfehler in der Runde
@@ -216,7 +219,12 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
   Änderungen dort werden **sofort gespeichert**, nicht erst beim
   Trainingsstart.
 - Am Rundenende werden unter den falschen auch die **richtig
-  beantworteten Wörter** aufgelistet.
+  beantworteten Wörter** aufgelistet — beide mit Stift zum Bearbeiten
+  und (abschaltbar in den Einstellungen) einem **zweigeteilten
+  Farbpunkt**: linke Hälfte = Leitner-Box vor der Runde, rechte Hälfte
+  = Box danach (grau = noch nicht trainiert). Gilt für alle Trainings
+  gleichermaßen; im Beugungstraining nur bei Vorgabe Deutsch (mit
+  Vorgabe Griechisch bewegt die Runde keine Boxen).
 - Im Verbtraining ist die **2. Person Plural 👥** zugleich die höfliche
   Anrede („ihr“ und „Sie“); Singular-/Plural-Fragen sind zusätzlich mit
   👤 (einer) bzw. 👥 (viele) markiert.
@@ -236,6 +244,14 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
   **Perfekt-Partizip** (z.B. „γραμμένος“).
 - Mehrere richtige Formen mit „/“ trennen (z.B. „2pl=είστε/είσαστε“),
   optionale Wortteile in Klammern („αγαπ(ά)ω“).
+- **Komplette Alternativantworten**: griechisch mit „ / “ trennen
+  („και / κι“), deutsch mit Komma oder „/“ („und, auch“) — jede
+  Alternative zählt bei der Abfrage als richtig.
+- **Genau eine von mehreren Varianten Pflicht**: eckige Klammern im
+  Satz, z.B. „Ich spreche [nicht/kein] Chinesisch.“ oder
+  „Πώς [είσαι/είστε];“ — auf beiden Sprachseiten, auch mit mehr als
+  zwei Varianten („[α/β/γ]“). Kein nacktes „A / B“ mitten im Satz —
+  das würde als zwei Komplettantworten gewertet.
 - **Adjektive**: nur ein unregelmäßiges Femininum eintragen.
 - Im Editor sind nur die zum Worttyp passenden Felder sichtbar;
   „Sonstiges“ zeigt alle Felder.

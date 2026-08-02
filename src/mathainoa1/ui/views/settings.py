@@ -266,6 +266,15 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
 
     sw_check.on_change = on_check
 
+    # --- Abfrage: Boxen vorher/nachher in der Ergebnisliste ---
+    sw_result_dots = ft.Switch(value=s.result_box_dots)
+
+    def on_result_dots(e):
+        s.result_box_dots = sw_result_dots.value
+        save_app_settings(s)
+
+    sw_result_dots.on_change = on_result_dots
+
     # --- Abfrage: Fehlerrunde und Leitner-Box ---
     def save_repeat(v):
         s.repeat_round_box_policy = v or "step_down"
@@ -581,6 +590,16 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
                     "bedeutet eine Box unter der ursprünglichen.",
                     size=sz(13), italic=True),
             rg_repeat,
+            ft.Divider(),
+            ft.Text("Ergebnisliste", size=sz(13)),
+            ft.Text("Zeigt nach jeder Runde vor jedem Wort einen "
+                    "zweigeteilten Farbpunkt: linke Hälfte = Leitner-Box "
+                    "vor der Runde, rechte Hälfte = Box danach (grau = "
+                    "noch nicht trainiert). Gilt für alle Trainings "
+                    "gleichermaßen.", size=sz(13), italic=True),
+            _switch_row(sw_result_dots,
+                        "Boxen vorher/nachher in der Ergebnisliste anzeigen",
+                        page),
             ft.Divider(),
             _h("Adjektivtraining"),
             ft.Text("Whitelisting fragt nur selbst festgelegte Adjektiv↔"

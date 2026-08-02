@@ -307,7 +307,11 @@ def help_view(nav, store=None) -> ft.Control:
             "der Alternativen als richtig — auf beiden Sprachseiten.",
             "Eckige Klammern im Satz: genau eine Variante muss genannt "
             "werden — „Ich spreche [nicht/kein] Chinesisch.“ akzeptiert "
-            "beide vollständigen Sätze, „Πώς [είσαι/είστε];“ ebenso.",
+            "beide vollständigen Sätze, „Πώς [είσαι/είστε];“ ebenso. "
+            "Das gilt auf beiden Sprachseiten, auch mit mehr als zwei "
+            "Varianten („[α/β/γ]“) und mit mehreren Gruppen im selben "
+            "Satz. Weglassen der Stelle zählt als Fehler — anders als "
+            "bei runden Klammern ist die Angabe Pflicht.",
             "Griechisch: fehlende oder falsche Akzente und ein falsches "
             "Schluss-ς ergeben „Fast!“. Mit „Akzentfehler tolerieren“ zählt "
             "das als richtig.",
@@ -374,6 +378,14 @@ def help_view(nav, store=None) -> ft.Control:
             "Reihenfolge der Fehler; in der nächsten Runde sind sie "
             "garantiert wieder dabei, gemischt zwischen den übrigen und "
             "neuen Wörtern.",
+            "Die Ergebnisliste nach jeder Runde zeigt vor jedem Wort "
+            "einen zweigeteilten Farbpunkt: die linke Hälfte ist die "
+            "Box vor der Runde, die rechte die Box danach (grau = noch "
+            "nicht trainiert; Farben wie in den Wortlisten). Das gilt "
+            "für alle Trainings gleichermaßen und lässt sich in den "
+            "Einstellungen (Zahnrad → Ergebnisliste) abschalten. Über "
+            "den Stift daneben lassen sich falsche wie richtige Wörter "
+            "direkt bearbeiten.",
             "Wörter, die heute schon (richtig) beantwortet wurden, rücken "
             "bei der Auswahl ans Ende — sie kommen erst wieder dran, wenn "
             "fällige, neue und ältere Karten aufgebraucht sind. So blockieren "
@@ -396,7 +408,18 @@ def help_view(nav, store=None) -> ft.Control:
             "Unregelmäßigkeit wieder 6 Formen mit Komma.",
             "Mehrere richtige Formen mit „/“ trennen, z.B. "
             "„2pl=είστε/είσαστε“ oder „δουν/δούνε“.",
-            "Optionale Wortteile in Klammern schreiben, z.B. „αγαπ(ά)ω“.",
+            "Komplette Alternativantworten: griechisch mit „ / “ trennen "
+            "(„και / κι“), deutsch mit Komma oder „/“ („und, auch“) — "
+            "jede Alternative zählt bei der Abfrage als richtig.",
+            "Muss genau EINE von mehreren Varianten im Satz genannt "
+            "werden, eckige Klammern verwenden — auf beiden Sprachseiten: "
+            "„Ich spreche [nicht/kein] Chinesisch.“ akzeptiert beide "
+            "Sätze, „Πώς [είσαι/είστε];“ ebenso; auch mit mehr als zwei "
+            "Varianten („[α/β/γ]“). Kein nacktes „A / B“ mitten im Satz — "
+            "das würde als zwei Komplettantworten gewertet.",
+            "Optionale Wortteile in Klammern schreiben, z.B. „αγαπ(ά)ω“ "
+            "oder „(Visiten-)Karte“ — mit und ohne Klammerinhalt zählt. "
+            "Klammern mit Satzzeichen sind reine Zusatzinfo („Sie (Akk.)“).",
             "Aus der Abfrage heraus: Der Stift öffnet den Notiz-Dialog — "
             "„Alles bearbeiten“ springt von dort in die vollständige "
             "Kartenbearbeitung (nicht bei Buchlisten).",
