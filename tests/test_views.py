@@ -520,6 +520,29 @@ def test_update_word_details_button_states():
     assert not btn.visible
 
 
+def test_has_word_forms_fast_matches_slow(store_with_edge_cases):
+    """Das billige Prädikat (ohne Control-Bau) muss mit has_word_forms
+    übereinstimmen — es entscheidet, ob Listenzeilen das Symbol zeigen."""
+    _store, vlist = store_with_edge_cases
+    extra = VocabCard(front="και", back="und")  # ohne Worttyp → nie Formen
+    for card in list(vlist.cards) + [extra]:
+        assert (reference.has_word_forms_fast(card)
+                == reference.has_word_forms(card)), card.front
+
+
+def test_word_details_button_variants(store_with_edge_cases):
+    """Fertiger Listen-Button: Tabellen-Symbol bei Formen ohne Lexikon,
+    None ohne beides."""
+    from mathainoa1.ui.word_details import word_details_button
+    import flet as ft
+    _store, vlist = store_with_edge_cases
+    verb = next(c for c in vlist.cards if c.front == "γράφω")
+    btn = word_details_button(verb)  # Lexikon-Feature aus → nur Formen
+    assert btn is not None and btn.icon == ft.Icons.TABLE_CHART_OUTLINED
+    plain = VocabCard(front="και", back="und")
+    assert word_details_button(plain) is None
+
+
 def test_hide_empty_texts():
     """Leere Platzhalter einklappen, gefüllte zeigen (Prüfen-Button-Höhe)."""
     import flet as ft
@@ -715,7 +738,8 @@ def test_lexikon_view_builds(store_with_edge_cases, tmp_path, monkeypatch):
 
 def test_search_hit_shows_info_button(store_with_edge_cases, tmp_path,
                                       monkeypatch):
-    """Wortsuche: Treffer mit Lexikon-Eintrag bekommen den ⓘ-Button."""
+    """Wortsuche: Treffer bekommen den kombinierten Wortinfo-Button
+    (γράφω hat Beugungsformen UND Lexikon-Eintrag → ⓘ) plus Audio."""
     ta = _enable_lexikon(tmp_path, monkeypatch)
     store, _vlist = store_with_edge_cases
     ta.lexicon_store(store).import_package(_sample_package_json())
@@ -728,8 +752,23 @@ def test_search_hit_shows_info_button(store_with_edge_cases, tmp_path,
     tf.on_change(None)
     found: list[str] = []
     _collect_texts_and_tooltips(view, found)
-    assert "Wortherkunft & Synonyme" in found
+    assert "Wort-Info & Beugungsformen" in found
+    assert any(t.startswith("Anhören") for t in found)
     ta.invalidate_cache()
+
+
+def test_search_hit_forms_only_shows_table_button(store_with_edge_cases):
+    """Wortsuche ohne Lexikon-Feature: Wörter mit Beugungsformen bekommen
+    trotzdem das Tabellen-Symbol."""
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    view = manager.search_view(nav, store)
+    tf = view.controls[0]
+    tf.value = "γράφω"
+    tf.on_change(None)
+    found: list[str] = []
+    _collect_texts_and_tooltips(view, found)
+    assert "Beugungsformen anzeigen" in found
 
 
 def test_list_view_word_info_icon(store_with_edge_cases, tmp_path,

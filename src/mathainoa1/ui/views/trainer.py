@@ -20,10 +20,10 @@ from mathainoa1.ui.audio import (
     maybe_autoplay,
     speaker_button,
 )
-from mathainoa1.ui.views.reference import (
-    has_word_forms,
-    show_word_forms,
-    word_forms_content,
+from mathainoa1.ui.views.reference import has_word_forms
+from mathainoa1.ui.word_details import (  # noqa: F401 — Re-Export für grammar
+    show_word_details,
+    update_word_details_button,
 )
 from mathainoa1.ui.scale import sz
 
@@ -135,58 +135,6 @@ def hide_empty_texts(*texts: ft.Text) -> None:
     die Tastatur (Antwort/Feedback erscheinen erst nach dem Prüfen)."""
     for t in texts:
         t.visible = bool(t.value)
-
-
-def update_word_details_button(btn: ft.IconButton, forms: bool,
-                               info: bool) -> None:
-    """Ein Symbol für Wort-Info und Beugungsformen — je nach Verfügbarkeit:
-    beides → Info-Symbol, nur Beugung → Tabellensymbol (wie Nomen-/
-    Verbtraining), nur Lexikoneintrag → Buchsymbol des Lexikons."""
-    btn.visible = forms or info
-    if forms and info:
-        btn.icon = ft.Icons.INFO_OUTLINE
-        btn.tooltip = "Wort-Info & Beugungsformen"
-    elif forms:
-        btn.icon = ft.Icons.TABLE_CHART_OUTLINED
-        btn.tooltip = "Beugungsformen anzeigen"
-    elif info:
-        btn.icon = ft.Icons.MENU_BOOK_OUTLINED
-        btn.tooltip = "Wortherkunft & Synonyme"
-
-
-def show_word_details(page: ft.Page, card, with_forms: bool = True) -> None:
-    """Wort-Info und/oder Beugungsformen als Dialog — gibt es beides,
-    steht die Beugungstabelle unter dem Lexikoneintrag, getrennt durch
-    einen Querbalken. with_forms=False, solange die Tabelle die Lösung
-    verraten würde (deutsche Vorgabe vor dem Aufdecken)."""
-    entry = etymology_for(card)
-    forms = word_forms_content(card) if with_forms else None
-    if forms is None and entry is None:
-        return
-    if entry is None:
-        show_word_forms(page, card)
-        return
-    if forms is None:
-        # Lazy-Import: das Feature-Modul nur laden, wenn es gebraucht wird
-        from mathainoa1.ui.views.textanalyse import etymology_dialog
-        etymology_dialog(page, entry)
-        return
-    from mathainoa1.ui.views.textanalyse import render_etymology
-    w = getattr(page, "width", None) or 420
-    h = getattr(page, "height", None) or 700
-    page.show_dialog(ft.AlertDialog(
-        title=ft.Text(card.with_plural(card.front), size=sz(16)),
-        inset_padding=ft.Padding.all(12),
-        content=ft.Column(
-            render_etymology(entry, with_title=False)
-            + [ft.Divider(thickness=2),
-               ft.Text("Beugungsformen", size=sz(16), weight=ft.FontWeight.BOLD),
-               forms],
-            scroll=ft.ScrollMode.AUTO, width=w, height=h - 180,
-        ),
-        actions=[ft.TextButton("Schließen",
-                               on_click=lambda e: page.pop_dialog())],
-    ))
 
 
 def typing_controls(tf_answer: ft.TextField, check) -> list[ft.Control]:
