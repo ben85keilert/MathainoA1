@@ -26,26 +26,36 @@ BOX_INTERVALS = {1: 0, 2: 1, 3: 3, 4: 7, 5: 30}
 
 
 def max_box_for_mode(production: bool, typed: bool, *,
+                     inflection: bool = False,
                      high_needs_production: bool = True,
-                     top_needs_typing: bool = True) -> int:
+                     top_needs_typing: bool = True,
+                     top_needs_inflection: bool = False) -> int:
     """Höchste per Beförderung erreichbare Box je Abfrageart.
 
     production: DE -> GR (aktiv erzeugen) statt GR -> DE (wiedererkennen).
     typed: getippte Produktion (schreiben) statt Karteikarte (Selbstbewertung).
+    inflection: Aufgabe stammt aus dem Beugungstraining (Nomen/Adjektiv/Verb).
 
-    Zwei Beschränkungen (aus den App-Einstellungen, Standard an):
-    - high_needs_production: Box 4+5 nur über Produktion (Wiedererkennen
-      höchstens Box 3).
-    - top_needs_typing: Box 5 nur über getippte Produktion (sonst höchstens
-      Box 4).
+    Drei Beschränkungen (aus den App-Einstellungen):
+    - high_needs_production (Standard an): Box 4+5 nur über Produktion
+      (Wiedererkennen höchstens Box 3).
+    - top_needs_typing (Standard an): Box 5 nur über getippte Produktion
+      (sonst höchstens Box 4).
+    - top_needs_inflection (Standard aus): Box 5 nur über das
+      Beugungstraining — alle übrigen Obergrenzen rücken eine Box nach
+      unten (Wiedererkennen 2, Karteikarte 3, getippt 4, Beugung 5).
 
-    Sind beide aus, erreicht jede Abfrageart Box 5.
+    Sind alle aus, erreicht jede Abfrageart Box 5.
     """
+    if inflection and top_needs_inflection:
+        return MAX_BOX  # Beugung erreicht die Spitze
+    penalty = 1 if top_needs_inflection else 0
     if production and typed:
-        return MAX_BOX  # getippte Produktion erreicht immer die Spitze
-    ceiling = FLASHCARD_MAX_BOX if top_needs_typing else MAX_BOX
+        return MAX_BOX - penalty  # getippte Produktion: sonst die Spitze
+    ceiling = (FLASHCARD_MAX_BOX if top_needs_typing else MAX_BOX) - penalty
     if not production:  # Wiedererkennen
-        return RECOGNITION_MAX_BOX if high_needs_production else ceiling
+        return (RECOGNITION_MAX_BOX - penalty) if high_needs_production \
+            else ceiling
     return ceiling  # Produktion per Karteikarte
 
 

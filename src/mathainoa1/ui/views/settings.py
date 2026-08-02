@@ -42,9 +42,15 @@ _THEME_MODES = {
 def _scaled_text_theme() -> ft.TextTheme:
     """Material-Textstile mit dem Zoomfaktor skaliert — damit auch Text,
     der nicht durch sz() läuft (Radio-/Switch-Labels, Buttons, AppBar),
-    dem Zoom folgt. Größen/Gewichte = Material-Defaults, nur skaliert."""
+    dem Zoom folgt. Größen/Gewichte = Material-Defaults, nur skaliert.
+
+    Jeder Stil braucht explizit color=ON_SURFACE: ein gesetztes text_theme
+    ERSETZT Flutters helligkeitsabhängige Typografie, und ohne Farbe fiele
+    der Text auf Weiß zurück — im hellen Theme unleserlich. Das Token löst
+    clientseitig je Theme-Helligkeit korrekt auf."""
     def st(size: int, weight=ft.FontWeight.W_400) -> ft.TextStyle:
-        return ft.TextStyle(size=sz(size), weight=weight)
+        return ft.TextStyle(size=sz(size), weight=weight,
+                            color=ft.Colors.ON_SURFACE)
 
     return ft.TextTheme(
         body_large=st(16), body_medium=st(14), body_small=st(12),
@@ -63,10 +69,14 @@ def apply_app_theme(page: ft.Page, s: AppSettings) -> None:
     page.theme_mode = _THEME_MODES.get(s.theme, ft.ThemeMode.SYSTEM)
     seed = SEED_COLORS.get(s.seed, SEED_COLORS["blue"])[1]
     # Bei 100 % kein text_theme setzen — so bleibt die Darstellung
-    # exakt wie ohne Zoom-Funktion
-    text_theme = _scaled_text_theme() if get_ui_scale() != 1.0 else None
-    page.theme = ft.Theme(color_scheme_seed=seed, text_theme=text_theme)
-    page.dark_theme = ft.Theme(color_scheme_seed=seed, text_theme=text_theme)
+    # exakt wie ohne Zoom-Funktion. Hell und Dunkel bekommen jeweils eine
+    # EIGENE TextTheme-Instanz — ein geteiltes Objekt kann beim Einhängen
+    # in den Control-Baum einem der beiden Themes verloren gehen.
+    scaled = get_ui_scale() != 1.0
+    page.theme = ft.Theme(color_scheme_seed=seed,
+                          text_theme=_scaled_text_theme() if scaled else None)
+    page.dark_theme = ft.Theme(color_scheme_seed=seed,
+                               text_theme=_scaled_text_theme() if scaled else None)
 
 
 def _wrapping_radio_group(value: str, options: list[tuple[str, str]],
@@ -229,6 +239,7 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     # --- Abfrage: Beschränkungen durch die Abfragemodi ---
     sw_high = ft.Switch(value=s.high_boxes_need_production)
     sw_top = ft.Switch(value=s.top_box_needs_typing)
+    sw_infl = ft.Switch(value=s.top_box_needs_inflection)
 
     def on_high(e):
         s.high_boxes_need_production = sw_high.value
@@ -238,8 +249,13 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
         s.top_box_needs_typing = sw_top.value
         save_app_settings(s)
 
+    def on_infl(e):
+        s.top_box_needs_inflection = sw_infl.value
+        save_app_settings(s)
+
     sw_high.on_change = on_high
     sw_top.on_change = on_top
+    sw_infl.on_change = on_infl
 
     # --- Abfrage: Prüfbutton-Stil beim Schreiben ---
     sw_check = ft.Switch(value=s.check_beside_field)
@@ -531,12 +547,21 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
             ft.Divider(),
             ft.Text("Beschränkung durch die Abfragemodi", size=sz(13)),
             ft.Text("Steuert, wie hoch eine Karte je nach Abfrageart steigen "
-                    "kann. Beide aus = jede Abfrageart erreicht Box 5.",
+                    "kann. Alle aus = jede Abfrageart erreicht Box 5. Ist "
+                    "„nur über das Beugungstraining“ an, rücken die übrigen "
+                    "Obergrenzen eine Box nach unten: Griechisch → Deutsch "
+                    "höchstens Box 2, Karteikarte Box 3, Schreiben Box 4 — "
+                    "Box 5 erreicht nur das Nomen-/Adjektiv-/Verbtraining "
+                    "mit Vorgabe Deutsch.",
                     size=sz(13), italic=True),
             _switch_row(sw_high,
                         "Box 4 und 5 nur über Deutsch → Griechisch", page),
             _switch_row(sw_top,
                         "Box 5 nur über Deutsch → Griechisch mit Schreiben",
+                        page),
+            _switch_row(sw_infl,
+                        "Box 5 nur über das Beugungstraining "
+                        "(Nomen/Adjektiv/Verb, Vorgabe Deutsch)",
                         page),
             ft.Divider(),
             ft.Text("Prüfen beim Schreiben", size=sz(13)),

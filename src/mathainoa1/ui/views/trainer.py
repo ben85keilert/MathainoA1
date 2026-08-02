@@ -20,24 +20,35 @@ from mathainoa1.ui.audio import (
     maybe_autoplay,
     speaker_button,
 )
-from mathainoa1.ui.views.reference import (
-    has_word_forms,
-    show_word_forms,
-    word_forms_content,
+from mathainoa1.ui.views.reference import has_word_forms
+from mathainoa1.ui.views.setup_common import on_off, options_summary
+from mathainoa1.ui.word_details import (  # noqa: F401 — Re-Export für grammar
+    show_word_details,
+    update_word_details_button,
+    word_details_button,
 )
 from mathainoa1.ui.scale import sz
 
 ALL = "__all__"
 
+# Fehler der zuletzt beendeten Runde je Liste (list_id) — für „Fehler in
+# nächster Runde wiederholen“ beim nächsten regulären Start derselben
+# Liste. Bewusst nur im Speicher: Nach einem App-Neustart sind die
+# Fehler ohnehin in Box 1 und damit sofort fällig (select_cards).
+_last_wrong: dict[str, list[VocabCard]] = {}
+
 
 def make_session(store: ContentStore, progress: ProgressStore,
-                 settings: TrainingSettings) -> TrainingSession:
+                 settings: TrainingSettings,
+                 must_include: list[VocabCard] | None = None,
+                 ) -> TrainingSession:
     cards = filter_cards(store.cards_for(settings.list_id), settings)
     app = load_app_settings()
     session = TrainingSession(cards, settings, progress=progress.all(),
                               accent_resets_box=app.accent_resets_box,
                               case_resets_box=app.case_resets_box,
-                              repeat_box_policy=app.repeat_round_box_policy)
+                              repeat_box_policy=app.repeat_round_box_policy,
+                              must_include=list(must_include or []))
 
     # Box-Deckel je Abfrageart (per Einstellungen abschaltbar); bei
     # "Gemischt" zählt die Richtung der jeweiligen Karte
@@ -137,58 +148,6 @@ def hide_empty_texts(*texts: ft.Text) -> None:
         t.visible = bool(t.value)
 
 
-def update_word_details_button(btn: ft.IconButton, forms: bool,
-                               info: bool) -> None:
-    """Ein Symbol für Wort-Info und Beugungsformen — je nach Verfügbarkeit:
-    beides → Info-Symbol, nur Beugung → Tabellensymbol (wie Nomen-/
-    Verbtraining), nur Lexikoneintrag → Buchsymbol des Lexikons."""
-    btn.visible = forms or info
-    if forms and info:
-        btn.icon = ft.Icons.INFO_OUTLINE
-        btn.tooltip = "Wort-Info & Beugungsformen"
-    elif forms:
-        btn.icon = ft.Icons.TABLE_CHART_OUTLINED
-        btn.tooltip = "Beugungsformen anzeigen"
-    elif info:
-        btn.icon = ft.Icons.MENU_BOOK_OUTLINED
-        btn.tooltip = "Wortherkunft & Synonyme"
-
-
-def show_word_details(page: ft.Page, card, with_forms: bool = True) -> None:
-    """Wort-Info und/oder Beugungsformen als Dialog — gibt es beides,
-    steht die Beugungstabelle unter dem Lexikoneintrag, getrennt durch
-    einen Querbalken. with_forms=False, solange die Tabelle die Lösung
-    verraten würde (deutsche Vorgabe vor dem Aufdecken)."""
-    entry = etymology_for(card)
-    forms = word_forms_content(card) if with_forms else None
-    if forms is None and entry is None:
-        return
-    if entry is None:
-        show_word_forms(page, card)
-        return
-    if forms is None:
-        # Lazy-Import: das Feature-Modul nur laden, wenn es gebraucht wird
-        from mathainoa1.ui.views.textanalyse import etymology_dialog
-        etymology_dialog(page, entry)
-        return
-    from mathainoa1.ui.views.textanalyse import render_etymology
-    w = getattr(page, "width", None) or 420
-    h = getattr(page, "height", None) or 700
-    page.show_dialog(ft.AlertDialog(
-        title=ft.Text(card.with_plural(card.front), size=sz(16)),
-        inset_padding=ft.Padding.all(12),
-        content=ft.Column(
-            render_etymology(entry, with_title=False)
-            + [ft.Divider(thickness=2),
-               ft.Text("Beugungsformen", size=sz(16), weight=ft.FontWeight.BOLD),
-               forms],
-            scroll=ft.ScrollMode.AUTO, width=w, height=h - 180,
-        ),
-        actions=[ft.TextButton("Schließen",
-                               on_click=lambda e: page.pop_dialog())],
-    ))
-
-
 def typing_controls(tf_answer: ft.TextField, check) -> list[ft.Control]:
     """Antwortfeld + Prüfen für den Schreibmodus — Stil per Einstellung:
     „Prüfen“-Button mittig unter dem Feld (Standard) oder rundes
@@ -256,6 +215,8 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
     )
     sw_article = ft.Switch(label="Artikel muss mitgetippt werden", value=s.with_article)
     sw_repeat = ft.Switch(label="Fehler am Ende wiederholen", value=s.repeat_errors)
+    sw_carry = ft.Switch(label="Fehler in nächster Runde wiederholen",
+                         value=s.carry_errors_next_round)
     sw_accent = ft.Switch(label="Akzentfehler tolerieren", value=s.accent_tolerant)
     sw_case = ft.Switch(label="Groß-/Kleinschreibung tolerieren (nur Nomen)",
                         value=s.case_tolerant)
@@ -311,6 +272,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             word_count=count,
             with_article=sw_article.value,
             repeat_errors=sw_repeat.value,
+            carry_errors_next_round=sw_carry.value,
             accent_tolerant=sw_accent.value,
             case_tolerant=sw_case.value,
             notes_on="notes" in notes_sel,
@@ -378,13 +340,39 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         if not filtered_cards(settings):
             return
         save_default_settings(settings)
-        session = make_session(store, progress, settings)
+        # Fehler der letzten Runde dieser Liste garantiert mitnehmen
+        wrong = (_last_wrong.pop(settings.list_id or ALL, [])
+                 if settings.carry_errors_next_round else [])
+        session = make_session(store, progress, settings, must_include=wrong)
         nav.go("Training", run_view(nav, store, progress, session))
 
     def edit_list(e):
         from mathainoa1.ui.views.manager import open_source_editor
         if dd_list.value:
             open_source_editor(nav, store, progress, dd_list.value)
+
+    def persist(e=None):
+        st = current_settings()
+        if st is not None:
+            save_default_settings(st)
+
+    options_card = options_summary(
+        nav.page,
+        describe=lambda: [
+            on_off("Fehlerrunde", sw_repeat.value),
+            on_off("Nächste Runde", sw_carry.value),
+            "Akzente " + ("tolerant" if sw_accent.value else "streng"),
+            "Groß/Klein " + ("tolerant" if sw_case.value else "streng"),
+            "Artikel " + ("mittippen" if sw_article.value else "optional"),
+            "Einblenden: " + (" + ".join(
+                x for x, on in (("Notizen", "notes" in (seg_notes.selected or [])),
+                                ("Hinweise", "hints" in (seg_notes.selected or [])))
+                if on) or "nichts"),
+        ],
+        controls=[sw_repeat, sw_carry, sw_accent, sw_case, sw_article,
+                  ft.Text("Bei der Frage einblenden", size=sz(13)), seg_notes],
+        on_change=persist,
+    )
 
     root = ft.Column(
         [
@@ -405,8 +393,6 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             ft.Row([seg_mode, tf_count], spacing=12,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             seg_dir,
-            sw_article, sw_repeat, sw_accent, sw_case,
-            ft.Text("Bei der Frage einblenden", size=sz(13)), seg_notes,
             error_text,
             ft.Row(
                 [
@@ -417,6 +403,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
                 ],
                 spacing=8, wrap=True,
             ),
+            options_card,
         ],
         spacing=12,
         scroll=ft.ScrollMode.AUTO,
@@ -718,15 +705,22 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
 def result_view(nav, store: ContentStore, progress: ProgressStore,
                 session: TrainingSession) -> ft.Control:
     stats = session.stats()
+    # Fehler dieser Runde für den nächsten Start derselben Liste merken
+    # (auch eine leere Liste — sie löscht veraltete Einträge)
+    _last_wrong[session.settings.list_id or ALL] = list(stats["wrong_cards"])
     wrong_items = [
         ft.ListTile(
             title=ft.Text(c.front),
             subtitle=ft.Text(c.back),
             leading=ft.Icon(ft.Icons.CLOSE, color=ft.Colors.ERROR),
-            trailing=ft.IconButton(
-                ft.Icons.EDIT_NOTE, tooltip="Hinweise/Notizen bearbeiten",
-                on_click=lambda e, c=c: edit_notes_dialog(nav.page, store, c),
-            ),
+            trailing=ft.Row([b for b in (
+                word_details_button(c),
+                ft.IconButton(
+                    ft.Icons.EDIT_NOTE,
+                    tooltip="Hinweise/Notizen bearbeiten",
+                    on_click=lambda e, c=c: edit_notes_dialog(
+                        nav.page, store, c)),
+            ) if b is not None], tight=True, spacing=0),
         )
         for c in stats["wrong_cards"]
     ]
@@ -736,6 +730,7 @@ def result_view(nav, store: ContentStore, progress: ProgressStore,
             title=ft.Text(a.card.front),
             subtitle=ft.Text(a.card.back),
             leading=ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN),
+            trailing=word_details_button(a.card),
         )
         for a in session.answers[: session.total_first_round]
         if session.counts_correct(a.result)
@@ -744,7 +739,11 @@ def result_view(nav, store: ContentStore, progress: ProgressStore,
     def again(e):
         nav.stack.pop()  # Ergebnis-View ersetzen statt stapeln
         nav.stack.pop()  # alte Trainings-View entfernen
-        new_session = make_session(store, progress, session.settings)
+        # Fehler dieser Runde garantiert mitnehmen (Option), Rest auffüllen
+        wrong = (_last_wrong.pop(session.settings.list_id or ALL, [])
+                 if session.settings.carry_errors_next_round else [])
+        new_session = make_session(store, progress, session.settings,
+                                   must_include=wrong)
         nav.go("Training", run_view(nav, store, progress, new_session))
 
     def home(e):

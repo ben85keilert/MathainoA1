@@ -241,6 +241,52 @@ def help_view(nav, store=None) -> ft.Control:
         _p("Alle drei Bereiche arbeiten auf denselben Vokabel- und "
            "Auswahllisten; regelmäßige Formen entstehen automatisch, "
            "Unregelmäßiges kommt aus den Zusatzfeldern der Karten."),
+        ft.Text("Startseiten & weitere Optionen", size=sz(14),
+                weight=ft.FontWeight.BOLD),
+        _bullets([
+            "Auf allen Startseiten stehen die selteneren Optionen "
+            "kompakt unter den Start-Buttons („Weitere Optionen“). "
+            "Antippen öffnet einen Dialog — Änderungen dort werden "
+            "sofort gespeichert, nicht erst beim Trainingsstart.",
+            "„Fehler am Ende wiederholen“: falsche Antworten kommen "
+            "direkt nach der Hauptrunde noch einmal dran (Fehlerrunde, "
+            "zählt nicht in die Statistik).",
+            "„Fehler in nächster Runde wiederholen“: die Fehler der "
+            "Hauptrunde sind bei „Neue Runde“ bzw. beim nächsten Start "
+            "derselben Liste garantiert wieder dabei, aufgefüllt mit "
+            "neuen Wörtern. Im Vokabeltraining gilt das bis zum "
+            "App-Neustart — danach sorgt ohnehin Box 1 dafür, dass die "
+            "Fehler sofort wieder fällig sind.",
+        ]),
+    ])
+
+    symbole = _chapter(nav, "Symbole in Training & Listen",
+                       ft.Icons.INFO_OUTLINE, [
+        _p("Unter der Karte in der Abfrage — und am Rand vieler "
+           "Listenzeilen — stehen bis zu drei Symbole:"),
+        _bullets([
+            "Lautsprecher: liest das griechische Wort vor. Langes Drücken "
+            "(oder Doppeltipp) schaltet den app-weiten Langsam-Modus zum "
+            "Nachsprechen um — mehr dazu im Kapitel „Audio“.",
+            "Wort-Symbol für Beugungsformen und Wort-Info — ein Button, "
+            "drei Gesichter: Gibt es beides, zeigt das ⓘ-Symbol einen "
+            "Dialog mit dem Lexikoneintrag oben und der Beugungstabelle "
+            "darunter (durch einen Querbalken getrennt). Gibt es nur die "
+            "Beugungsformen (Deklination bei Nomen/Adjektiven, "
+            "Konjugation bei Verben), erscheint das Tabellen-Symbol; gibt "
+            "es nur den Lexikoneintrag (Wortherkunft & Synonyme, Teil der "
+            "erweiterten Funktion „Textanalyse“), das Buch-Symbol.",
+            "Stift: öffnet den Notiz-Dialog für Hinweise/Notizen — "
+            "„Alles bearbeiten“ springt von dort in die vollständige "
+            "Kartenbearbeitung (nicht bei Buchlisten).",
+        ]),
+        _p("Das Wort-Symbol erscheint auch in Wortlisten, in der "
+           "Wortsuche, in den Vorschauen der Trainings, in den "
+           "Ergebnislisten und bei den Problemwörtern der Statistik."),
+        _p("Spoilerschutz bei Deutsch → Griechisch: Solange die "
+           "griechische Seite noch verdeckt ist, bleiben Lautsprecher "
+           "und Beugungstabelle gesperrt — sie würden sonst die Lösung "
+           "verraten."),
     ])
 
     wertung = _chapter(nav, "Wertung", ft.Icons.RULE, [
@@ -276,7 +322,9 @@ def help_view(nav, store=None) -> ft.Control:
             "lässt sich aber wählen, wohin ein dort richtig beantwortetes "
             "Wort wandert: Box 1 (keine Verbesserung), Box 2, die "
             "ursprüngliche Box oder eine Box darunter — mindestens "
-            "Box 2 (Standard).",
+            "Box 2 (Standard). Dieselbe Regel gilt auch in den "
+            "Fehlerrunden des Nomen-/Adjektiv-/Verbtrainings mit "
+            "Vorgabe Deutsch.",
         ]),
         ft.Text("Akzent- und Groß-/Kleinschreibung tolerieren", size=sz(14),
                 weight=ft.FontWeight.BOLD),
@@ -307,8 +355,18 @@ def help_view(nav, store=None) -> ft.Control:
             "ab: Griechisch → Deutsch (Wiedererkennen) höchstens Box 3, "
             "Deutsch → Griechisch als Karteikarte höchstens Box 4, "
             "Deutsch → Griechisch getippt (schreiben können) bis Box 5. "
-            "Diese beiden Beschränkungen lassen sich in den Einstellungen "
+            "Diese Beschränkungen lassen sich in den Einstellungen "
             "(Zahnrad) abschalten.",
+            "Zusätzlich einschaltbar: „Box 5 nur über das "
+            "Beugungstraining“ — dann rücken alle Obergrenzen eine Box "
+            "nach unten (Wiedererkennen Box 2, Karteikarte Box 3, "
+            "Schreiben Box 4) und nur das Nomen-/Adjektiv-/Verbtraining "
+            "mit Vorgabe Deutsch führt bis Box 5.",
+            "Beugungstraining mit Vorgabe Deutsch wertet voll wie das "
+            "Vokabeltraining: richtig = Box rauf, falsch = zurück in "
+            "Box 1. Im Adjektivtraining wandern Adjektiv- und Nomenkarte "
+            "gemeinsam. Mit Vorgabe Griechisch bleibt es reines "
+            "Formentraining ohne Wirkung auf die Boxen.",
             "„Sicher“ ist eine Karte ab Box 4. Erreicht eine Karte "
             "Box 5, wird ihr Fehlerzähler gelöscht — sie verschwindet "
             "aus den Problemwörtern der Statistik.",
@@ -600,8 +658,8 @@ def help_view(nav, store=None) -> ft.Control:
             _p("Grammatik-Übersichten (Alphabet, Artikel, Deklinationen, "
                "Verben …) findest du über das Buchsymbol oben in der "
                "Leiste."),
-            trainings, wertung, leitner, editing, wortsuche, prompts,
-            stufen, audio, backup_ch, datenschutz, about_row,
+            trainings, symbole, wertung, leitner, editing, wortsuche,
+            prompts, stufen, audio, backup_ch, datenschutz, about_row,
         ],
         spacing=4,
         scroll=ft.ScrollMode.AUTO,

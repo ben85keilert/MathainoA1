@@ -520,6 +520,29 @@ def test_update_word_details_button_states():
     assert not btn.visible
 
 
+def test_has_word_forms_fast_matches_slow(store_with_edge_cases):
+    """Das billige Prädikat (ohne Control-Bau) muss mit has_word_forms
+    übereinstimmen — es entscheidet, ob Listenzeilen das Symbol zeigen."""
+    _store, vlist = store_with_edge_cases
+    extra = VocabCard(front="και", back="und")  # ohne Worttyp → nie Formen
+    for card in list(vlist.cards) + [extra]:
+        assert (reference.has_word_forms_fast(card)
+                == reference.has_word_forms(card)), card.front
+
+
+def test_word_details_button_variants(store_with_edge_cases):
+    """Fertiger Listen-Button: Tabellen-Symbol bei Formen ohne Lexikon,
+    None ohne beides."""
+    from mathainoa1.ui.word_details import word_details_button
+    import flet as ft
+    _store, vlist = store_with_edge_cases
+    verb = next(c for c in vlist.cards if c.front == "γράφω")
+    btn = word_details_button(verb)  # Lexikon-Feature aus → nur Formen
+    assert btn is not None and btn.icon == ft.Icons.TABLE_CHART_OUTLINED
+    plain = VocabCard(front="και", back="und")
+    assert word_details_button(plain) is None
+
+
 def test_hide_empty_texts():
     """Leere Platzhalter einklappen, gefüllte zeigen (Prüfen-Button-Höhe)."""
     import flet as ft
@@ -715,7 +738,8 @@ def test_lexikon_view_builds(store_with_edge_cases, tmp_path, monkeypatch):
 
 def test_search_hit_shows_info_button(store_with_edge_cases, tmp_path,
                                       monkeypatch):
-    """Wortsuche: Treffer mit Lexikon-Eintrag bekommen den ⓘ-Button."""
+    """Wortsuche: Treffer bekommen den kombinierten Wortinfo-Button
+    (γράφω hat Beugungsformen UND Lexikon-Eintrag → ⓘ) plus Audio."""
     ta = _enable_lexikon(tmp_path, monkeypatch)
     store, _vlist = store_with_edge_cases
     ta.lexicon_store(store).import_package(_sample_package_json())
@@ -728,8 +752,23 @@ def test_search_hit_shows_info_button(store_with_edge_cases, tmp_path,
     tf.on_change(None)
     found: list[str] = []
     _collect_texts_and_tooltips(view, found)
-    assert "Wortherkunft & Synonyme" in found
+    assert "Wort-Info & Beugungsformen" in found
+    assert any(t.startswith("Anhören") for t in found)
     ta.invalidate_cache()
+
+
+def test_search_hit_forms_only_shows_table_button(store_with_edge_cases):
+    """Wortsuche ohne Lexikon-Feature: Wörter mit Beugungsformen bekommen
+    trotzdem das Tabellen-Symbol."""
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    view = manager.search_view(nav, store)
+    tf = view.controls[0]
+    tf.value = "γράφω"
+    tf.on_change(None)
+    found: list[str] = []
+    _collect_texts_and_tooltips(view, found)
+    assert "Beugungsformen anzeigen" in found
 
 
 def test_list_view_word_info_icon(store_with_edge_cases, tmp_path,
@@ -931,3 +970,51 @@ def test_prompt_level_interpolation(tmp_path, monkeypatch):
     for tpl in (CHATBOT_PROMPT, TEXT_PROMPT):
         text = tpl.format(level=load_app_settings().level)
         assert "Niveau A2" in text and "{level}" not in text
+
+
+def test_options_summary_saves_immediately_and_refreshes():
+    """Die Options-Karte der Startseiten: jede Änderung im Dialog ruft
+    sofort on_change (Speichern) und frischt die Zusammenfassung auf."""
+    import flet as ft
+    from mathainoa1.ui.views.setup_common import on_off, options_summary
+
+    saved = []
+    sw = ft.Switch(label="Fehlerrunde", value=True)
+    page = SimpleNamespace(update=lambda: None, width=420,
+                           show_dialog=lambda d: None,
+                           pop_dialog=lambda: None)
+    card = options_summary(page,
+                           describe=lambda: [on_off("Fehlerrunde", sw.value)],
+                           controls=[sw, ft.Text("Hinweis")],
+                           on_change=lambda: saved.append(sw.value))
+    tile = card.content
+    assert tile.subtitle.value == "Fehlerrunde: an"
+    sw.value = False
+    sw.on_change(None)  # von der Komponente verdrahtet
+    assert saved == [False]
+    assert tile.subtitle.value == "Fehlerrunde: aus"
+
+
+def test_setup_views_have_options_card(store_with_edge_cases, tmp_path,
+                                       monkeypatch):
+    """Alle 4 Startseiten zeigen die kompakte Options-Karte unter den
+    Start-Buttons statt einzelner Schalter auf der Seite."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "opt.db")
+    try:
+        views = [
+            trainer.setup_view(nav, store, progress),
+            grammar.setup_view(nav, store, progress),
+            grammar.adjective_setup_view(nav, store, progress),
+            grammar.conjugation_setup_view(nav, store, progress),
+        ]
+        for view in views:
+            found: list[str] = []
+            _collect_texts_and_tooltips(view, found)
+            assert "Weitere Optionen" in found
+            # die Schalter selbst stehen nicht mehr direkt auf der Seite
+            assert "Fehler am Ende wiederholen" not in found
+    finally:
+        progress.close()

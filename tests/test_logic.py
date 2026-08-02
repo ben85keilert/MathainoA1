@@ -533,3 +533,69 @@ def test_select_cards_demotes_answered_today():
     # 4 Plätze: jetzt kommt sie als letzte Priorität doch mit
     picked = select_cards(cards, 4, progress, now=now)
     assert set(p.id for p in picked) == {c.id for c in cards}
+
+
+# --- Kartenauswahl: must_include (Fehler in nächster Runde wiederholen) ---
+
+
+def test_select_cards_must_include_guaranteed():
+    from mathainoa1.logic.session import select_cards
+
+    cards = [VocabCard(front=f"w{i}", back=str(i)) for i in range(10)]
+    wrong = [cards[7], cards[9]]
+    picked = select_cards(cards, 4, None, must_include=wrong)
+    assert len(picked) == 4
+    picked_ids = {c.id for c in picked}
+    assert {c.id for c in wrong} <= picked_ids
+
+
+def test_select_cards_must_include_dedupe_and_pool_filter():
+    from mathainoa1.logic.session import select_cards
+
+    cards = [VocabCard(front=f"w{i}", back=str(i)) for i in range(3)]
+    foreign = VocabCard(front="fremd", back="x")  # nicht im Pool
+    picked = select_cards(cards, 5, None,
+                          must_include=[cards[0], cards[0], foreign])
+    picked_ids = [c.id for c in picked]
+    # dedupliziert (Karte nur einmal), Fremdkarte draußen, Rest aufgefüllt
+    assert picked_ids.count(cards[0].id) == 1
+    assert foreign.id not in picked_ids
+    assert len(picked) == 3
+
+
+def test_select_cards_must_include_respects_count():
+    from mathainoa1.logic.session import select_cards
+
+    cards = [VocabCard(front=f"w{i}", back=str(i)) for i in range(6)]
+    picked = select_cards(cards, 2, None, must_include=cards[:4])
+    assert len(picked) == 2
+    assert {c.id for c in picked} <= {c.id for c in cards[:4]}
+
+
+def test_select_cards_must_include_with_progress():
+    from datetime import datetime, timedelta
+    from mathainoa1.logic.session import select_cards
+    from mathainoa1.storage.progress import CardProgress
+
+    now = datetime(2026, 7, 26, 12, 0)
+    cards = [VocabCard(front=f"w{i}", back=str(i)) for i in range(4)]
+    # alle Karten weit in der Zukunft fällig — ohne must_include käme die
+    # gewünschte Karte trotzdem, aber hier prüfen wir die Garantie
+    progress = {c.id: CardProgress(c.id, box=4, correct=3,
+                                   last_seen=now - timedelta(days=1),
+                                   due=now + timedelta(days=5))
+                for c in cards}
+    picked = select_cards(cards, 2, progress, now=now,
+                          must_include=[cards[3]])
+    assert cards[3].id in {c.id for c in picked}
+    assert len(picked) == 2
+
+
+def test_training_settings_carry_default_true():
+    from mathainoa1.logic.session import TrainingSettings
+
+    # Alt-JSON ohne das Feld -> Standard an
+    s = TrainingSettings.from_dict({"mode": "typing"})
+    assert s.carry_errors_next_round is True
+    s2 = TrainingSettings.from_dict({"carry_errors_next_round": False})
+    assert s2.carry_errors_next_round is False

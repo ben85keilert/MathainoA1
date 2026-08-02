@@ -15,6 +15,9 @@ Nomen/Adjektiven, Konjugation bei Verben), erscheint das
 **Tabellen-Symbol**, gibt es nur den Lexikoneintrag, das
 **Buch-Symbol**. Die Beugungstabelle ist bei Deutsch → Griechisch erst
 nach dem Aufdecken enthalten, damit die Antwort nicht verraten wird.
+Dasselbe Wort-Symbol erscheint auch in Wortlisten, in der Wortsuche, in
+den Vorschauen der Trainings, in den Ergebnislisten und bei den
+Problemwörtern der Statistik.
 
 ## Zoom
 
@@ -24,7 +27,9 @@ Werte bringen auf kleinen Displays mehr auf den Bildschirm, größere
 verbessern die Lesbarkeit. Es handelt sich um echte
 Schriftgrößen-Skalierung — die Oberfläche ordnet sich neu an, nichts
 wird abgeschnitten. Die Änderung wirkt sofort auf die
-Einstellungsseite; andere Ansichten übernehmen sie beim Öffnen.
+Einstellungsseite; andere Ansichten übernehmen sie beim Öffnen. Die
+skalierten Schriften folgen dabei den Farben des gewählten Themes —
+auch im hellen Modus bleibt alles lesbar.
 
 ## Stufen (A1/A2)
 
@@ -197,12 +202,19 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
   Komma, „/“ oder als eigene Sätze), genügt eine davon. Text in Klammern
   ist Zusatzinfo und muss nicht mitgetippt werden.
 - Die **Fehlerrunde** am Ende wiederholt alle falschen Karten in der
-  Reihenfolge der Fehler und zählt nicht in die Statistik. In der
-  **nächsten Runde** kommen die falschen Wörter garantiert wieder mit
-  dazu und werden zwischen die übrigen/neuen Wörter gemischt. Wörter,
-  die **heute schon richtig beantwortet** wurden, rücken bei der Auswahl
-  dagegen ans Ende — sie kommen erst wieder dran, wenn fällige, neue und
-  ältere Karten aufgebraucht sind.
+  Reihenfolge der Fehler und zählt nicht in die Statistik („Fehler am
+  Ende wiederholen“). Mit **„Fehler in nächster Runde wiederholen“**
+  kommen die falschen Wörter bei „Neue Runde“ bzw. beim nächsten Start
+  derselben Liste garantiert wieder mit dazu und werden zwischen die
+  übrigen/neuen Wörter gemischt. Wörter, die **heute schon richtig
+  beantwortet** wurden, rücken bei der Auswahl dagegen ans Ende — sie
+  kommen erst wieder dran, wenn fällige, neue und ältere Karten
+  aufgebraucht sind.
+- Beide Optionen — und die übrigen Schalter (Toleranzen, Artikel,
+  Einblendungen) — stehen auf den Startseiten kompakt unter den
+  Start-Buttons („Weitere Optionen“). Antippen öffnet einen Dialog;
+  Änderungen dort werden **sofort gespeichert**, nicht erst beim
+  Trainingsstart.
 - Am Rundenende werden unter den falschen auch die **richtig
   beantworteten Wörter** aufgelistet.
 - Im Verbtraining ist die **2. Person Plural 👥** zugleich die höfliche
@@ -364,6 +376,16 @@ höhere Box bleibt dabei stehen, wird aber nicht zurückgestuft. Bei der
 Einstellung „Gemischt“ zählt die Richtung, in der die Karte tatsächlich
 abgefragt wurde.
 
+Diese Obergrenzen sind einstellbar (Zahnrad → Abfrage → „Beschränkung
+durch die Abfragemodi“) — drei Schalter: „Box 4 und 5 nur über
+Deutsch → Griechisch“, „Box 5 nur über Deutsch → Griechisch mit
+Schreiben“ und **„Box 5 nur über das Beugungstraining“**. Ist der
+dritte Schalter an, rücken alle übrigen Obergrenzen eine Box nach
+unten: Griechisch → Deutsch höchstens **Box 2**, Deutsch → Griechisch
+als Karteikarte **Box 3**, Deutsch → Griechisch getippt **Box 4** —
+**Box 5** erreicht nur noch das Nomen-/Adjektiv-/Verbtraining mit
+Vorgabe Deutsch.
+
 Über das Papierkorb-Symbol in der Statistik-Ansicht lässt sich der
 Lernstand einer Liste komplett auf null zurücksetzen; die Karten gelten
 danach wieder als neu.
@@ -393,17 +415,22 @@ Problemwörtern (erst ein neuer Fehler zählt wieder).
   - Im Tipp-Modus zählt „Fast!“ (nur Akzent-/Schluss-ς-Fehler) als richtig.
   - Im Karteikarten-Modus zählt die Selbstbewertung („Gewusst“ /
     „Nicht gewusst“).
-- **Deklination**: Hier kommt es auf die eingestellte **Vorgabe** an:
-  - Vorgabe **Griechisch** (die Nominativphrase wird angezeigt): Das ist
-    reines Formentraining — es fließt **nicht** in die Vokabelstatistik ein.
-  - Vorgabe **Deutsch** (nur die deutsche Bedeutung wird angezeigt): Wer
-    hier richtig dekliniert, hat die Vokabel zugleich aktiv gewusst. Eine
-    **richtige Antwort zählt deshalb positiv** für die Vokabelstatistik der
-    Karte (Box steigt). Eine falsche Antwort setzt die Box **nicht**
-    zurück — ein Deklinationsfehler ist kein Beweis, dass die Vokabel
-    unbekannt ist. Auch hier zählt nur die erste Runde, nicht die
-    Fehlerrunde.
-- **Konjugation**: fließt derzeit nicht in die Vokabelstatistik ein.
+- **Beugungstraining (Nomen, Adjektive, Verben)**: Hier kommt es auf
+  die eingestellte **Vorgabe** an:
+  - Vorgabe **Griechisch** (die Nominativphrase bzw. das Lemma wird
+    angezeigt): Das ist reines Formentraining — es fließt **nicht** in
+    die Vokabelstatistik ein.
+  - Vorgabe **Deutsch** (nur die deutsche Bedeutung wird angezeigt):
+    Wer hier richtig beugt, hat die Vokabel zugleich aktiv gewusst. Es
+    gilt die **volle Wertung wie im Vokabeltraining**: richtig = Box
+    steigt (bis Box 5), **falsch = Karte fällt zurück in Box 1**. Die
+    Fehlerrunde am Ende zählt auch hier nicht — für ein dort richtig
+    beantwortetes Wort gilt dieselbe „Fehlerrunde“-Einstellung wie im
+    Vokabeltraining (Standard: eine Box unter der ursprünglichen,
+    mindestens Box 2).
+  - Im **Adjektivtraining** wandern **Adjektiv- und Nomenkarte
+    gemeinsam**: Eine richtige Antwort befördert beide, eine falsche
+    setzt beide zurück.
 
 Deklinations- und Konjugationsrunden zeigen am Ende zusätzlich ihr eigenes
 Rundenergebnis (x von y richtig); das ist unabhängig von der dauerhaften

@@ -27,7 +27,7 @@ from mathainoa1.storage.content import ContentStore, filter_level
 from mathainoa1.storage.progress import ProgressStore
 from mathainoa1.storage.settings import TTS_GOOGLE, load_app_settings
 from mathainoa1.storage.tts import TtsFetchError, speakable
-from mathainoa1.ui.audio import tts_cache, tts_engine
+from mathainoa1.ui.audio import speaker_button, tts_cache, tts_engine
 from mathainoa1.ui.dialogs import plaintext_dialog
 from mathainoa1.ui.views.trainer import edit_notes_dialog
 from mathainoa1.ui.views.wordlist import (
@@ -41,6 +41,7 @@ from mathainoa1.ui.views.wordlist import (
     origin_names,
 )
 from mathainoa1.ui.scale import sz
+from mathainoa1.ui.word_details import word_details_button
 
 ARTICLES = ["", "ο", "η", "το", "οι", "τα"]
 
@@ -727,18 +728,14 @@ def search_view(nav, store: ContentStore) -> ft.Control:
         tiles = []
         for vlist, card, in_selections in hits:
             trailing_items: list[ft.Control] = []
-            entry = textanalyse.etymology_for(card)
-            if entry is not None:
-                def show_info(e, x=entry):
-                    # Lazy-Import wie in wordlist.card_tiles (kein Zyklus)
-                    from mathainoa1.ui.views.textanalyse import (
-                        etymology_dialog,
-                    )
-                    etymology_dialog(page, x)
-
-                trailing_items.append(ft.IconButton(
-                    ft.Icons.INFO_OUTLINE, icon_size=sz(18),
-                    tooltip="Wortherkunft & Synonyme", on_click=show_info))
+            # Kombinierter Wortinfo-Button + Lautsprecher — gleiche
+            # Symbole wie in den Wortlisten (wordlist.card_tiles)
+            btn_details = word_details_button(card, icon_size=18)
+            if btn_details is not None:
+                trailing_items.append(btn_details)
+            trailing_items.append(speaker_button(
+                None, lambda c=card: c.front,
+                icon_color=ft.Colors.PRIMARY))
             if in_selections:
                 trailing_items.append(ft.Icon(
                     ft.Icons.STAR, color=ft.Colors.AMBER, size=sz(18),

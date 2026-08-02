@@ -26,6 +26,9 @@ class TrainingSettings:
     # Schalter aus, zählt bei Nomen (nicht bei Phrasen) eine falsche
     # Schreibung wie ein strenger Akzentfehler — Runde ja, Leitner-Box nein
     case_tolerant: bool = True
+    # Fehler der Hauptrunde bei „Nochmal“/nächstem Start derselben Liste
+    # garantiert wieder aufnehmen (mit neuen Wörtern aufgefüllt)
+    carry_errors_next_round: bool = True
     notes_on: bool = True  # Notizen standardmäßig bei der Frage einblenden
     hints_on: bool = False  # Hinweise nur auf Klick (bzw. hier dauerhaft)
     # Filter
@@ -52,7 +55,8 @@ def filter_cards(cards: list[VocabCard], settings: TrainingSettings) -> list[Voc
 
 
 def select_cards(cards: list[VocabCard], count: int, progress: dict | None = None,
-                 now: datetime | None = None) -> list[VocabCard]:
+                 now: datetime | None = None,
+                 must_include: list[VocabCard] | None = None) -> list[VocabCard]:
     """Kartenauswahl nach Leitner: überfällige zuerst, dann neue, dann der Rest.
 
     Die Priorität bestimmt nur, WELCHE Karten in die Runde kommen (Fehler
@@ -67,11 +71,27 @@ def select_cards(cards: list[VocabCard], count: int, progress: dict | None = Non
     Neue und ältere Karten aufgebraucht sind.
 
     progress: card_id -> CardProgress (siehe storage/progress.py); None = mischen.
+    must_include: diese Karten (z.B. Fehler der Vorrunde) kommen garantiert
+    in die Auswahl — vor allen anderen Töpfen, dedupliziert per id und nur
+    soweit sie im Karten-Pool liegen; aufgefüllt wird wie üblich.
     """
+    fixed: list[VocabCard] = []
+    if must_include:
+        pool_ids = {c.id for c in cards}
+        seen: set[str] = set()
+        for c in must_include:
+            if c.id in pool_ids and c.id not in seen:
+                seen.add(c.id)
+                fixed.append(c)
+        fixed = fixed[:count]
+        cards = [c for c in cards if c.id not in seen]
+        count -= len(fixed)
     if not progress:
         pool = list(cards)
         random.shuffle(pool)
-        return pool[:count]
+        selected = fixed + pool[:count]
+        random.shuffle(selected)
+        return selected
     now = now or datetime.now()
     due, new, rest, rest_today = [], [], [], []
     for c in cards:
@@ -90,7 +110,7 @@ def select_cards(cards: list[VocabCard], count: int, progress: dict | None = Non
     rest_today.sort(key=lambda t: t[0])
     ordered = ([c for _, c in due] + new + [c for _, c in rest]
                + [c for _, c in rest_today])
-    selected = ordered[:count]
+    selected = fixed + ordered[:count]
     random.shuffle(selected)
     return selected
 
@@ -119,6 +139,9 @@ class TrainingSession:
     repeat_box_policy: str = "step_down"
     # Callback dafür: (card, Zielbox) — z.B. ProgressStore.restore_box
     on_repeat_correct: Callable[[VocabCard, int], None] | None = None
+    # Karten, die garantiert in die Runde kommen (Fehler der Vorrunde bei
+    # „Fehler in nächster Runde wiederholen“)
+    must_include: list[VocabCard] = field(default_factory=list)
     queue: list[VocabCard] = field(init=False)
     answers: list[Answer] = field(default_factory=list)
     _wrong_pending: list[VocabCard] = field(default_factory=list)
@@ -127,7 +150,9 @@ class TrainingSession:
     in_repeat_round: bool = field(default=False)
 
     def __post_init__(self):
-        self.queue = select_cards(self.cards, self.settings.word_count, self.progress)
+        self.queue = select_cards(self.cards, self.settings.word_count,
+                                  self.progress,
+                                  must_include=self.must_include)
         self.total_first_round = len(self.queue)
         # Bei "Gemischt": Richtung pro Karte einmal festlegen (bleibt auch in
         # der Fehlerrunde gleich)

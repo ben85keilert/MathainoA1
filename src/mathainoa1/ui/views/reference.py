@@ -513,6 +513,20 @@ def has_word_forms(card: VocabCard) -> bool:
     return word_forms_content(card) is not None
 
 
+def has_word_forms_fast(card: VocabCard) -> bool:
+    """Wie has_word_forms, aber ohne Flet-Controls zu bauen — für
+    Listenzeilen, wo das Prädikat pro Karte ausgewertet wird."""
+    if card.word_type == "Nomen":
+        noun = decl.parse_noun(card)
+        return noun is not None and any(
+            decl.decline(noun, case, num) for case, num, _ in _CASE_LABELS)
+    if card.word_type == "Adjektiv":
+        return decl.parse_adjective(card) is not None
+    if card.word_type == "Verb":
+        return conj.parse_verb(card) is not None
+    return False
+
+
 def show_word_forms(page: ft.Page, card: VocabCard) -> None:
     """Beugungsformen der Karte als Dialog (aus den Trainern aufrufbar)."""
     content = word_forms_content(card)

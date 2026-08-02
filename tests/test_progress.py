@@ -197,3 +197,32 @@ def test_max_box_for_mode_only_high_restriction():
     assert max_box_for_mode(False, False, **kw) == 3   # Wiedererkennen bis 3
     assert max_box_for_mode(True, False, **kw) == 5    # Karteikarte bis 5
     assert max_box_for_mode(True, True, **kw) == 5
+
+
+def test_max_box_for_mode_inflection_restriction():
+    from mathainoa1.storage.progress import max_box_for_mode
+    # „Box 5 nur über das Beugungstraining“ an: alle übrigen Obergrenzen
+    # rücken eine Box nach unten
+    kw = dict(top_needs_inflection=True)
+    assert max_box_for_mode(False, False, **kw) == 2   # Wiedererkennen
+    assert max_box_for_mode(True, False, **kw) == 3    # Karteikarte
+    assert max_box_for_mode(True, True, **kw) == 4     # getippt
+    assert max_box_for_mode(True, True, inflection=True, **kw) == 5
+    assert max_box_for_mode(True, False, inflection=True, **kw) == 5
+
+
+def test_max_box_for_mode_inflection_off_falls_back():
+    from mathainoa1.storage.progress import max_box_for_mode
+    # Schalter aus: Beugungsaufgaben folgen der normalen Produktionslogik
+    assert max_box_for_mode(True, True, inflection=True) == 5
+    assert max_box_for_mode(True, False, inflection=True) == 4
+
+
+def test_max_box_for_mode_inflection_with_legacy_switches_off():
+    from mathainoa1.storage.progress import max_box_for_mode
+    kw = dict(high_needs_production=False, top_needs_typing=False,
+              top_needs_inflection=True)
+    # Alt-Schalter aus: alles bis 4, nur Beugung bis 5
+    assert max_box_for_mode(False, False, **kw) == 4
+    assert max_box_for_mode(True, True, **kw) == 4
+    assert max_box_for_mode(False, False, inflection=True, **kw) == 5

@@ -399,3 +399,12 @@ def test_selection_order_per_kind(tmp_path):
         "Wörter A", "Wörter B"]
     assert [s.name for s in fresh.ordered_selections("adjektive")] == [
         "Adjektive B", "Adjektive A"]
+
+
+def test_app_settings_inflection_switch_roundtrip():
+    from mathainoa1.storage.settings import AppSettings
+
+    s = AppSettings(top_box_needs_inflection=True)
+    assert AppSettings.from_dict(s.to_dict()).top_box_needs_inflection is True
+    # Alt-JSON ohne das Feld -> Standard aus
+    assert AppSettings.from_dict({}).top_box_needs_inflection is False

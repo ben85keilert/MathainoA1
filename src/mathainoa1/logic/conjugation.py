@@ -221,6 +221,9 @@ class ConjugationSettings:
     numbers: list[str] = field(default_factory=lambda: ["sg", "pl"])
     tenses: list[str] = field(default_factory=lambda: ["present"])
     repeat_errors: bool = True
+    # Fehler der Hauptrunde bei „Nochmal“ garantiert wieder aufnehmen
+    # (mit neuen Aufgaben aufgefüllt) — bisheriges Standardverhalten
+    carry_errors_next_round: bool = True
     accent_tolerant: bool = True
     list_id: str | None = None
 
@@ -243,6 +246,12 @@ class ConjugationTask:
     expected: str  # kanonische Form, z.B. "μένετε" / "θα γράψετε"
     variants: list[str] = field(default_factory=list)
     tense: str = "present"
+
+    @property
+    def scored_cards(self) -> list[VocabCard]:
+        """Karten, deren Lernstand diese Aufgabe bewegt (gemeinsame
+        Schnittstelle mit DeclensionTask für die geteilte Session)."""
+        return [self.card]
 
     @property
     def label(self) -> str:

@@ -322,3 +322,10 @@ def test_verb_sample_regular_shows_2pl_and_future():
     sample = _verb_sample(v)
     assert "2. Person Plural" in sample and "γράφετε" in sample
     assert "θα γράψετε" in sample
+
+
+def test_conjugation_settings_carry_default_true():
+    s = ConjugationSettings.from_dict({"mode": "typing"})
+    assert s.carry_errors_next_round is True
+    assert ConjugationSettings.from_dict(
+        {"carry_errors_next_round": False}).carry_errors_next_round is False

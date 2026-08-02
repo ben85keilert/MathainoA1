@@ -3,7 +3,8 @@
 Wird von Vokabelverwaltung, Statistik und Trainer-Vorschau geteilt, damit
 alle Kartenansichten gleich aussehen: zwei Spalten (Griechisch | Deutsch),
 links optional der Farbpunkt der Leitner-Box. Importiert bewusst keine
-anderen View-Module (vermeidet Import-Zirkel).
+anderen View-Module (vermeidet Import-Zirkel); der Wortinfo-Button kommt
+aus ui/word_details (zyklenfrei).
 """
 
 from __future__ import annotations
@@ -13,9 +14,9 @@ import flet as ft
 from mathainoa1.logic.answer_check import normalize, strip_accents
 from mathainoa1.models import WORD_TYPES, VocabCard
 from mathainoa1.storage.progress import MAX_BOX, CardProgress
-from mathainoa1.storage.textanalyse import etymology_for
 from mathainoa1.ui.audio import speaker_button
 from mathainoa1.ui.scale import sz
+from mathainoa1.ui.word_details import word_details_button
 
 BOX_COLORS = [ft.Colors.RED, ft.Colors.ORANGE, ft.Colors.AMBER,
               ft.Colors.LIGHT_GREEN, ft.Colors.GREEN]
@@ -94,17 +95,10 @@ def card_tiles(cards: list[VocabCard], on_click=None, on_delete=None,
             box = p.box if p and p.seen else 0
             leading = ft.Icon(ft.Icons.CIRCLE, size=sz(14), color=box_color(box))
         trailing_items: list[ft.Control] = []
-        entry = etymology_for(c)  # None, wenn Feature Textanalyse aus
-        if entry is not None:
-            def show_info(e, entry=entry):
-                # Lazy-Import: wordlist darf keine View-Module importieren
-                from mathainoa1.ui.views.textanalyse import etymology_dialog
-                etymology_dialog(e.control.page, entry)
-
-            trailing_items.append(ft.IconButton(
-                ft.Icons.INFO_OUTLINE, tooltip="Wortherkunft & Synonyme",
-                on_click=show_info,
-            ))
+        # Kombinierter Wortinfo-Button (Beugungsformen und/oder Lexikon)
+        btn_details = word_details_button(c)
+        if btn_details is not None:
+            trailing_items.append(btn_details)
         trailing_items.append(
             speaker_button(None, lambda c=c: c.front,
                            icon_color=ft.Colors.PRIMARY))

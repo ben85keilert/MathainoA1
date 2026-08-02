@@ -479,6 +479,9 @@ class DeclensionSettings:
     # bleibt nur für alte Settings-JSONs erhalten und wird ignoriert
     with_adjectives: bool = False
     repeat_errors: bool = True
+    # Fehler der Hauptrunde bei „Nochmal“ garantiert wieder aufnehmen
+    # (mit neuen Aufgaben aufgefüllt) — bisheriges Standardverhalten
+    carry_errors_next_round: bool = True
     accent_tolerant: bool = True
     # Groß-/Kleinschreibung tolerieren (analog zu accent_tolerant); aus:
     # falsche Schreibung zählt wie ein strenger Akzentfehler (nur Nomen,
@@ -504,6 +507,14 @@ class DeclensionTask:
     meaning: str  # deutsche Bedeutung des Nomens
     expected: str  # kanonische Antwort, z.B. "τον μικρό δρόμο"
     variants: list[str] = field(default_factory=list)  # ebenfalls richtig
+    # Adjektivtraining: die Karte des mitdeklinierten Adjektivs — beide
+    # Karten wandern dann gemeinsam durch die Leitner-Boxen
+    adj_card: VocabCard | None = None
+
+    @property
+    def scored_cards(self) -> list[VocabCard]:
+        """Alle Karten, deren Lernstand diese Aufgabe bewegt."""
+        return [self.card] + ([self.adj_card] if self.adj_card else [])
 
     @property
     def label(self) -> str:
@@ -529,7 +540,8 @@ class DeclensionTask:
 
 def build_task(card: VocabCard, noun: Noun, case: str, number: str,
                adj: Adjective | None = None,
-               direction: str = "gr") -> DeclensionTask | None:
+               direction: str = "gr",
+               adj_card: VocabCard | None = None) -> DeclensionTask | None:
     """Baut eine Aufgabe Vorgabe → Zielform; None wenn nicht ableitbar.
 
     direction "gr": Vorgabe ist die griechische Nominativphrase, die deutsche
@@ -558,7 +570,8 @@ def build_task(card: VocabCard, noun: Noun, case: str, number: str,
         meaning = card.back
     return DeclensionTask(card=card, case=case, number=number,
                           prompt=prompt, meaning=meaning,
-                          expected=expected, variants=variants)
+                          expected=expected, variants=variants,
+                          adj_card=adj_card)
 
 
 def declinable_nouns(cards: list[VocabCard]) -> list[tuple[VocabCard, Noun]]:
@@ -646,7 +659,7 @@ def generate_adjective_tasks(
         nouns_by_key.setdefault(key(noun.word), (card, noun))
     tasks = []
     seen_adj: set[str] = set()
-    for _adj_card, adj in adj_items:
+    for adj_card, adj in adj_items:
         adj_key = key(adj.word)
         if adj_key in seen_adj:
             continue
@@ -663,7 +676,8 @@ def generate_adjective_tasks(
             card, noun = item
             for case, number in _task_slots(noun, settings):
                 task = build_task(card, noun, case, number, adj,
-                                  direction=settings.direction)
+                                  direction=settings.direction,
+                                  adj_card=adj_card)
                 if task is not None:
                     tasks.append(task)
     rng.shuffle(tasks)
@@ -681,21 +695,35 @@ class DeclensionSession:
     """Ablauf wie beim Vokabeltraining: Erstrunde, optional Fehlerrunde.
 
     on_result(card, correct) wird pro Aufgabe der Erstrunde aufgerufen —
-    z.B. um bei deutscher Vorgabe die Vokabelstatistik zu füttern.
+    z.B. um bei deutscher Vorgabe die Vokabelstatistik zu füttern; bei
+    Adjektivaufgaben je einmal für Nomen- UND Adjektivkarte
+    (task.scored_cards). Analog on_repeat_correct(card, zielbox) für eine
+    richtige Antwort in der Fehlerrunde (Policy wie im Vokabeltraining).
     """
 
     def __init__(self, tasks: list[DeclensionTask], settings: DeclensionSettings,
                  on_result=None, accent_resets_box: bool = False,
-                 case_resets_box: bool = False):
+                 case_resets_box: bool = False,
+                 progress: dict | None = None,
+                 repeat_box_policy: str = "step_down",
+                 on_repeat_correct=None):
         self.settings = settings
         self.on_result = on_result
         # App-Policy: strenger Akzent-/Groß-Klein-Fehler setzt die Box auf 1
         self.accent_resets_box = accent_resets_box
         self.case_resets_box = case_resets_box
+        # card_id -> CardProgress (Momentaufnahme beim Start) — für
+        # Box-Neutralität und die Fehlerrunden-Wiederherstellung
+        self.progress = progress
+        self.repeat_box_policy = repeat_box_policy
+        self.on_repeat_correct = on_repeat_correct
         self.queue = tasks[: max(1, settings.word_count)]
         self.total_first_round = len(self.queue)
         self.answers: list[TaskAnswer] = []
         self._wrong_pending: list[DeclensionTask] = []
+        # Box vor dem Fehler-Reset, je falsch beantworteter Karte der
+        # Erstrunde (wie TrainingSession._prev_box)
+        self._prev_box: dict[str, int] = {}
         self.in_repeat_round = False
 
     @property
@@ -727,6 +755,18 @@ class DeclensionSession:
             return self.settings.accent_tolerant
         return result == Result.CORRECT
 
+    def repeat_target_box(self, card: VocabCard) -> int | None:
+        """Zielbox für eine richtige Fehlerrunden-Antwort — None = keine
+        Verbesserung. Neue Wörter (ohne gemerkte Box) gelten als Box 1."""
+        old = self._prev_box.get(card.id, 1)
+        if self.repeat_box_policy == "box2":
+            return 2
+        if self.repeat_box_policy == "original":
+            return old if old > 1 else None
+        if self.repeat_box_policy == "step_down":
+            return max(2, old - 1)
+        return None
+
     def _record(self, task: DeclensionTask, result: Result, given: str = "") -> None:
         self.answers.append(TaskAnswer(task, result, given))
         self.queue.pop(0)
@@ -736,10 +776,26 @@ class DeclensionSession:
         strict_accent = (result == Result.ALMOST
                          and not self.settings.accent_tolerant)
         strict_case = result == Result.CASE
-        box_neutral = ((strict_accent and not self.accent_resets_box)
-                       or (strict_case and not self.case_resets_box))
-        if self.on_result and not self.in_repeat_round and not box_neutral:
-            self.on_result(task.card, self.counts_correct(result))
+        ok = self.counts_correct(result)
+        for card in task.scored_cards:
+            box_neutral = ((strict_accent and not self.accent_resets_box)
+                           or (strict_case and not self.case_resets_box))
+            # "Box-neutral" nur bei Karten MIT Lernstand — eine neue Karte
+            # hat keine Box zu schützen (wie TrainingSession._record)
+            prev = (self.progress or {}).get(card.id)
+            if box_neutral and (prev is None or not prev.seen):
+                box_neutral = False
+            if (not self.in_repeat_round and not box_neutral and not ok
+                    and prev is not None and prev.seen):
+                # Box vor dem Reset merken — für die mögliche
+                # Wiederherstellung in der Fehlerrunde
+                self._prev_box[card.id] = prev.box
+            if self.on_result and not self.in_repeat_round and not box_neutral:
+                self.on_result(card, ok)
+            if self.in_repeat_round and self.on_repeat_correct and ok:
+                target = self.repeat_target_box(card)
+                if target is not None:
+                    self.on_repeat_correct(card, target)
         if (not self.counts_correct(result) and self.settings.repeat_errors
                 and not self.in_repeat_round):
             self._wrong_pending.append(task)

@@ -34,7 +34,7 @@ from mathainoa1.storage.adjective_combos import (
     save_combos,
 )
 from mathainoa1.storage.content import ContentStore, filter_level
-from mathainoa1.storage.progress import ProgressStore
+from mathainoa1.storage.progress import ProgressStore, max_box_for_mode
 from mathainoa1.storage.settings import (
     load_adjective_settings,
     load_app_settings,
@@ -47,23 +47,57 @@ from mathainoa1.storage.settings import (
 from mathainoa1.ui.audio import autoplay_button, maybe_autoplay, speaker_button
 from mathainoa1.storage.textanalyse import etymology_for
 from mathainoa1.ui.views.reference import has_word_forms
+from mathainoa1.ui.views.setup_common import on_off, options_summary
 from mathainoa1.ui.views.trainer import (
     almost_feedback,
     edit_notes_dialog,
     hide_empty_texts,
-    show_word_details,
     typing_controls,
-    update_word_details_button,
 )
 from mathainoa1.ui.scale import sz
+from mathainoa1.ui.word_details import (
+    show_word_details,
+    update_word_details_button,
+    word_details_button,
+)
 
 
-def _make_session(tasks, settings, on_result=None) -> DeclensionSession:
-    """DeclensionSession mit der App-Box-Reset-Policy (Akzent/Groß-Klein)."""
+def _make_session(tasks, settings, on_result=None, progress=None,
+                  on_repeat_correct=None) -> DeclensionSession:
+    """DeclensionSession mit den App-Policies: Box-Reset bei strengen
+    Fehlern und Fehlerrunden-Wiederherstellung (wie Vokabeltraining)."""
     app = load_app_settings()
     return DeclensionSession(tasks, settings, on_result=on_result,
                              accent_resets_box=app.accent_resets_box,
-                             case_resets_box=app.case_resets_box)
+                             case_resets_box=app.case_resets_box,
+                             progress=progress.all() if progress else None,
+                             repeat_box_policy=app.repeat_round_box_policy,
+                             on_repeat_correct=on_repeat_correct)
+
+
+def _leitner_wiring(progress, settings, mode_of):
+    """Volle Leitner-Aufzeichnung fürs Beugungstraining — nur bei Vorgabe
+    „Deutsch“ (aktives Erinnern des griechischen Worts): richtig = eine
+    Box rauf (gedeckelt), falsch = zurück in Box 1; dazu die
+    Fehlerrunden-Wiederherstellung. Bei Vorgabe „Griechisch“ (None, None).
+
+    mode_of() liefert den aktuellen Abfragemodus („typing“/„flashcard“) —
+    als Callable, weil er im Lauf umschaltbar ist."""
+    if settings.direction != "de":
+        return None, None
+    app = load_app_settings()
+
+    def cap() -> int:
+        return max_box_for_mode(
+            production=True, typed=(mode_of() == "typing"),
+            inflection=True,
+            high_needs_production=app.high_boxes_need_production,
+            top_needs_typing=app.top_box_needs_typing,
+            top_needs_inflection=app.top_box_needs_inflection)
+
+    on_result = lambda card, ok: progress.record(card.id, ok, max_box=cap())
+    on_repeat_correct = lambda card, box: progress.restore_box(card.id, box)
+    return on_result, on_repeat_correct
 
 
 def _verb_sample(verb: conj.Verb) -> str:
@@ -250,6 +284,8 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         keyboard_type=ft.KeyboardType.NUMBER, width=160,
     )
     sw_repeat = ft.Switch(label="Fehler am Ende wiederholen", value=s.repeat_errors)
+    sw_carry = ft.Switch(label="Fehler in nächster Runde wiederholen",
+                         value=s.carry_errors_next_round)
     sw_accent = ft.Switch(label="Akzentfehler tolerieren", value=s.accent_tolerant)
     sw_case = ft.Switch(label="Groß-/Kleinschreibung tolerieren (nur Nomen)",
                         value=s.case_tolerant)
@@ -293,6 +329,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             cases=cases,
             numbers=numbers,
             repeat_errors=sw_repeat.value,
+            carry_errors_next_round=sw_carry.value,
             accent_tolerant=sw_accent.value,
             case_tolerant=sw_case.value,
             list_id=dd_list.value,
@@ -333,6 +370,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
                 title=ft.Row([ft.Text(c.front, expand=1), ft.Text(c.back, expand=1)],
                              spacing=12),
                 subtitle=ft.Text(sub, size=sz(12)),
+                trailing=word_details_button(c),
             )
 
         sort_btns, word_rows = _grouped_word_rows(
@@ -363,23 +401,27 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             nav.page.update()
             return
         save_declension_settings(settings)
-        # Bei deutscher Vorgabe zählt eine richtig deklinierte Antwort auch
-        # als gewusste Vokabel (nur positiv — Deklinationsfehler setzen die
-        # Vokabel-Box nicht zurück)
-        def record_vocab(card, correct):
-            if correct:
-                progress.record(card.id, True)
-
-        on_result = record_vocab if settings.direction == "de" else None
-        session = _make_session(tasks, settings, on_result=on_result)
+        # Bei deutscher Vorgabe volle Leitner-Wertung: richtig = Box rauf
+        # (gedeckelt), falsch = Box 1, Fehlerrunde stellt gemäß Policy her
+        on_result, on_repeat = _leitner_wiring(
+            progress, settings, lambda: settings.mode)
+        session = _make_session(tasks, settings, on_result=on_result,
+                                progress=progress,
+                                on_repeat_correct=on_repeat)
         nav.go("Nomentraining", run_view(
             nav, store, session, title="Nomentraining",
-            make_tasks=lambda s: decl.generate_tasks(store.cards_for(s.list_id), s)))
+            make_tasks=lambda s: decl.generate_tasks(store.cards_for(s.list_id), s),
+            progress=progress))
 
     def edit_list(e):
         from mathainoa1.ui.views.manager import open_source_editor
         if dd_list.value:
             open_source_editor(nav, store, progress, dd_list.value)
+
+    def persist():
+        st = current_settings()
+        if st is not None:
+            save_declension_settings(st)
 
     root = ft.Column(
         [
@@ -401,7 +443,6 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             seg_direction,
             seg_cases,
             seg_numbers,
-            sw_repeat, sw_accent, sw_case,
             error_text,
             ft.Row(
                 [
@@ -411,6 +452,17 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
                                       on_click=show_words),
                 ],
                 spacing=8, wrap=True,
+            ),
+            options_summary(
+                nav.page,
+                describe=lambda: [
+                    on_off("Fehlerrunde", sw_repeat.value),
+                    on_off("Nächste Runde", sw_carry.value),
+                    "Akzente " + ("tolerant" if sw_accent.value else "streng"),
+                    "Groß/Klein " + ("tolerant" if sw_case.value else "streng"),
+                ],
+                controls=[sw_repeat, sw_carry, sw_accent, sw_case],
+                on_change=persist,
             ),
         ],
         spacing=12,
@@ -493,6 +545,8 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
         keyboard_type=ft.KeyboardType.NUMBER, width=160,
     )
     sw_repeat = ft.Switch(label="Fehler am Ende wiederholen", value=s.repeat_errors)
+    sw_carry = ft.Switch(label="Fehler in nächster Runde wiederholen",
+                         value=s.carry_errors_next_round)
     sw_accent = ft.Switch(label="Akzentfehler tolerieren", value=s.accent_tolerant)
     sw_case = ft.Switch(label="Groß-/Kleinschreibung tolerieren (nur Nomen)",
                         value=s.case_tolerant)
@@ -546,6 +600,7 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
             cases=cases,
             numbers=numbers,
             repeat_errors=sw_repeat.value,
+            carry_errors_next_round=sw_carry.value,
             accent_tolerant=sw_accent.value,
             case_tolerant=sw_case.value,
             list_id=dd_list.value,
@@ -637,15 +692,26 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
             nav.page.update()
             return
         save_adjective_settings(settings)
-        session = _make_session(tasks, settings)
+        # Adjektivaufgaben werten Nomen- UND Adjektivkarte gemeinsam
+        # (task.scored_cards in der Session)
+        on_result, on_repeat = _leitner_wiring(
+            progress, settings, lambda: settings.mode)
+        session = _make_session(tasks, settings, on_result=on_result,
+                                progress=progress,
+                                on_repeat_correct=on_repeat)
         nav.go("Adjektivtraining", run_view(
             nav, store, session, title="Adjektivtraining",
-            make_tasks=make_tasks))
+            make_tasks=make_tasks, progress=progress))
 
     def edit_list(e):
         from mathainoa1.ui.views.manager import open_source_editor
         if dd_list.value:
             open_source_editor(nav, store, progress, dd_list.value)
+
+    def persist():
+        st = current_settings()
+        if st is not None:
+            save_adjective_settings(st)
 
     if combos_mode == "blacklist":
         combos_label, combos_icon = "Ausnahmen festlegen…", ft.Icons.LINK_OFF
@@ -679,7 +745,6 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
             seg_direction,
             seg_cases,
             seg_numbers,
-            sw_repeat, sw_accent, sw_case,
             error_text,
             ft.Row(
                 [
@@ -687,6 +752,17 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
                                     on_click=start),
                 ],
                 spacing=8, wrap=True,
+            ),
+            options_summary(
+                nav.page,
+                describe=lambda: [
+                    on_off("Fehlerrunde", sw_repeat.value),
+                    on_off("Nächste Runde", sw_carry.value),
+                    "Akzente " + ("tolerant" if sw_accent.value else "streng"),
+                    "Groß/Klein " + ("tolerant" if sw_case.value else "streng"),
+                ],
+                controls=[sw_repeat, sw_carry, sw_accent, sw_case],
+                on_change=persist,
             ),
         ],
         spacing=12,
@@ -948,6 +1024,8 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
         keyboard_type=ft.KeyboardType.NUMBER, width=160,
     )
     sw_repeat = ft.Switch(label="Fehler am Ende wiederholen", value=s.repeat_errors)
+    sw_carry = ft.Switch(label="Fehler in nächster Runde wiederholen",
+                         value=s.carry_errors_next_round)
     sw_accent = ft.Switch(label="Akzentfehler tolerieren", value=s.accent_tolerant)
     error_text = ft.Text("", color=ft.Colors.ERROR)
 
@@ -996,6 +1074,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             numbers=numbers,
             tenses=tenses,
             repeat_errors=sw_repeat.value,
+            carry_errors_next_round=sw_carry.value,
             accent_tolerant=sw_accent.value,
             list_id=dd_list.value,
         )
@@ -1028,6 +1107,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                 title=ft.Row([ft.Text(c.front, expand=1), ft.Text(c.back, expand=1)],
                              spacing=12),
                 subtitle=ft.Text(_verb_sample(v), size=sz(12)),
+                trailing=word_details_button(c),
             )
 
         sort_btns, word_rows = _grouped_word_rows(
@@ -1065,15 +1145,25 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             nav.page.update()
             return
         save_conjugation_settings(settings)
-        session = _make_session(tasks, settings)
+        on_result, on_repeat = _leitner_wiring(
+            progress, settings, lambda: settings.mode)
+        session = _make_session(tasks, settings, on_result=on_result,
+                                progress=progress,
+                                on_repeat_correct=on_repeat)
         nav.go("Verbtraining", run_view(
             nav, store, session, title="Verbtraining",
-            make_tasks=lambda s: conj.generate_tasks(store.cards_for(s.list_id), s)))
+            make_tasks=lambda s: conj.generate_tasks(store.cards_for(s.list_id), s),
+            progress=progress))
 
     def edit_list(e):
         from mathainoa1.ui.views.manager import open_source_editor
         if dd_list.value:
             open_source_editor(nav, store, progress, dd_list.value)
+
+    def persist():
+        st = current_settings()
+        if st is not None:
+            save_conjugation_settings(st)
 
     root = ft.Column(
         [
@@ -1096,7 +1186,6 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             seg_tenses,
             seg_persons,
             seg_numbers,
-            sw_repeat, sw_accent,
             error_text,
             ft.Row(
                 [
@@ -1106,6 +1195,16 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                                       on_click=show_words),
                 ],
                 spacing=8, wrap=True,
+            ),
+            options_summary(
+                nav.page,
+                describe=lambda: [
+                    on_off("Fehlerrunde", sw_repeat.value),
+                    on_off("Nächste Runde", sw_carry.value),
+                    "Akzente " + ("tolerant" if sw_accent.value else "streng"),
+                ],
+                controls=[sw_repeat, sw_carry, sw_accent],
+                on_change=persist,
             ),
         ],
         spacing=12,
@@ -1117,10 +1216,12 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
 
 
 def run_view(nav, store: ContentStore, session: DeclensionSession,
-             title: str, make_tasks) -> ft.Control:
+             title: str, make_tasks,
+             progress: ProgressStore | None = None) -> ft.Control:
     """Trainingsrunde — gemeinsam für Deklination und Konjugation.
 
-    make_tasks(settings) erzeugt die Aufgaben für "Neue Runde".
+    make_tasks(settings) erzeugt die Aufgaben für "Neue Runde";
+    progress wird für deren frische Lernstand-Momentaufnahme gebraucht.
     Die aufgedeckte Lösungsform (task.expected, z.B. "θα γράψετε" oder
     "τους μικρούς δρόμους") lässt sich anhören — die Sprachausgabe spricht
     auch gebeugte Formen, nicht nur die Grundform.
@@ -1190,7 +1291,8 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
     def show_task():
         task = session.current
         if task is None:
-            nav.go("Ergebnis", result_view(nav, store, session, title, make_tasks))
+            nav.go("Ergebnis", result_view(nav, store, session, title,
+                                           make_tasks, progress=progress))
             return
         shown["task"] = task
         done = len(session.answers)
@@ -1328,8 +1430,11 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         task = session.current
         answer.value = task.expected
         solution_shown(task)
-        if session.in_repeat_round:
-            # Fehlerrunde zählt nicht — Selbstbewertung wäre Scheinauswahl
+        if session.in_repeat_round and (
+                session.on_repeat_correct is None
+                or session.repeat_box_policy == "none"):
+            # Ohne mögliche Box-Verbesserung (griechische Vorgabe oder
+            # Policy „keine“) wäre die Selbstbewertung Scheinauswahl
             action_area.controls = [
                 ft.FilledButton("Weiter", icon=ft.Icons.ARROW_FORWARD,
                                 on_click=lambda e: judge(True))
@@ -1421,7 +1526,8 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
 
 
 def result_view(nav, store: ContentStore, session: DeclensionSession,
-                title: str, make_tasks) -> ft.Control:
+                title: str, make_tasks,
+                progress: ProgressStore | None = None) -> ft.Control:
     stats = session.stats()
     # Bei deutscher Vorgabe die Grundform mit auflisten — sie steht sonst
     # nirgends in der Zeile
@@ -1434,6 +1540,7 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
                             f"Grundform: {t.card.front}" if de_direction
                             else "") if x)),
             leading=ft.Icon(ft.Icons.CLOSE, color=ft.Colors.ERROR),
+            trailing=word_details_button(t.card),
         )
         for t in stats["wrong_tasks"]
     ]
@@ -1444,6 +1551,7 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
             subtitle=ft.Text(" · ".join(
                 x for x in (a.task.label, a.task.meaning) if x)),
             leading=ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN),
+            trailing=word_details_button(a.task.card),
         )
         for a in session.answers[: session.total_first_round]
         if session.counts_correct(a.result)
@@ -1454,15 +1562,20 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
         nav.stack.pop()  # alte Trainings-View entfernen
         settings = session.settings
         # Fehler der Vorrunde kommen garantiert wieder mit in die neue
-        # Runde und werden zwischen die übrigen Aufgaben gemischt
-        wrong = stats["wrong_tasks"]
+        # Runde und werden zwischen die übrigen Aufgaben gemischt —
+        # abschaltbar über „Fehler in nächster Runde wiederholen“
+        wrong = (stats["wrong_tasks"]
+                 if getattr(settings, "carry_errors_next_round", True) else [])
         seen = {(t.prompt, t.expected) for t in wrong}
         fill = [t for t in make_tasks(settings)
                 if (t.prompt, t.expected) not in seen]
         tasks = (wrong + fill)[: max(1, settings.word_count)]
         random.shuffle(tasks)
-        session2 = _make_session(tasks, settings, on_result=session.on_result)
-        nav.go(title, run_view(nav, store, session2, title, make_tasks))
+        session2 = _make_session(tasks, settings, on_result=session.on_result,
+                                 progress=progress,
+                                 on_repeat_correct=session.on_repeat_correct)
+        nav.go(title, run_view(nav, store, session2, title, make_tasks,
+                               progress=progress))
 
     def home(e):
         del nav.stack[1:]
