@@ -54,6 +54,7 @@ from mathainoa1.ui.views.trainer import (
     hide_empty_texts,
     typing_controls,
 )
+from mathainoa1.ui.views.wordlist import box_of, box_transition_dot
 from mathainoa1.ui.scale import sz
 from mathainoa1.ui.word_details import (
     show_word_details,
@@ -1532,27 +1533,54 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
     # Bei deutscher Vorgabe die Grundform mit auflisten — sie steht sonst
     # nirgends in der Zeile
     de_direction = session.settings.direction == "de"
-    wrong_items = [
-        ft.ListTile(
-            title=ft.Text(f"{t.prompt} → {t.expected}"),
-            subtitle=ft.Text(" · ".join(
-                x for x in (t.label, t.meaning,
-                            f"Grundform: {t.card.front}" if de_direction
-                            else "") if x)),
-            leading=ft.Icon(ft.Icons.CLOSE, color=ft.Colors.ERROR),
-            trailing=word_details_button(t.card),
+    # Boxen vorher/nachher als zweigeteilter Punkt (Einstellungen) — nur
+    # bei Vorgabe Deutsch, sonst bewegt die Runde keine Boxen; im
+    # Adjektivtraining ein Punkt je mitwandernder Karte (Nomen + Adjektiv)
+    show_dots = (load_app_settings().result_box_dots and de_direction
+                 and progress is not None and session.progress is not None)
+
+    def leading_for(icon: str, color: str, task) -> ft.Control:
+        mark = ft.Icon(icon, color=color)
+        if not show_dots:
+            return mark
+        dots = []
+        for card in task.scored_cards:
+            before = box_of(card, session.progress)
+            p = progress.get(card.id)
+            after = p.box if p and p.seen else 0
+            dots.append(box_transition_dot(
+                before, after,
+                label=card.front if len(task.scored_cards) > 1 else ""))
+        return ft.Row([mark, *dots], tight=True, spacing=6)
+
+    def edit_button(task) -> ft.Control:
+        return ft.IconButton(
+            ft.Icons.EDIT_NOTE, tooltip="Hinweise/Notizen bearbeiten",
+            on_click=lambda e, c=task.card: edit_notes_dialog(
+                nav.page, store, c))
+
+    def task_tile(task, icon: str, color: str, subtitle: str) -> ft.Control:
+        return ft.ListTile(
+            title=ft.Text(f"{task.prompt} → {task.expected}"),
+            subtitle=ft.Text(subtitle),
+            leading=leading_for(icon, color, task),
+            trailing=ft.Row([b for b in (word_details_button(task.card),
+                                         edit_button(task))
+                             if b is not None], tight=True, spacing=0),
         )
+
+    wrong_items = [
+        task_tile(t, ft.Icons.CLOSE, ft.Colors.ERROR, " · ".join(
+            x for x in (t.label, t.meaning,
+                        f"Grundform: {t.card.front}" if de_direction
+                        else "") if x))
         for t in stats["wrong_tasks"]
     ]
-    # Darunter auch die richtig gelösten Aufgaben der Runde zeigen
+    # Darunter auch die richtig gelösten Aufgaben der Runde zeigen —
+    # mit denselben Bearbeitungs-Symbolen wie die falschen
     correct_items = [
-        ft.ListTile(
-            title=ft.Text(f"{a.task.prompt} → {a.task.expected}"),
-            subtitle=ft.Text(" · ".join(
-                x for x in (a.task.label, a.task.meaning) if x)),
-            leading=ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN),
-            trailing=word_details_button(a.task.card),
-        )
+        task_tile(a.task, ft.Icons.CHECK, ft.Colors.GREEN, " · ".join(
+            x for x in (a.task.label, a.task.meaning) if x))
         for a in session.answers[: session.total_first_round]
         if session.counts_correct(a.result)
     ]

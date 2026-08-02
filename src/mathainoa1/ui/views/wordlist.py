@@ -34,6 +34,34 @@ def box_of(card: VocabCard, all_progress: dict[str, CardProgress]) -> int:
     return p.box if p and p.seen else 0
 
 
+def box_name(box: int) -> str:
+    return "neu" if box == 0 else f"Box {box}"
+
+
+def box_transition_dot(before: int, after: int, label: str = "") -> ft.Control:
+    """Zweigeteilter Farbpunkt für die Ergebnislisten: linke Hälfte =
+    Box vor der Runde, rechte Hälfte = Box danach (0 = grau/untrainiert).
+
+    label (z.B. das Wort) wird dem Tooltip vorangestellt — nützlich im
+    Adjektivtraining, wo zwei Karten gemeinsam wandern."""
+    d, half = sz(14), sz(14) / 2
+    tooltip = f"{box_name(before)} → {box_name(after)}"
+    if label:
+        tooltip = f"{label}: {tooltip}"
+    return ft.Container(
+        ft.Row(
+            [ft.Container(width=half, height=d, bgcolor=box_color(before),
+                          border_radius=ft.BorderRadius.only(
+                              top_left=half, bottom_left=half)),
+             ft.Container(width=half, height=d, bgcolor=box_color(after),
+                          border_radius=ft.BorderRadius.only(
+                              top_right=half, bottom_right=half))],
+            spacing=0, tight=True,
+        ),
+        tooltip=tooltip,
+    )
+
+
 def box_chip_controls(active: set[int], on_toggle) -> list[ft.Control]:
     """Farbige Box-Umschalter (1–5 und „neu“) für Filterzeilen."""
     return [
