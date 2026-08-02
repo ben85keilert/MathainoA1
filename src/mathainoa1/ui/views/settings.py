@@ -42,9 +42,15 @@ _THEME_MODES = {
 def _scaled_text_theme() -> ft.TextTheme:
     """Material-Textstile mit dem Zoomfaktor skaliert — damit auch Text,
     der nicht durch sz() läuft (Radio-/Switch-Labels, Buttons, AppBar),
-    dem Zoom folgt. Größen/Gewichte = Material-Defaults, nur skaliert."""
+    dem Zoom folgt. Größen/Gewichte = Material-Defaults, nur skaliert.
+
+    Jeder Stil braucht explizit color=ON_SURFACE: ein gesetztes text_theme
+    ERSETZT Flutters helligkeitsabhängige Typografie, und ohne Farbe fiele
+    der Text auf Weiß zurück — im hellen Theme unleserlich. Das Token löst
+    clientseitig je Theme-Helligkeit korrekt auf."""
     def st(size: int, weight=ft.FontWeight.W_400) -> ft.TextStyle:
-        return ft.TextStyle(size=sz(size), weight=weight)
+        return ft.TextStyle(size=sz(size), weight=weight,
+                            color=ft.Colors.ON_SURFACE)
 
     return ft.TextTheme(
         body_large=st(16), body_medium=st(14), body_small=st(12),
@@ -63,10 +69,14 @@ def apply_app_theme(page: ft.Page, s: AppSettings) -> None:
     page.theme_mode = _THEME_MODES.get(s.theme, ft.ThemeMode.SYSTEM)
     seed = SEED_COLORS.get(s.seed, SEED_COLORS["blue"])[1]
     # Bei 100 % kein text_theme setzen — so bleibt die Darstellung
-    # exakt wie ohne Zoom-Funktion
-    text_theme = _scaled_text_theme() if get_ui_scale() != 1.0 else None
-    page.theme = ft.Theme(color_scheme_seed=seed, text_theme=text_theme)
-    page.dark_theme = ft.Theme(color_scheme_seed=seed, text_theme=text_theme)
+    # exakt wie ohne Zoom-Funktion. Hell und Dunkel bekommen jeweils eine
+    # EIGENE TextTheme-Instanz — ein geteiltes Objekt kann beim Einhängen
+    # in den Control-Baum einem der beiden Themes verloren gehen.
+    scaled = get_ui_scale() != 1.0
+    page.theme = ft.Theme(color_scheme_seed=seed,
+                          text_theme=_scaled_text_theme() if scaled else None)
+    page.dark_theme = ft.Theme(color_scheme_seed=seed,
+                               text_theme=_scaled_text_theme() if scaled else None)
 
 
 def _wrapping_radio_group(value: str, options: list[tuple[str, str]],

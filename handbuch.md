@@ -24,7 +24,9 @@ Werte bringen auf kleinen Displays mehr auf den Bildschirm, größere
 verbessern die Lesbarkeit. Es handelt sich um echte
 Schriftgrößen-Skalierung — die Oberfläche ordnet sich neu an, nichts
 wird abgeschnitten. Die Änderung wirkt sofort auf die
-Einstellungsseite; andere Ansichten übernehmen sie beim Öffnen.
+Einstellungsseite; andere Ansichten übernehmen sie beim Öffnen. Die
+skalierten Schriften folgen dabei den Farben des gewählten Themes —
+auch im hellen Modus bleibt alles lesbar.
 
 ## Stufen (A1/A2)
 
