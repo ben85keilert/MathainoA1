@@ -243,6 +243,35 @@ def help_view(nav, store=None) -> ft.Control:
            "Unregelmäßiges kommt aus den Zusatzfeldern der Karten."),
     ])
 
+    symbole = _chapter(nav, "Symbole in Training & Listen",
+                       ft.Icons.INFO_OUTLINE, [
+        _p("Unter der Karte in der Abfrage — und am Rand vieler "
+           "Listenzeilen — stehen bis zu drei Symbole:"),
+        _bullets([
+            "Lautsprecher: liest das griechische Wort vor. Langes Drücken "
+            "(oder Doppeltipp) schaltet den app-weiten Langsam-Modus zum "
+            "Nachsprechen um — mehr dazu im Kapitel „Audio“.",
+            "Wort-Symbol für Beugungsformen und Wort-Info — ein Button, "
+            "drei Gesichter: Gibt es beides, zeigt das ⓘ-Symbol einen "
+            "Dialog mit dem Lexikoneintrag oben und der Beugungstabelle "
+            "darunter (durch einen Querbalken getrennt). Gibt es nur die "
+            "Beugungsformen (Deklination bei Nomen/Adjektiven, "
+            "Konjugation bei Verben), erscheint das Tabellen-Symbol; gibt "
+            "es nur den Lexikoneintrag (Wortherkunft & Synonyme, Teil der "
+            "erweiterten Funktion „Textanalyse“), das Buch-Symbol.",
+            "Stift: öffnet den Notiz-Dialog für Hinweise/Notizen — "
+            "„Alles bearbeiten“ springt von dort in die vollständige "
+            "Kartenbearbeitung (nicht bei Buchlisten).",
+        ]),
+        _p("Das Wort-Symbol erscheint auch in Wortlisten, in der "
+           "Wortsuche, in den Vorschauen der Trainings, in den "
+           "Ergebnislisten und bei den Problemwörtern der Statistik."),
+        _p("Spoilerschutz bei Deutsch → Griechisch: Solange die "
+           "griechische Seite noch verdeckt ist, bleiben Lautsprecher "
+           "und Beugungstabelle gesperrt — sie würden sonst die Lösung "
+           "verraten."),
+    ])
+
     wertung = _chapter(nav, "Wertung", ft.Icons.RULE, [
         _bullets([
             "Groß-/Kleinschreibung und mehrfache Leerzeichen sind egal — "
@@ -600,8 +629,8 @@ def help_view(nav, store=None) -> ft.Control:
             _p("Grammatik-Übersichten (Alphabet, Artikel, Deklinationen, "
                "Verben …) findest du über das Buchsymbol oben in der "
                "Leiste."),
-            trainings, wertung, leitner, editing, wortsuche, prompts,
-            stufen, audio, backup_ch, datenschutz, about_row,
+            trainings, symbole, wertung, leitner, editing, wortsuche,
+            prompts, stufen, audio, backup_ch, datenschutz, about_row,
         ],
         spacing=4,
         scroll=ft.ScrollMode.AUTO,

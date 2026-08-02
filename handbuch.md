@@ -15,6 +15,9 @@ Nomen/Adjektiven, Konjugation bei Verben), erscheint das
 **Tabellen-Symbol**, gibt es nur den Lexikoneintrag, das
 **Buch-Symbol**. Die Beugungstabelle ist bei Deutsch → Griechisch erst
 nach dem Aufdecken enthalten, damit die Antwort nicht verraten wird.
+Dasselbe Wort-Symbol erscheint auch in Wortlisten, in der Wortsuche, in
+den Vorschauen der Trainings, in den Ergebnislisten und bei den
+Problemwörtern der Statistik.
 
 ## Zoom
 
