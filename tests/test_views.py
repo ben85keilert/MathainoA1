@@ -970,3 +970,51 @@ def test_prompt_level_interpolation(tmp_path, monkeypatch):
     for tpl in (CHATBOT_PROMPT, TEXT_PROMPT):
         text = tpl.format(level=load_app_settings().level)
         assert "Niveau A2" in text and "{level}" not in text
+
+
+def test_options_summary_saves_immediately_and_refreshes():
+    """Die Options-Karte der Startseiten: jede Änderung im Dialog ruft
+    sofort on_change (Speichern) und frischt die Zusammenfassung auf."""
+    import flet as ft
+    from mathainoa1.ui.views.setup_common import on_off, options_summary
+
+    saved = []
+    sw = ft.Switch(label="Fehlerrunde", value=True)
+    page = SimpleNamespace(update=lambda: None, width=420,
+                           show_dialog=lambda d: None,
+                           pop_dialog=lambda: None)
+    card = options_summary(page,
+                           describe=lambda: [on_off("Fehlerrunde", sw.value)],
+                           controls=[sw, ft.Text("Hinweis")],
+                           on_change=lambda: saved.append(sw.value))
+    tile = card.content
+    assert tile.subtitle.value == "Fehlerrunde: an"
+    sw.value = False
+    sw.on_change(None)  # von der Komponente verdrahtet
+    assert saved == [False]
+    assert tile.subtitle.value == "Fehlerrunde: aus"
+
+
+def test_setup_views_have_options_card(store_with_edge_cases, tmp_path,
+                                       monkeypatch):
+    """Alle 4 Startseiten zeigen die kompakte Options-Karte unter den
+    Start-Buttons statt einzelner Schalter auf der Seite."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "opt.db")
+    try:
+        views = [
+            trainer.setup_view(nav, store, progress),
+            grammar.setup_view(nav, store, progress),
+            grammar.adjective_setup_view(nav, store, progress),
+            grammar.conjugation_setup_view(nav, store, progress),
+        ]
+        for view in views:
+            found: list[str] = []
+            _collect_texts_and_tooltips(view, found)
+            assert "Weitere Optionen" in found
+            # die Schalter selbst stehen nicht mehr direkt auf der Seite
+            assert "Fehler am Ende wiederholen" not in found
+    finally:
+        progress.close()

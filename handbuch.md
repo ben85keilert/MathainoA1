@@ -202,12 +202,19 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
   Komma, „/“ oder als eigene Sätze), genügt eine davon. Text in Klammern
   ist Zusatzinfo und muss nicht mitgetippt werden.
 - Die **Fehlerrunde** am Ende wiederholt alle falschen Karten in der
-  Reihenfolge der Fehler und zählt nicht in die Statistik. In der
-  **nächsten Runde** kommen die falschen Wörter garantiert wieder mit
-  dazu und werden zwischen die übrigen/neuen Wörter gemischt. Wörter,
-  die **heute schon richtig beantwortet** wurden, rücken bei der Auswahl
-  dagegen ans Ende — sie kommen erst wieder dran, wenn fällige, neue und
-  ältere Karten aufgebraucht sind.
+  Reihenfolge der Fehler und zählt nicht in die Statistik („Fehler am
+  Ende wiederholen“). Mit **„Fehler in nächster Runde wiederholen“**
+  kommen die falschen Wörter bei „Neue Runde“ bzw. beim nächsten Start
+  derselben Liste garantiert wieder mit dazu und werden zwischen die
+  übrigen/neuen Wörter gemischt. Wörter, die **heute schon richtig
+  beantwortet** wurden, rücken bei der Auswahl dagegen ans Ende — sie
+  kommen erst wieder dran, wenn fällige, neue und ältere Karten
+  aufgebraucht sind.
+- Beide Optionen — und die übrigen Schalter (Toleranzen, Artikel,
+  Einblendungen) — stehen auf den Startseiten kompakt unter den
+  Start-Buttons („Weitere Optionen“). Antippen öffnet einen Dialog;
+  Änderungen dort werden **sofort gespeichert**, nicht erst beim
+  Trainingsstart.
 - Am Rundenende werden unter den falschen auch die **richtig
   beantworteten Wörter** aufgelistet.
 - Im Verbtraining ist die **2. Person Plural 👥** zugleich die höfliche

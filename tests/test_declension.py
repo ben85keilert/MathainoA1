@@ -789,3 +789,10 @@ def test_declension_repeat_round_policy_none():
     session.check_typed("falsch")
     session.check_typed(session.current.expected)
     assert restored == []
+
+
+def test_declension_settings_carry_default_true():
+    s = DeclensionSettings.from_dict({"mode": "typing"})
+    assert s.carry_errors_next_round is True
+    assert DeclensionSettings.from_dict(
+        {"carry_errors_next_round": False}).carry_errors_next_round is False

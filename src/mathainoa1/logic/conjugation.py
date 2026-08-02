@@ -221,6 +221,9 @@ class ConjugationSettings:
     numbers: list[str] = field(default_factory=lambda: ["sg", "pl"])
     tenses: list[str] = field(default_factory=lambda: ["present"])
     repeat_errors: bool = True
+    # Fehler der Hauptrunde bei „Nochmal“ garantiert wieder aufnehmen
+    # (mit neuen Aufgaben aufgefüllt) — bisheriges Standardverhalten
+    carry_errors_next_round: bool = True
     accent_tolerant: bool = True
     list_id: str | None = None
 

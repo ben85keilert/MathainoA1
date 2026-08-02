@@ -479,6 +479,9 @@ class DeclensionSettings:
     # bleibt nur für alte Settings-JSONs erhalten und wird ignoriert
     with_adjectives: bool = False
     repeat_errors: bool = True
+    # Fehler der Hauptrunde bei „Nochmal“ garantiert wieder aufnehmen
+    # (mit neuen Aufgaben aufgefüllt) — bisheriges Standardverhalten
+    carry_errors_next_round: bool = True
     accent_tolerant: bool = True
     # Groß-/Kleinschreibung tolerieren (analog zu accent_tolerant); aus:
     # falsche Schreibung zählt wie ein strenger Akzentfehler (nur Nomen,

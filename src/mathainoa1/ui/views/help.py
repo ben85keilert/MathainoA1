@@ -241,6 +241,23 @@ def help_view(nav, store=None) -> ft.Control:
         _p("Alle drei Bereiche arbeiten auf denselben Vokabel- und "
            "Auswahllisten; regelmäßige Formen entstehen automatisch, "
            "Unregelmäßiges kommt aus den Zusatzfeldern der Karten."),
+        ft.Text("Startseiten & weitere Optionen", size=sz(14),
+                weight=ft.FontWeight.BOLD),
+        _bullets([
+            "Auf allen Startseiten stehen die selteneren Optionen "
+            "kompakt unter den Start-Buttons („Weitere Optionen“). "
+            "Antippen öffnet einen Dialog — Änderungen dort werden "
+            "sofort gespeichert, nicht erst beim Trainingsstart.",
+            "„Fehler am Ende wiederholen“: falsche Antworten kommen "
+            "direkt nach der Hauptrunde noch einmal dran (Fehlerrunde, "
+            "zählt nicht in die Statistik).",
+            "„Fehler in nächster Runde wiederholen“: die Fehler der "
+            "Hauptrunde sind bei „Neue Runde“ bzw. beim nächsten Start "
+            "derselben Liste garantiert wieder dabei, aufgefüllt mit "
+            "neuen Wörtern. Im Vokabeltraining gilt das bis zum "
+            "App-Neustart — danach sorgt ohnehin Box 1 dafür, dass die "
+            "Fehler sofort wieder fällig sind.",
+        ]),
     ])
 
     symbole = _chapter(nav, "Symbole in Training & Listen",
