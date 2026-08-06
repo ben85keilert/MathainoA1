@@ -97,12 +97,24 @@ pushen):
 python tools/release.py 0.8.2
 ```
 
+**Immer über das Skript releasen — nicht den Tag von Hand setzen und
+kein Release über die GitHub-Oberfläche anlegen.** Ein Tag ohne den
+passenden „Version x.y.z“-Commit lässt den Workflow sofort mit
+„Tag vX passt nicht zu pyproject-Version Y“ abbrechen; ein von Hand
+angelegtes Release steht dann leer (ohne APK) in der Liste. Ist das
+doch einmal passiert: Version nachziehen und den Tag auf den neuen
+Commit umsetzen (`git push origin :refs/tags/vX` — dann neu taggen
+und pushen), der Workflow hängt die Dateien anschließend an das
+bestehende Release.
+
 ### In-App-Update-Check (Sideload-Provisorium)
 
 Die App prüft beim Start (höchstens einmal täglich, still bei Fehlern)
 das neueste GitHub-Release und bietet bei einer neueren Version den
 APK-Download an; zusätzlich gibt es in der Hilfe „Nach Updates suchen“
-(`storage/updates.py` + `ui/updates.py`). Da alle CI-Builds denselben
+(`storage/updates.py` + `ui/updates.py`). Releases **ohne** APK-Datei
+werden übersprungen — ein noch laufender oder gescheiterter Build soll
+kein Update melden, das sich nicht installieren lässt. Da alle CI-Builds denselben
 Signierschlüssel tragen, installiert Android die neue APK über die
 bestehende App — Lernstand und Listen bleiben erhalten.
 Voraussetzung: das Repository ist öffentlich (die ungetokente
