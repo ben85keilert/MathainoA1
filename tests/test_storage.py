@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from mathainoa1.models import VocabCard, VocabList
 from mathainoa1.storage import content
 
@@ -408,3 +410,107 @@ def test_app_settings_inflection_switch_roundtrip():
     assert AppSettings.from_dict(s.to_dict()).top_box_needs_inflection is True
     # Alt-JSON ohne das Feld -> Standard aus
     assert AppSettings.from_dict({}).top_box_needs_inflection is False
+
+
+# --- Update bestehender Listen (Sammelbearbeitung per Export/Import) ---
+
+def _update_store(tmp_path):
+    store = content.ContentStore(tmp_path / "book", tmp_path / "user")
+    store.load_all()
+    vlist = VocabList(name="Verben")
+    vlist.cards = [
+        VocabCard(front="γράφω", back="schreiben", word_type="Verb",
+                  id="v1", notes_gr="alt"),
+        VocabCard(front="βλέπω", back="sehen", word_type="Verb", id="v2"),
+    ]
+    store.save_user_list(vlist)
+    return store, vlist
+
+
+def test_update_list_from_csv_updates_by_id(tmp_path):
+    store, vlist = _update_store(tmp_path)
+    result = store.update_list_from_text(
+        vlist, "id,stem2\nv1,γράψ-\nv2,δ-\n")
+    assert result["updated"] == 2 and result["added"] == 0
+    assert [c.stem2 for c in vlist.cards] == ["γράψ-", "δ-"]
+    # nicht mitgelieferte Spalten bleiben unangetastet
+    assert vlist.cards[0].notes_gr == "alt"
+    # und der Stand liegt auf der Platte
+    fresh = content.ContentStore(store.book_dir, store.user_dir)
+    fresh.load_all()
+    assert fresh.lists[vlist.id].cards[0].stem2 == "γράψ-"
+
+
+def test_update_list_empty_cell_clears_value(tmp_path):
+    store, vlist = _update_store(tmp_path)
+    store.update_list_from_text(vlist, "id,notes_gr\nv1,\n")
+    assert vlist.cards[0].notes_gr == ""
+
+
+def test_update_list_keeps_front_back_on_empty(tmp_path):
+    """front/back sind Pflicht — eine leere Zelle löscht sie nicht."""
+    store, vlist = _update_store(tmp_path)
+    store.update_list_from_text(vlist, "id,front,back\nv1,,\n")
+    assert vlist.cards[0].front == "γράφω"
+    assert vlist.cards[0].back == "schreiben"
+
+
+def test_update_list_adds_unknown_rows(tmp_path):
+    store, vlist = _update_store(tmp_path)
+    result = store.update_list_from_text(
+        vlist, "id,front,back,word_type\nv1,γράφω,schreiben,Verb\n"
+               ",τρώω,essen,Verb\n")
+    assert result["added"] == 1
+    assert vlist.cards[-1].front == "τρώω"
+    assert vlist.cards[-1].word_type == "Verb"
+    assert len(vlist.cards) == 3  # nichts gelöscht
+
+
+def test_update_list_json_and_article_convention(tmp_path):
+    store, vlist = _update_store(tmp_path)
+    text = json.dumps({"cards": [
+        {"id": "v1", "front": "δρόμος", "article": "ο", "word_type": "Nomen"}]},
+        ensure_ascii=False)
+    store.update_list_from_text(vlist, text)
+    assert vlist.cards[0].front == "ο δρόμος"
+    assert vlist.cards[0].article == "ο"
+
+
+def test_update_list_needs_id_column(tmp_path):
+    store, vlist = _update_store(tmp_path)
+    with pytest.raises(ValueError):
+        store.update_list_from_text(vlist, "front,back\nτρώω,essen\n")
+
+
+def test_update_book_list_only_notes(tmp_path):
+    """Buchlisten: Notizen/Hinweise landen im Overlay, alles andere wird
+    abgelehnt."""
+    book = tmp_path / "book"
+    book.mkdir()
+    vlist = VocabList(name="Pronomen", book="A1")
+    vlist.cards = [VocabCard(front="εγώ", back="ich", id="p1")]
+    content.save_list(vlist, book / "pron.json")
+    store = content.ContentStore(book, tmp_path / "user")
+    store.load_all()
+    book_list = store.lists[vlist.id]
+    assert book_list.editable is False
+
+    result = store.update_list_from_text(
+        book_list, "id,notes_gr\np1,Personalpronomen\n")
+    assert result["updated"] == 1
+    assert book_list.cards[0].notes_gr == "Personalpronomen"
+    fresh = content.ContentStore(book, tmp_path / "user")
+    fresh.load_all()
+    assert fresh.lists[vlist.id].cards[0].notes_gr == "Personalpronomen"
+
+    with pytest.raises(ValueError):
+        store.update_list_from_text(book_list, "id,back\np1,ICH\n")
+
+
+def test_export_csv_columns_can_include_id():
+    from mathainoa1.storage.content import export_csv_columns
+
+    card = VocabCard(front="γράφω", back="schreiben", id="v1")
+    text = export_csv_columns([card], ["id", "front", "back"])
+    assert text.splitlines()[0] == "id,front,back"
+    assert text.splitlines()[1] == "v1,γράφω,schreiben"

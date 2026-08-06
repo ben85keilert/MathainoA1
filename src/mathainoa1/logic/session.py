@@ -12,6 +12,27 @@ from mathainoa1.logic import answer_check
 from mathainoa1.logic.answer_check import Result
 
 
+# Leitner-Boxen, aus denen Wörter gezogen werden dürfen; 0 = noch nicht
+# trainiert ("neu"). Der Trainings-Dialog macht sie einzeln abwählbar —
+# ist am Ende nichts mehr übrig, kommt einfach keine Runde zustande.
+ALL_BOXES = [0, 1, 2, 3, 4, 5]
+
+
+def box_of_id(card_id: str, progress: dict | None) -> int:
+    """Leitner-Box einer Karten-ID; 0 = noch nicht trainiert."""
+    p = (progress or {}).get(card_id)
+    return p.box if p and p.seen else 0
+
+
+def cards_in_boxes(cards: list[VocabCard], progress: dict | None,
+                   boxes: list[int] | None) -> list[VocabCard]:
+    """Karten auf die gewählten Leitner-Boxen einschränken."""
+    if boxes is None or set(boxes) >= set(ALL_BOXES):
+        return list(cards)
+    allowed = set(boxes)
+    return [c for c in cards if box_of_id(c.id, progress) in allowed]
+
+
 @dataclass
 class TrainingSettings:
     """Vom User änderbare Defaults für eine Trainingsrunde."""
@@ -35,6 +56,8 @@ class TrainingSettings:
     list_id: str | None = None
     task: str | None = None  # None = alle
     word_type: str | None = None  # None = alle
+    # Leitner-Boxen, aus denen gezogen wird (0 = „neu"); alle = kein Filter
+    boxes: list[int] = field(default_factory=lambda: list(ALL_BOXES))
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -22,9 +22,11 @@ import random
 import re
 import unicodedata
 from dataclasses import dataclass, field, asdict
+from datetime import datetime
 
 from mathainoa1.logic import answer_check
 from mathainoa1.logic.answer_check import Result
+from mathainoa1.logic.session import ALL_BOXES, box_of_id
 from mathainoa1.models import NOUN_FORM_KEYS, VocabCard
 
 # Trainierbare Fälle; Nominativ wird nur im Plural abgefragt (der Singular
@@ -286,7 +288,12 @@ def _nominative_plural(noun: Noun, plural_field: str) -> str | None:
         stem = noun.stem
         if _ACUTE in unicodedata.normalize("NFD", suffix):
             stem = strip_acute(stem)
-        return _ensure_accent(stem + suffix)
+        form = _ensure_accent(stem + suffix)
+        if noun.cls == "f3":
+            # -εις zieht den Akzent mit: η άσκηση → οι ασκήσεις, η έκφραση
+            # → οι εκφράσεις (höchstens vorletzte Silbe, wie die Regelform)
+            return _cap_accent(form, 1)
+        return form
     st = noun.stem
     if noun.cls in ("m2", "f2"):
         return _ensure_accent(st + "οι")
@@ -488,6 +495,8 @@ class DeclensionSettings:
     # relevant v.a. bei Eigennamen wie „την Αθήνα“)
     case_tolerant: bool = True
     list_id: str | None = None
+    # Leitner-Boxen, aus denen gezogen wird (0 = „neu"); alle = kein Filter
+    boxes: list[int] = field(default_factory=lambda: list(ALL_BOXES))
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -684,6 +693,109 @@ def generate_adjective_tasks(
     return tasks
 
 
+def task_box(task, progress: dict | None) -> int:
+    """Leitner-Box einer Aufgabe = schwächste beteiligte Karte.
+
+    Im Adjektivtraining wandern Nomen UND Adjektiv gemeinsam; die noch
+    ungeübtere der beiden bestimmt, wie dringend die Aufgabe ist."""
+    return min(box_of_id(c.id, progress) for c in task.scored_cards)
+
+
+def tasks_in_boxes(tasks: list, progress: dict | None,
+                   boxes: list[int] | None) -> list:
+    """Aufgaben auf die gewählten Leitner-Boxen einschränken (task_box)."""
+    if boxes is None or set(boxes) >= set(ALL_BOXES):
+        return list(tasks)
+    allowed = set(boxes)
+    return [t for t in tasks if task_box(t, progress) in allowed]
+
+
+def _task_group_order(groups: dict, progress: dict | None,
+                      now: datetime | None,
+                      rng: random.Random) -> list:
+    """Reihenfolge der Wörter wie im Vokabeltraining (select_cards):
+    fällige zuerst (älteste Fälligkeit vorn), dann neue, dann der Rest —
+    und ganz hinten, was heute schon beantwortet wurde."""
+    keys = list(groups)
+    if not progress:
+        rng.shuffle(keys)
+        return keys
+    now = now or datetime.now()
+    due, new, rest, rest_today = [], [], [], []
+    for key in keys:
+        entries = [progress.get(cid) for cid in key]
+        if any(p is None for p in entries):
+            new.append(key)
+        elif any(p.is_due(now) for p in entries):
+            due.append((min(p.due or now for p in entries), key))
+        elif any(p.last_seen is not None and p.last_seen.date() == now.date()
+                 for p in entries):
+            rest_today.append((min(p.due for p in entries), key))
+        else:
+            rest.append((min(p.due for p in entries), key))
+    due.sort(key=lambda t: t[0])
+    rng.shuffle(new)
+    rest.sort(key=lambda t: t[0])
+    rest_today.sort(key=lambda t: t[0])
+    return ([k for _, k in due] + new + [k for _, k in rest]
+            + [k for _, k in rest_today])
+
+
+def select_tasks(tasks: list, count: int, progress: dict | None = None,
+                 now: datetime | None = None,
+                 must_include: list | None = None,
+                 rng: random.Random | None = None) -> list:
+    """Aufgabenauswahl fürs Beugungstraining — nach denselben Regeln wie
+    die Kartenauswahl des Vokabeltrainings (siehe session.select_cards).
+
+    Gezogen werden zuerst WÖRTER (bzw. im Adjektivtraining die Adjektiv↔
+    Nomen-Paare) nach ihrem Lernstand; je Wort kommt zunächst nur eine
+    Aufgabe in die Runde. Reicht das nicht für die gewünschte Anzahl,
+    kommen weitere Formen derselben Wörter dazu.
+
+    must_include: Aufgaben, die garantiert wieder drankommen (Fehler der
+    Vorrunde) — ihre Wörter rutschen beim Auffüllen ans Ende.
+    """
+    rng = rng or random.Random()
+    count = max(0, count)
+    fixed: list = []
+    seen_tasks: set[tuple[str, str]] = set()
+    for t in (must_include or []):
+        ident = (t.prompt, t.expected)
+        if ident not in seen_tasks:
+            seen_tasks.add(ident)
+            fixed.append(t)
+    fixed = fixed[:count]
+    fixed_keys = {tuple(c.id for c in t.scored_cards) for t in fixed}
+
+    groups: dict[tuple, list] = {}
+    for t in tasks:
+        if (t.prompt, t.expected) in seen_tasks:
+            continue
+        groups.setdefault(tuple(c.id for c in t.scored_cards), []).append(t)
+    order = _task_group_order(groups, progress, now, rng)
+    # Wörter, die schon über must_include drin sind, erst ganz zum Schluss
+    order = ([k for k in order if k not in fixed_keys]
+             + [k for k in order if k in fixed_keys])
+
+    selected = list(fixed)
+    depth = 0
+    while len(selected) < count and order:
+        added = False
+        for key in order:
+            group = groups[key]
+            if depth < len(group):
+                selected.append(group[depth])
+                added = True
+                if len(selected) >= count:
+                    break
+        if not added:
+            break
+        depth += 1
+    rng.shuffle(selected)
+    return selected
+
+
 @dataclass
 class TaskAnswer:
     task: DeclensionTask
@@ -706,18 +818,23 @@ class DeclensionSession:
                  case_resets_box: bool = False,
                  progress: dict | None = None,
                  repeat_box_policy: str = "step_down",
-                 on_repeat_correct=None):
+                 on_repeat_correct=None,
+                 must_include: list[DeclensionTask] | None = None):
         self.settings = settings
         self.on_result = on_result
         # App-Policy: strenger Akzent-/Groß-Klein-Fehler setzt die Box auf 1
         self.accent_resets_box = accent_resets_box
         self.case_resets_box = case_resets_box
         # card_id -> CardProgress (Momentaufnahme beim Start) — für
-        # Box-Neutralität und die Fehlerrunden-Wiederherstellung
+        # Box-Neutralität, Aufgabenauswahl und die Fehlerrunden-
+        # Wiederherstellung
         self.progress = progress
         self.repeat_box_policy = repeat_box_policy
         self.on_repeat_correct = on_repeat_correct
-        self.queue = tasks[: max(1, settings.word_count)]
+        # Auswahl nach Lernstand (fällige/neue Wörter zuerst) statt der
+        # ersten n Aufgaben — wie im Vokabeltraining
+        self.queue = select_tasks(tasks, max(1, settings.word_count),
+                                  progress, must_include=must_include)
         self.total_first_round = len(self.queue)
         self.answers: list[TaskAnswer] = []
         self._wrong_pending: list[DeclensionTask] = []

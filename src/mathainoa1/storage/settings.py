@@ -76,6 +76,13 @@ class AppSettings:
     # App-weiter Zoomfaktor (1.0 = 100 %); geklemmt wird beim Anwenden
     # in ui/scale.py, hier bleibt der Rohwert
     ui_scale: float = 1.0
+    # Statistik (Leitner-Boxen, Fehlerzähler) je Training einzeln
+    # abschaltbar. Aus = die Runde bewegt keinen Lernstand — weder hoch
+    # noch runter; die Wortauswahl richtet sich weiter nach den Boxen.
+    stats_vocab: bool = True
+    stats_nouns: bool = True
+    stats_adjectives: bool = True
+    stats_verbs: bool = True
 
     def to_dict(self) -> dict:
         return asdict(self)

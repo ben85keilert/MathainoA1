@@ -252,6 +252,16 @@ class ContentStore:
                 card.hints_de = ann.get("hints_de", card.hints_de)
                 card.notes_de = ann.get("notes_de", card.notes_de)
 
+    def _write_annotations(self) -> None:
+        self.annotations_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.annotations_path, "w", encoding="utf-8") as f:
+            json.dump(self._annotations, f, ensure_ascii=False, indent=2)
+
+    def _remember_annotation(self, card: VocabCard) -> None:
+        self._annotations[card.id] = {
+            "hints_gr": card.hints_gr, "hints_de": card.hints_de,
+            "notes_gr": card.notes_gr, "notes_de": card.notes_de}
+
     def update_notes(self, card: VocabCard, hints_gr: str, hints_de: str,
                      notes_gr: str, notes_de: str) -> None:
         """Speichert Hinweise/Notizen: Buchkarten als Overlay, eigene direkt."""
@@ -264,11 +274,59 @@ class ContentStore:
         if owner is not None and owner.editable:
             self.save_user_list(owner)
             return
-        self._annotations[card.id] = {"hints_gr": hints_gr, "hints_de": hints_de,
-                                      "notes_gr": notes_gr, "notes_de": notes_de}
-        self.annotations_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.annotations_path, "w", encoding="utf-8") as f:
-            json.dump(self._annotations, f, ensure_ascii=False, indent=2)
+        self._remember_annotation(card)
+        self._write_annotations()
+
+    # --- Bestehende Liste per Datei/Text aktualisieren (Abgleich über ID) ---
+
+    def update_list_from_text(self, vlist: VocabList, text: str) -> dict:
+        """Karten einer Liste aus CSV-/JSON-Text aktualisieren.
+
+        Angefasst werden nur die Spalten, die die Datei mitbringt; eine
+        leere Zelle löscht den Wert (Ausnahme front/back). Zeilen ohne
+        bekannte ID werden als neue Karten angehängt, gelöscht wird nie.
+        Buchlisten sind nicht editierbar — dort lassen sich nur
+        Hinweise/Notizen ändern (sie liegen als Overlay daneben).
+        """
+        rows, fields = parse_import_rows(text)
+        if not rows:
+            raise ValueError("Keine Zeilen gefunden.")
+        if not fields:
+            raise ValueError(
+                "Keine bekannten Spalten gefunden — fehlt die Kopfzeile "
+                "mit den Spaltennamen (id,front,back,…)?")
+        if not any(r.get("id") for r in rows):
+            raise ValueError(
+                "Keine ID-Spalte — ohne sie lassen sich die Zeilen keiner "
+                "Karte zuordnen. Bitte die Liste mit der Spalte „ID“ "
+                "exportieren, dort ändern und wieder einlesen.")
+        if vlist.editable:
+            result = update_cards(vlist, rows, fields)
+            if result["updated"] or result["added"]:
+                self.save_user_list(vlist)
+            return result
+        # Buchliste: nur die Overlay-Felder sind änderbar
+        forbidden = [f for f in fields if f not in ANNOTATION_FIELDS]
+        if forbidden:
+            raise ValueError(
+                "Buchlisten lassen sich nur bei Hinweisen und Notizen "
+                "aktualisieren — bitte nur diese Spalten exportieren "
+                "(gefunden: " + ", ".join(forbidden) + ").")
+        by_id = {c.id: c for c in vlist.cards}
+        result = {"updated": 0, "unchanged": 0, "added": 0, "skipped": 0}
+        for row in rows:
+            card = by_id.get(str(row.get("id") or ""))
+            if card is None:
+                result["skipped"] += 1
+                continue
+            if _apply_row(card, row, fields):
+                self._remember_annotation(card)
+                result["updated"] += 1
+            else:
+                result["unchanged"] += 1
+        if result["updated"]:
+            self._write_annotations()
+        return result
 
     # --- Abfragen ---
 
@@ -290,6 +348,9 @@ class ContentStore:
 CSV_FIELDS = ["front", "back", "plural", "article", "word_type",
               "hints_gr", "hints_de", "notes_gr", "notes_de", "forms", "stem2",
               "aorist_passive", "participle"]
+# Die Karten-ID ist keine inhaltliche Spalte, aber exportierbar: nur mit
+# ihr findet der Update-Import (update_list_from_text) die Karte wieder
+EXPORT_FIELDS = ["id"] + CSV_FIELDS
 
 
 def export_csv(vlist: VocabList) -> str:
@@ -297,8 +358,8 @@ def export_csv(vlist: VocabList) -> str:
 
 
 def export_csv_columns(cards: list[VocabCard], fields: list[str]) -> str:
-    """CSV nur mit den gewünschten Spalten (Reihenfolge wie CSV_FIELDS)."""
-    fields = [f for f in CSV_FIELDS if f in fields]
+    """CSV nur mit den gewünschten Spalten (Reihenfolge wie EXPORT_FIELDS)."""
+    fields = [f for f in EXPORT_FIELDS if f in fields]
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
     writer.writeheader()
@@ -333,6 +394,52 @@ def _split_leading_article(front: str) -> tuple[str | None, str]:
     return None, front
 
 
+def _normalize_row(row: dict, word_type_fallback: str | None = None) -> dict:
+    """Rohzeile (CSV/JSON) auf die Karten-Konvention bringen.
+
+    Bearbeitet nur die tatsächlich vorhandenen Spalten — beim Update
+    einer bestehenden Liste kommen oft nur einzelne Felder mit.
+    word_type_fallback: Worttyp der bestehenden Karte, wenn die Zeile
+    keine Worttyp-Spalte hat (entscheidet über die Artikel-Ableitung).
+    """
+    row = dict(row)
+    if "word_type" in row:
+        wt = row.get("word_type") or ""
+        row["word_type"] = next(
+            (t for t in WORD_TYPES if t.lower() == wt.lower()), "Sonstiges")
+    word_type = row.get("word_type", word_type_fallback)
+    # Artikel-Konvention herstellen: front beginnt mit dem Artikel UND
+    # die article-Spalte wiederholt ihn (darauf bauen Deklination und
+    # der "Artikel mittippen"-Schalter). Bei Widerspruch gewinnt der
+    # sichtbare Artikel in front; abgeleitet wird er nur bei Nomen,
+    # damit Phrasen wie "τα λέμε" keinen Artikel untergeschoben bekommen.
+    if row.get("front"):
+        col_art = _clean_article(row.get("article", ""))
+        front_art, word = _split_leading_article(row["front"])
+        if front_art and (col_art or word_type == "Nomen"):
+            row["article"] = front_art
+            row["front"] = f"{front_art} {word}"
+        elif col_art:
+            row["article"] = col_art
+            row["front"] = f"{col_art} {row['front']}"
+        elif "article" in row:
+            row["article"] = None
+    elif "article" in row:
+        row["article"] = _clean_article(row.get("article", ""))
+    if "forms" in row and not isinstance(row["forms"], dict):
+        try:
+            row["forms"] = parse_forms_text(row["forms"] or "")
+        except ValueError:
+            del row["forms"]  # kaputte Angabe lieber ignorieren als abbrechen
+    for stem_field in ("stem2", "aorist_passive"):
+        if stem_field in row:
+            try:
+                row[stem_field] = parse_stem2_text(row[stem_field] or "")
+            except ValueError:
+                del row[stem_field]
+    return row
+
+
 def import_csv(name: str, text: str, chapter: int | None = None) -> VocabList:
     reader = csv.DictReader(io.StringIO(text.lstrip("﻿")))
     cards = []
@@ -341,37 +448,119 @@ def import_csv(name: str, text: str, chapter: int | None = None) -> VocabList:
                if k in CSV_FIELDS and v is not None and v.strip()}
         if not row.get("front") or not row.get("back"):
             continue
-        wt = row.get("word_type", "")
-        row["word_type"] = next(
-            (t for t in WORD_TYPES if t.lower() == wt.lower()), "Sonstiges")
-        # Artikel-Konvention herstellen: front beginnt mit dem Artikel UND
-        # die article-Spalte wiederholt ihn (darauf bauen Deklination und
-        # der "Artikel mittippen"-Schalter). Bei Widerspruch gewinnt der
-        # sichtbare Artikel in front; abgeleitet wird er nur bei Nomen,
-        # damit Phrasen wie "τα λέμε" keinen Artikel untergeschoben bekommen.
-        col_art = _clean_article(row.get("article", ""))
-        front_art, word = _split_leading_article(row["front"])
-        if front_art and (col_art or row["word_type"] == "Nomen"):
-            row["article"] = front_art
-            row["front"] = f"{front_art} {word}"
-        elif col_art:
-            row["article"] = col_art
-            row["front"] = f"{col_art} {row['front']}"
-        else:
+        row.setdefault("word_type", "")
+        row = _normalize_row(row)
+        if row.get("article") is None:
             row.pop("article", None)
-        if "forms" in row:
-            try:
-                row["forms"] = parse_forms_text(row["forms"])
-            except ValueError:
-                del row["forms"]  # kaputte Angabe lieber ignorieren als abbrechen
-        for stem_field in ("stem2", "aorist_passive"):
-            if stem_field in row:
-                try:
-                    row[stem_field] = parse_stem2_text(row[stem_field])
-                except ValueError:
-                    del row[stem_field]
         cards.append(VocabCard(**row))
     return VocabList(name=name, chapter=chapter, cards=cards)
+
+
+# --- Update bestehender Listen (Abgleich über die Karten-ID) ---
+
+# Felder, die auch an Buchkarten geändert werden dürfen — sie liegen als
+# Overlay neben der (unveränderlichen) Buchliste (siehe update_notes)
+ANNOTATION_FIELDS = ["hints_gr", "hints_de", "notes_gr", "notes_de"]
+# Ohne diese Felder ergibt eine Karte keinen Sinn: eine leere Zelle löscht
+# hier NICHT, sie wird übersprungen
+REQUIRED_FIELDS = ["front", "back"]
+
+
+def parse_import_rows(text: str) -> tuple[list[dict], list[str]]:
+    """Import-Text (CSV oder JSON) als Rohzeilen + benutzte Spalten.
+
+    Anders als import_csv/import_json wird hier NICHT auf Karten
+    abgebildet: fürs Update muss unterscheidbar bleiben, welche Spalten
+    die Datei überhaupt mitbringt (nur die werden angefasst) und welche
+    davon leer sind (= Wert löschen). Rückgabe: (Zeilen, Spalten);
+    "id" ist in den Spalten nicht enthalten, steht aber in den Zeilen.
+    """
+    text = text.lstrip("﻿").strip()
+    if not text:
+        raise ValueError("Der Text ist leer.")
+    known = set(CSV_FIELDS)
+    if text.startswith("{") or text.startswith("["):
+        data = json.loads(text)
+        raw = data if isinstance(data, list) else data.get("cards", [])
+        if not isinstance(raw, list):
+            raise ValueError("JSON ohne Kartenliste („cards“).")
+        rows, fields = [], []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            row = {k: v for k, v in item.items() if k in known or k == "id"}
+            rows.append(row)
+            for k in row:
+                if k in known and k not in fields:
+                    fields.append(k)
+        return rows, [f for f in CSV_FIELDS if f in fields]
+    reader = csv.DictReader(io.StringIO(text))
+    names = [n.strip() for n in (reader.fieldnames or [])]
+    fields = [f for f in CSV_FIELDS if f in names]
+    rows = []
+    for raw_row in reader:
+        row = {}
+        for key, value in raw_row.items():
+            key = (key or "").strip()
+            if key in known or key == "id":
+                row[key] = (value or "").strip()
+        rows.append(row)
+    return rows, fields
+
+
+def _apply_row(card: VocabCard, row: dict, fields: list[str]) -> bool:
+    """Übernimmt die Felder der Zeile in die Karte; True = etwas geändert.
+
+    Leere Werte löschen den Inhalt — außer bei front/back (dort wäre die
+    Karte danach kaputt) und bei Feldern, die die Zeile gar nicht hat."""
+    changed = False
+    for key in fields:
+        if key not in row:
+            continue
+        value = row[key]
+        if key in REQUIRED_FIELDS and not value:
+            continue
+        if key == "forms":
+            value = value if isinstance(value, dict) else {}
+        elif key == "article":
+            value = value or None
+        elif value is None:
+            value = ""
+        if getattr(card, key) != value:
+            setattr(card, key, value)
+            changed = True
+    return changed
+
+
+def update_cards(vlist: VocabList, rows: list[dict], fields: list[str],
+                 add_new: bool = True) -> dict:
+    """Karten einer Liste per ID aktualisieren, unbekannte anhängen.
+
+    Zeilen ohne bekannte ID werden zu neuen Karten (nur mit front UND
+    back). Karten der Liste, die in der Datei fehlen, bleiben unberührt —
+    gelöscht wird nie. Rückgabe: Zähler für die Rückmeldung.
+    """
+    by_id = {c.id: c for c in vlist.cards}
+    result = {"updated": 0, "unchanged": 0, "added": 0, "skipped": 0}
+    for row in rows:
+        card = by_id.get(str(row.get("id") or ""))
+        if card is not None:
+            clean = _normalize_row(row, word_type_fallback=card.word_type)
+            if _apply_row(card, clean, fields):
+                result["updated"] += 1
+            else:
+                result["unchanged"] += 1
+            continue
+        clean = _normalize_row(row)
+        if not add_new or not clean.get("front") or not clean.get("back"):
+            result["skipped"] += 1
+            continue
+        new_card = VocabCard(front="", back="")
+        _apply_row(new_card, clean, fields)
+        new_card.source = "custom"
+        vlist.cards.append(new_card)
+        result["added"] += 1
+    return result
 
 
 # --- Beispielliste (über die Hilfe hinzufügbar) ---
@@ -421,7 +610,7 @@ def export_json_columns(name: str, cards: list[VocabCard],
     Die Karten-ID wird immer mitgeschrieben: beim Reimport bleibt der
     Lernstand (progress.db) so an den Karten hängen. forms bleibt ein
     Dict (kein Text wie im CSV)."""
-    fields = [f for f in CSV_FIELDS if f in fields]
+    fields = [f for f in CSV_FIELDS if f in fields]  # id steht schon fest
     out = {"name": name, "cards": []}
     for c in cards:
         d = c.to_dict()

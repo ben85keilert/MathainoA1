@@ -226,3 +226,34 @@ def test_max_box_for_mode_inflection_with_legacy_switches_off():
     assert max_box_for_mode(False, False, **kw) == 4
     assert max_box_for_mode(True, True, **kw) == 4
     assert max_box_for_mode(False, False, inflection=True, **kw) == 5
+
+
+# --- Box-Filter des Trainings-Dialogs (abwählbare Leitner-Boxen) ---
+
+def test_cards_in_boxes_filters():
+    from mathainoa1.logic.session import ALL_BOXES, cards_in_boxes
+    from mathainoa1.storage.progress import CardProgress
+
+    cards = [VocabCard(front=f"w{i}", back=f"d{i}", id=f"c{i}")
+             for i in range(4)]
+    progress = {
+        "c0": CardProgress("c0", box=1, wrong=1),
+        "c1": CardProgress("c1", box=5, correct=5),
+        "c2": CardProgress("c2", box=3, correct=3),
+        # c3 ohne Eintrag = Box 0 ("neu")
+    }
+    assert [c.id for c in cards_in_boxes(cards, progress, [1])] == ["c0"]
+    assert [c.id for c in cards_in_boxes(cards, progress, [0])] == ["c3"]
+    assert [c.id for c in cards_in_boxes(cards, progress, [1, 3])] == ["c0", "c2"]
+    # alle Boxen = kein Filter, None ebenso
+    assert len(cards_in_boxes(cards, progress, ALL_BOXES)) == 4
+    assert len(cards_in_boxes(cards, progress, None)) == 4
+    # nichts gewählt = keine Wörter (bewusst erlaubt)
+    assert cards_in_boxes(cards, progress, []) == []
+
+
+def test_training_settings_boxes_default_all():
+    from mathainoa1.logic.session import ALL_BOXES
+
+    assert TrainingSettings.from_dict({}).boxes == ALL_BOXES
+    assert TrainingSettings.from_dict({"boxes": [2, 3]}).boxes == [2, 3]

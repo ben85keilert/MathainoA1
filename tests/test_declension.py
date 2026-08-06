@@ -796,3 +796,152 @@ def test_declension_settings_carry_default_true():
     assert s.carry_errors_next_round is True
     assert DeclensionSettings.from_dict(
         {"carry_errors_next_round": False}).carry_errors_next_round is False
+
+
+# --- Akzent im Plural der 3. Deklination (η άσκηση -> οι ασκήσεις) ---
+
+def _fem3(front: str, plural: str = "-εις") -> decl.Noun:
+    card = VocabCard(front=front, back="x", article="η", plural=plural,
+                     word_type="Nomen")
+    return decl.parse_noun(card)
+
+
+def test_f3_plural_moves_accent_with_card_plural_field():
+    """Die Pluralangabe „-εις" der Karte darf den Akzent nicht festhalten:
+    η έκφραση -> οι εκφράσεις (nicht „έκφρασεις")."""
+    for front, expected in (("η έκφραση", "εκφράσεις"),
+                            ("η ερώτηση", "ερωτήσεις"),
+                            ("η άσκηση", "ασκήσεις"),
+                            ("η κυβέρνηση", "κυβερνήσεις"),
+                            ("η διεύθυνση", "διευθύνσεις")):
+        noun = _fem3(front)
+        assert decl.decline(noun, "nom", "pl") == expected
+        assert decl.decline(noun, "acc", "pl") == expected
+
+
+def test_f3_plural_keeps_correct_accent_when_already_fine():
+    for front, expected in (("η πόλη", "πόλεις"), ("η στάση", "στάσεις"),
+                            ("η λέξη", "λέξεις")):
+        assert decl.decline(_fem3(front), "nom", "pl") == expected
+
+
+def test_f3_genitive_unchanged():
+    noun = _fem3("η έκφραση")
+    assert decl.decline(noun, "gen", "sg") == "έκφρασης"
+    assert decl.decline(noun, "gen", "pl") == "εκφράσεων"
+
+
+# --- Aufgabenauswahl nach Lernstand (wie im Vokabeltraining) ---
+
+def _noun_cards() -> list[VocabCard]:
+    words = ["η ώρα", "η πόρτα", "η γλώσσα", "η ταβέρνα", "η καρέκλα"]
+    return [VocabCard(front=w, back=f"w{i}", article="η", plural="-ες",
+                      word_type="Nomen", id=f"c{i}")
+            for i, w in enumerate(words)]
+
+
+def _progress_map(now):
+    from datetime import timedelta
+
+    from mathainoa1.storage.progress import CardProgress
+    return {
+        # gelernt, lange nicht fällig
+        "c0": CardProgress("c0", box=5, correct=9,
+                           last_seen=now - timedelta(days=1),
+                           due=now + timedelta(days=29)),
+        # überfällig
+        "c1": CardProgress("c1", box=1, wrong=1,
+                           last_seen=now - timedelta(days=2),
+                           due=now - timedelta(days=2)),
+        # heute schon beantwortet -> ganz nach hinten
+        "c2": CardProgress("c2", box=3, correct=3, last_seen=now,
+                           due=now + timedelta(days=3)),
+        # c3, c4 haben keinen Eintrag = neu
+    }
+
+
+def _tasks(cards=None):
+    settings = DeclensionSettings(cases=["acc", "gen"], numbers=["sg", "pl"])
+    return decl.generate_tasks(cards or _noun_cards(), settings)
+
+
+def test_select_tasks_due_and_new_first():
+    from datetime import datetime
+
+    now = datetime(2026, 8, 6, 12, 0)
+    tasks = _tasks()
+    picked = decl.select_tasks(tasks, 3, _progress_map(now), now=now)
+    # fällig (c1) + beide neuen (c3, c4) — gelernte/heute geübte bleiben draußen
+    assert sorted(t.card.id for t in picked) == ["c1", "c3", "c4"]
+
+
+def test_select_tasks_answered_today_last():
+    from datetime import datetime
+
+    now = datetime(2026, 8, 6, 12, 0)
+    picked = decl.select_tasks(_tasks(), 4, _progress_map(now), now=now)
+    # c2 wurde heute beantwortet und kommt nach der gelernten Karte c0
+    assert "c2" not in {t.card.id for t in picked}
+    assert "c0" in {t.card.id for t in picked}
+
+
+def test_select_tasks_one_task_per_word_first():
+    from datetime import datetime
+
+    now = datetime(2026, 8, 6, 12, 0)
+    picked = decl.select_tasks(_tasks(), 5, _progress_map(now), now=now)
+    assert len(picked) == 5
+    assert len({t.card.id for t in picked}) == 5  # jedes Wort genau einmal
+
+
+def test_select_tasks_fills_with_more_forms_when_words_run_out():
+    from datetime import datetime
+
+    now = datetime(2026, 8, 6, 12, 0)
+    picked = decl.select_tasks(_tasks(), 8, _progress_map(now), now=now)
+    assert len(picked) == 8  # 5 Wörter, danach zweite Formen derselben Wörter
+    assert len({(t.card.id, t.case, t.number) for t in picked}) == 8
+
+
+def test_select_tasks_must_include_guaranteed():
+    from datetime import datetime
+
+    now = datetime(2026, 8, 6, 12, 0)
+    tasks = _tasks()
+    must = [t for t in tasks if t.card.id == "c0"][:1]
+    picked = decl.select_tasks(tasks, 3, _progress_map(now), now=now,
+                               must_include=must)
+    assert must[0] in picked
+    assert len(picked) == 3
+
+
+def test_tasks_in_boxes_filters_by_weakest_card():
+    from datetime import datetime
+
+    now = datetime(2026, 8, 6, 12, 0)
+    progress = _progress_map(now)
+    tasks = _tasks()
+    assert {t.card.id for t in decl.tasks_in_boxes(tasks, progress, [1])} == {"c1"}
+    assert {t.card.id for t in decl.tasks_in_boxes(tasks, progress, [0])} \
+        == {"c3", "c4"}
+    # alle Boxen = kein Filter
+    assert len(decl.tasks_in_boxes(tasks, progress, decl.ALL_BOXES)) == len(tasks)
+
+
+def test_declension_settings_boxes_default_all():
+    assert DeclensionSettings.from_dict({}).boxes == decl.ALL_BOXES
+    assert DeclensionSettings.from_dict({"boxes": [0, 1]}).boxes == [0, 1]
+
+
+def test_session_selects_by_progress():
+    """Die Session zieht selbst nach Lernstand — nicht mehr die ersten n."""
+    from datetime import datetime
+
+    from mathainoa1.logic.declension import DeclensionSession
+
+    now = datetime(2026, 8, 6, 12, 0)
+    settings = DeclensionSettings(cases=["acc"], numbers=["sg"], word_count=2)
+    tasks = decl.generate_tasks(_noun_cards(), settings)
+    session = DeclensionSession(tasks, settings, progress=_progress_map(now))
+    assert len(session.queue) == 2
+    assert "c2" not in {t.card.id for t in session.queue}

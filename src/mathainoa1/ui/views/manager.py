@@ -62,8 +62,11 @@ def google_audio() -> bool:
     braucht keinen Cache."""
     return tts_engine() == TTS_GOOGLE
 
-# Export-Spalten: (CSV-Feldname, Anzeigename) — Reihenfolge = Exportreihenfolge
+# Export-Spalten: (CSV-Feldname, Anzeigename) — Reihenfolge = Exportreihenfolge.
+# „id“ steht vorn: nur mit ihr findet „Liste aktualisieren…“ die Karten
+# wieder (JSON schreibt sie ohnehin immer mit).
 EXPORT_COLUMNS = [
+    ("id", "ID (für „Liste aktualisieren“)"),
     ("front", "Griechisch"), ("back", "Deutsch"), ("plural", "Plural"),
     ("article", "Artikel"), ("word_type", "Worttyp"),
     ("forms", "Formen"), ("stem2", "2. Stamm"),
@@ -77,6 +80,18 @@ def _export_value(card: VocabCard, key: str) -> str:
     if key == "forms":
         return forms_to_text(card.forms)
     return getattr(card, key) or ""
+
+
+def _update_summary(result: dict) -> str:
+    """Rückmeldung des Update-Imports als ein Satz."""
+    parts = [f"{result['updated']} aktualisiert"]
+    if result["added"]:
+        parts.append(f"{result['added']} neu angelegt")
+    if result["unchanged"]:
+        parts.append(f"{result['unchanged']} unverändert")
+    if result["skipped"]:
+        parts.append(f"{result['skipped']} ohne Treffer übersprungen")
+    return ", ".join(parts) + "."
 
 
 def _lexikon_menu_items(page: ft.Page, store: ContentStore, name: str,
@@ -359,6 +374,9 @@ def manager_view(nav, store: ContentStore,
                                  icon=ft.Icons.DOWNLOAD,
                                  on_click=lambda e, l=vlist: export_dialog(
                                      l.name, l.cards)),
+                ft.PopupMenuItem(content="Liste aktualisieren…",
+                                 icon=ft.Icons.SYNC,
+                                 on_click=lambda e, l=vlist: update_list_dialog(l)),
                 *([ft.PopupMenuItem(content="Audio vorbereiten",
                                     icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
                                     on_click=lambda e, l=vlist: prepare_audio_dialog(
@@ -379,6 +397,11 @@ def manager_view(nav, store: ContentStore,
                                      icon=ft.Icons.DOWNLOAD,
                                      on_click=lambda e, l=vlist: export_dialog(
                                          l.name, l.cards)),
+                    # Buchliste: nur Hinweise/Notizen aktualisierbar
+                    ft.PopupMenuItem(content="Notizen aktualisieren…",
+                                     icon=ft.Icons.SYNC,
+                                     on_click=lambda e, l=vlist:
+                                         update_list_dialog(l)),
                     *([ft.PopupMenuItem(content="Audio vorbereiten",
                                         icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
                                         on_click=lambda e, l=vlist: prepare_audio_dialog(
@@ -507,6 +530,74 @@ def manager_view(nav, store: ContentStore,
         store.save_user_list(vlist)
         refresh()
 
+    def update_list_dialog(vlist: VocabList):
+        """Bestehende Liste aus CSV/JSON aktualisieren (Abgleich über die
+        Karten-ID): exportieren, außerhalb im Sammelauftrag ändern,
+        wieder einlesen. Angefasst werden nur die mitgelieferten Spalten."""
+        tf_text = ft.TextField(
+            label="CSV- oder JSON-Text hier einfügen",
+            multiline=True, min_lines=6, max_lines=12, autofocus=True,
+        )
+        error = ft.Text("", color=ft.Colors.ERROR, size=sz(13))
+
+        def apply_text(text: str) -> bool:
+            try:
+                result = store.update_list_from_text(vlist, text)
+            except ValueError as exc:
+                error.value = str(exc)
+                page.update()
+                return False
+            except Exception:
+                error.value = ("Text konnte nicht gelesen werden — ist es "
+                               "CSV/JSON aus dem Export dieser Liste?")
+                page.update()
+                return False
+            page.pop_dialog()
+            refresh()
+            page.show_dialog(ft.SnackBar(ft.Text(
+                f"„{vlist.name}“: {_update_summary(result)}")))
+            return True
+
+        def do_update(e):
+            apply_text((tf_text.value or "").strip())
+
+        async def from_file(e):
+            files = await picker.pick_files(
+                dialog_title="Datei zum Aktualisieren wählen",
+                allowed_extensions=["json", "csv"], with_data=True)
+            if not files:
+                return
+            f = files[0]
+            data = f.bytes_data if hasattr(f, "bytes_data") else None
+            if data is None and f.path:
+                data = Path(f.path).read_bytes()
+            if data is None:
+                return
+            apply_text(data.decode("utf-8-sig"))
+
+        hint = ("Zugeordnet wird über die Spalte „ID“ — bitte die Liste "
+                "vorher mit dieser Spalte exportieren. Nur die Spalten der "
+                "Datei werden geändert; eine leere Zelle löscht den Wert "
+                "(außer Griechisch/Deutsch). Zeilen mit unbekannter ID "
+                "werden als neue Karten angehängt, gelöscht wird nichts.")
+        if not vlist.editable:
+            hint = ("Buchliste: aktualisierbar sind nur Hinweise und "
+                    "Notizen (Spalten hints_gr, hints_de, notes_gr, "
+                    "notes_de) — zugeordnet über die Spalte „ID“. Neue "
+                    "Karten lassen sich hier nicht anlegen.")
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text(f"„{vlist.name}“ aktualisieren"),
+            content=ft.Column(
+                [ft.Text(hint, size=sz(13), italic=True), tf_text, error],
+                tight=True, spacing=10, width=420,
+                scroll=ft.ScrollMode.AUTO),
+            actions=[ft.TextButton("Abbrechen",
+                                   on_click=lambda e: page.pop_dialog()),
+                     ft.OutlinedButton("Aus Datei…", icon=ft.Icons.UPLOAD_FILE,
+                                       on_click=from_file),
+                     ft.FilledButton("Aktualisieren", on_click=do_update)],
+        ))
+
     def export_dialog(name: str, cards: list[VocabCard]):
         """Export als CSV, JSON oder PDF — mit Spaltenauswahl per Checkbox.
 
@@ -535,7 +626,11 @@ def manager_view(nav, store: ContentStore,
 
         def sync_buttons(e=None):
             # PDF gibt es nur als Datei — Plaintext ergäbe Binärmüll
-            btn_text.disabled = current_format() == "pdf"
+            pdf = current_format() == "pdf"
+            btn_text.disabled = pdf
+            # Die ID ist ein Schlüssel fürs Wiedereinlesen, kein Lernstoff —
+            # im Ausdruck wäre sie nur Ballast
+            checks["id"].disabled = pdf
             page.update()
 
         seg_format.on_change = sync_buttons
@@ -549,7 +644,7 @@ def manager_view(nav, store: ContentStore,
             return handler
 
         def need_fields() -> list[str] | None:
-            f = [k for k, cb in checks.items() if cb.value]
+            f = [k for k, cb in checks.items() if cb.value and not cb.disabled]
             if not f:
                 error.value = "Bitte mindestens eine Spalte wählen."
                 page.update()
