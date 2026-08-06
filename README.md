@@ -83,12 +83,17 @@ data/vocab/   # Vokabellisten je Kapitel (JSON)
 tests/        # pytest-Tests
 ```
 
-## Release bauen (APK + AAB)
+## Release bauen (APK)
 
 Der Workflow [`release.yml`](.github/workflows/release.yml) baut bei
-einem Versions-Tag (`v*`) oder manuell (workflow_dispatch) APK und AAB,
-lädt beide als Workflow-Artefakte hoch und legt beim Tag-Push ein
+einem Versions-Tag (`v*`) oder manuell (workflow_dispatch) die APK,
+lädt sie als Workflow-Artefakt hoch und legt beim Tag-Push ein
 GitHub-Release an. Der Tag muss zur Version in `pyproject.toml` passen.
+Das AAB (App Bundle für Google Play) wird derzeit **nicht** gebaut —
+gebraucht wird nur die APK zum Sideload. Der versionCode wird trotzdem
+weiter aus der Version berechnet, damit ein späterer Play-Upload direkt
+passt; zum Wiederbeleben genügt ein `flet build aab`-Schritt im
+Workflow (im Kopfkommentar der Datei beschrieben).
 Am einfachsten übernimmt das Release-Skript alles auf einmal
 (Version in `pyproject.toml` + `__init__.py` setzen, committen, taggen,
 pushen):
@@ -122,6 +127,10 @@ GitHub-API liefert für private Repos 404 — der Check schlägt dann
 einfach still fehl).
 
 ### Play-Store-Veröffentlichung (Checkliste)
+
+Vorerst nicht aktuell — der Workflow baut nur die APK. Für einen
+Play-Upload muss zuerst der AAB-Schritt wieder in `release.yml`
+(siehe oben).
 
 - **Datenschutzerklärung**: In der Play Console eine öffentlich
   erreichbare URL hinterlegen — z.B. die GitHub-Ansicht von

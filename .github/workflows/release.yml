@@ -1,13 +1,19 @@
-name: Release bauen (APK + AAB)
+name: Release bauen (APK)
 
 # Baut nur bei einem Versions-Tag (z.B. "git tag v0.3.0 && git push --tags")
 # oder manuell — nicht bei jedem Push auf main.
 #
-# Google Play braucht ein AAB (App Bundle) mit einem versionCode, der bei
-# jedem Upload strikt steigen muss. Der versionCode wird deterministisch
-# aus der Version berechnet: major*10000 + minor*100 + patch
-# (v0.3.0 -> 300, v1.2.3 -> 10203) — solange die Version wächst, wächst
-# auch der versionCode. Der Tag muss zur Version in pyproject.toml passen.
+# Gebaut wird derzeit nur die APK (Sideload über das GitHub-Release). Das
+# AAB für Google Play wird vorerst nicht gebraucht; zum Wiederbeleben
+# genügt ein zusätzlicher "flet build aab"-Schritt vor dem APK-Schritt
+# plus build/aab/*.aab in den Dateilisten unten.
+#
+# Der versionCode wird deterministisch aus der Version berechnet:
+# major*10000 + minor*100 + patch (v0.3.0 -> 300, v1.2.3 -> 10203) —
+# solange die Version wächst, wächst auch der versionCode. Das ist für
+# einen späteren Play-Upload nötig (dort muss er strikt steigen) und
+# hält APK und AAB vergleichbar. Der Tag muss zur Version in
+# pyproject.toml passen.
 #
 # Signierung (für den Play-Upload nötig): läuft automatisch, wenn diese
 # Repository-Secrets gesetzt sind — sonst wird unsigniert (debug) gebaut:
@@ -86,12 +92,6 @@ jobs:
             echo "FLET_ANDROID_SIGNING_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}"
           } >> "$GITHUB_ENV"
 
-      - name: AAB bauen (Google Play)
-        run: >
-          flet build aab --verbose
-          --build-version "${{ steps.ver.outputs.version }}"
-          --build-number "${{ steps.ver.outputs.build_number }}"
-
       - name: APK bauen (Sideload/GitHub-Release)
         run: >
           flet build apk --verbose
@@ -102,26 +102,21 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mathainoa1-${{ steps.ver.outputs.version }}
-          path: |
-            build/apk/*.apk
-            build/aab/*.aab
+          path: build/apk/*.apk
           if-no-files-found: error
           retention-days: 90
 
-      # Bei einem Tag landen APK + AAB zusätzlich in einem GitHub-Release —
-      # die APK ist dort am Handy mit einem Klick installierbar, das AAB
-      # wird manuell in der Play Console hochgeladen.
+      # Bei einem Tag landet die APK zusätzlich in einem GitHub-Release —
+      # dort ist sie am Handy mit einem Klick installierbar.
       # Läuft nur, wenn alle vorherigen Schritte durch sind — ein Release
       # ohne APK wäre schlimmer als gar keins: die App würde ein Update
       # melden, das sich nicht installieren lässt (siehe
       # storage/updates.py, das solche Releases zusätzlich überspringt).
-      - name: Release mit APK + AAB anlegen
+      - name: Release mit APK anlegen
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            build/apk/*.apk
-            build/aab/*.aab
-          # Ohne passende Dateien lieber abbrechen als ein leeres Release
+          files: build/apk/*.apk
+          # Ohne passende Datei lieber abbrechen als ein leeres Release
           fail_on_unmatched_files: true
           generate_release_notes: true
