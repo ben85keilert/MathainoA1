@@ -43,7 +43,8 @@ def test_auto_check_hoechstens_einmal_pro_tag(env, monkeypatch):
 
     def fake_fetch():
         calls.append(1)
-        return updates.UpdateInfo(version="99.0.0")
+        return updates.UpdateInfo(version="99.0.0",
+                                  apk_url="https://x/app.apk")
 
     monkeypatch.setattr(updates, "fetch_latest", fake_fetch)
     assert updates.auto_check() is not None
@@ -74,3 +75,25 @@ def test_downgrade_notice(env):
     notice = updates.downgrade_notice()
     assert notice is not None and "99.0.0" in notice
     assert updates.downgrade_notice() is not None  # bleibt bestehen
+
+
+def test_auto_check_ueberspringt_release_ohne_apk(env, monkeypatch):
+    """Ein Release ohne APK ist noch nicht fertig (Build läuft oder ist
+    gescheitert) — es zu melden führte nur zu einer Seite ohne Download."""
+    monkeypatch.setattr(updates, "fetch_latest", lambda: updates.UpdateInfo(
+        version="99.0.0", notes="Neues", apk_url=""))
+    assert updates.auto_check() is None
+
+
+def test_is_installable_update():
+    neu_mit_apk = updates.UpdateInfo(version="99.0.0",
+                                     apk_url="https://x/app.apk")
+    neu_ohne_apk = updates.UpdateInfo(version="99.0.0")
+    alt_mit_apk = updates.UpdateInfo(version="0.0.1",
+                                     apk_url="https://x/app.apk")
+    assert updates.is_installable_update(neu_mit_apk) is True
+    assert updates.is_installable_update(neu_ohne_apk) is False
+    assert updates.is_installable_update(alt_mit_apk) is False
+    assert updates.is_installable_update(
+        updates.UpdateInfo(version=__version__,
+                           apk_url="https://x/app.apk")) is False

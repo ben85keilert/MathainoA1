@@ -103,9 +103,20 @@ def auto_check() -> UpdateInfo | None:
         info = fetch_latest()
     except (OSError, ValueError):
         return None
-    if parse_version(info.version) > parse_version(__version__):
-        return info
-    return None
+    return info if is_installable_update(info) else None
+
+
+def is_installable_update(info: UpdateInfo) -> bool:
+    """Neuer UND installierbar — nur dann lohnt der Hinweis.
+
+    Ein Release ohne APK ist noch nicht fertig: entweder hängt der Build
+    noch, oder er ist gescheitert (bzw. das Release wurde von Hand
+    angelegt, bevor die CI lief). Es zu melden würde nur zu einer
+    Release-Seite ohne Download führen — also überspringen und beim
+    nächsten Check erneut schauen.
+    """
+    return (bool(info.apk_url)
+            and parse_version(info.version) > parse_version(__version__))
 
 
 def downgrade_notice() -> str | None:

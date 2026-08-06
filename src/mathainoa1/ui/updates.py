@@ -78,9 +78,16 @@ def manual_check(page: ft.Page) -> None:
                 "Update-Check fehlgeschlagen — bitte die "
                 "Internetverbindung prüfen.")))
             return
-        if (updates.parse_version(info.version)
-                > updates.parse_version(__version__)):
+        if updates.is_installable_update(info):
             show_update_dialog(page, info)
+        elif (updates.parse_version(info.version)
+                > updates.parse_version(__version__)):
+            # Release ist da, die APK aber noch nicht (Build läuft oder
+            # ist gescheitert) — ehrlicher als „auf dem neuesten Stand"
+            page.show_dialog(ft.SnackBar(ft.Text(
+                f"Version {info.version} ist angekündigt, aber noch ohne "
+                "installierbare Datei — bitte später noch einmal "
+                "versuchen.")))
         else:
             page.show_dialog(ft.SnackBar(ft.Text(
                 f"Du bist auf dem neuesten Stand ({__version__}).")))
