@@ -257,6 +257,27 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     sw_top.on_change = on_top
     sw_infl.on_change = on_infl
 
+    # --- Abfrage: Statistik je Training ein-/ausschalten ---
+    stat_switches = {
+        "stats_vocab": (ft.Switch(value=s.stats_vocab), "Vokabeltraining"),
+        "stats_nouns": (ft.Switch(value=s.stats_nouns), "Nomentraining"),
+        "stats_adjectives": (ft.Switch(value=s.stats_adjectives),
+                             "Adjektivtraining"),
+        "stats_verbs": (ft.Switch(value=s.stats_verbs), "Verbtraining"),
+    }
+
+    def on_stats(key: str):
+        def handler(e, key=key):
+            setattr(s, key, stat_switches[key][0].value)
+            save_app_settings(s)
+        return handler
+
+    for _key, (_sw, _label) in stat_switches.items():
+        _sw.on_change = on_stats(_key)
+
+    stats_rows = [_switch_row(sw, label, page)
+                  for sw, label in stat_switches.values()]
+
     # --- Abfrage: Prüfbutton-Stil beim Schreiben ---
     sw_check = ft.Switch(value=s.check_beside_field)
 
@@ -572,6 +593,17 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
                         "Box 5 nur über das Beugungstraining "
                         "(Nomen/Adjektiv/Verb, Vorgabe Deutsch)",
                         page),
+            ft.Divider(),
+            ft.Text("Statistik einschalten für", size=sz(13)),
+            ft.Text("Bestimmt, welche Trainings den Lernstand bewegen "
+                    "dürfen. Ist ein Training aus, fällt es komplett aus "
+                    "der Statistik: keine Leitner-Boxen rauf oder runter, "
+                    "keine Fehlerzähler, keine Punkte in der Ergebnisliste. "
+                    "Welche Wörter gezogen werden, richtet sich weiterhin "
+                    "nach den Boxen. (Nomen/Adjektive/Verben zählen ohnehin "
+                    "nur bei Vorgabe „Deutsch“.)",
+                    size=sz(13), italic=True),
+            *stats_rows,
             ft.Divider(),
             ft.Text("Prüfen beim Schreiben", size=sz(13)),
             ft.Text("Aus = „Prüfen“-Button mittig unter dem Antwortfeld, "

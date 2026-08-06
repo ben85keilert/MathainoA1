@@ -1132,3 +1132,159 @@ def test_declension_result_view_dots_per_scored_card(store_with_edge_cases,
         assert "Hinweise/Notizen bearbeiten" in found
     finally:
         progress.close()
+
+
+def _tiles(ctrl, out):
+    """Alle ListTiles des Control-Baums einsammeln."""
+    import flet as ft
+    if isinstance(ctrl, ft.ListTile):
+        out.append(ctrl)
+    for attr in ("controls", "content", "title", "subtitle", "trailing",
+                 "leading"):
+        sub = getattr(ctrl, attr, None)
+        for s in (sub if isinstance(sub, list) else [sub]):
+            if isinstance(s, ft.Control):
+                _tiles(s, out)
+
+
+def _icons(ctrl, out):
+    import flet as ft
+    if isinstance(ctrl, ft.Icon) and ctrl.name:
+        out.append(ctrl.name)
+    for attr in ("controls", "content", "title", "subtitle", "trailing",
+                 "leading"):
+        sub = getattr(ctrl, attr, None)
+        for s in (sub if isinstance(sub, list) else [sub]):
+            if isinstance(s, ft.Control):
+                _icons(s, out)
+
+
+def test_result_view_marks_only_in_headings(store_with_edge_cases, tmp_path,
+                                            monkeypatch):
+    """✓/✗ stehen einmal in der Überschrift, nicht mehr vor jedem Wort."""
+    import flet as ft
+
+    from mathainoa1.logic.session import TrainingSession, TrainingSettings
+
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    store, vlist = store_with_edge_cases
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "res.db")
+    try:
+        session = TrainingSession(
+            vlist.cards[:2],
+            TrainingSettings(mode="flashcard", word_count=2,
+                             repeat_errors=False))
+        session.mark(False)
+        session.mark(True)
+        view = trainer.result_view(nav, store, progress, session)
+        texts: list[str] = []
+        _collect_texts_and_tooltips(view, texts)
+        assert "Falsche Karten:" in texts and "Richtig:" in texts
+        tiles: list = []
+        _tiles(view, tiles)
+        assert tiles  # es gibt Wortzeilen …
+        for tile in tiles:
+            marks: list[str] = []
+            if isinstance(tile.leading, ft.Control):
+                _icons(tile.leading, marks)
+            # … aber ohne eigenes ✓/✗ davor
+            assert ft.Icons.CHECK not in marks and ft.Icons.CLOSE not in marks
+    finally:
+        progress.close()
+
+
+def test_stats_switch_off_stops_progress(store_with_edge_cases, tmp_path,
+                                         monkeypatch):
+    """„Statistik einschalten für" aus: die Runde läuft, bewegt aber
+    weder Boxen noch Zähler."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.logic.session import TrainingSettings
+    from mathainoa1.storage.settings import (
+        AppSettings,
+        load_app_settings,
+        save_app_settings,
+    )
+
+    store, vlist = store_with_edge_cases
+    progress = ProgressStore(tmp_path / "stats.db")
+    try:
+        settings = TrainingSettings(mode="flashcard", word_count=1,
+                                    repeat_errors=False, list_id=vlist.id)
+        save_app_settings(AppSettings(stats_vocab=True))
+        assert trainer.make_session(
+            store, progress, settings).on_result is not None
+
+        save_app_settings(AppSettings(stats_vocab=False))
+        assert load_app_settings().stats_vocab is False
+        session = trainer.make_session(store, progress, settings)
+        assert session.on_result is None and session.on_repeat_correct is None
+        card = session.current
+        session.mark(True)
+        assert progress.get(card.id) is None  # nichts aufgezeichnet
+    finally:
+        progress.close()
+
+
+def test_leitner_wiring_respects_stats_switch(tmp_path, monkeypatch):
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.logic.declension import DeclensionSettings
+
+    settings = DeclensionSettings(direction="de")
+    progress = ProgressStore(tmp_path / "w.db")
+    try:
+        on_result, on_repeat = grammar._leitner_wiring(
+            progress, settings, lambda: "typing", stats_on=True)
+        assert on_result is not None and on_repeat is not None
+        assert grammar._leitner_wiring(
+            progress, settings, lambda: "typing", stats_on=False) == (None, None)
+        # Vorgabe Griechisch zählt weiterhin gar nicht
+        assert grammar._leitner_wiring(
+            DeclensionSettings(direction="gr"), DeclensionSettings(direction="gr"),
+            lambda: "typing") == (None, None)
+    finally:
+        progress.close()
+
+
+def test_setup_views_have_box_filter(store_with_edge_cases, tmp_path,
+                                     monkeypatch):
+    """Alle Trainings-Startseiten bieten die abwählbaren Leitner-Boxen."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    nav.store = store
+    progress = ProgressStore(tmp_path / "box.db")
+    try:
+        views = [
+            trainer.setup_view(nav, store, progress),
+            grammar.setup_view(nav, store, progress),
+            grammar.adjective_setup_view(nav, store, progress),
+            grammar.conjugation_setup_view(nav, store, progress),
+        ]
+        for view in views:
+            found: list[str] = []
+            _collect_texts_and_tooltips(view, found)
+            assert "Boxen" in found
+            assert "Noch nicht trainiert" in found  # Tooltip des „neu"-Chips
+            assert "Box 5" in found
+    finally:
+        progress.close()
+
+
+def test_box_filter_row_toggles(tmp_path, monkeypatch):
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.logic.session import ALL_BOXES
+    from mathainoa1.ui.views.setup_common import box_filter_row
+
+    nav = _fake_nav()
+    row, boxes_of = box_filter_row(nav.page, None)
+    assert boxes_of() == ALL_BOXES
+    # Chip „5" abschalten (die Zeile beginnt mit der Beschriftung)
+    chip5 = row.controls[5]  # Text, 1, 2, 3, 4, 5, neu
+    chip5.on_click(None)
+    assert boxes_of() == [0, 1, 2, 3, 4]
+    chip5.on_click(None)
+    assert boxes_of() == ALL_BOXES
+    # gespeicherte Auswahl wird übernommen
+    _row2, boxes2 = box_filter_row(nav.page, [0, 1])
+    assert boxes2() == [0, 1]

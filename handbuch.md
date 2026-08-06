@@ -291,6 +291,40 @@ auf, z.B. `gen_pl=γυναικών; 2sg=πας`. In der App-Hilfe (?-Symbol) ste
 ein fertiger Chatbot-Prompt, der aus einer Liste griechischer Wörter
 (als Foto oder Text) die Import-CSV erzeugt.
 
+## Bestehende Liste aktualisieren (Sammelbearbeitung)
+
+Ein Import legt immer eine **neue** Liste an. Um eine **vorhandene**
+Liste im Sammelauftrag zu ändern (z.B. allen Verben den 2. Stamm
+nachtragen oder die Notizen einer ganzen Kapitelliste überarbeiten),
+gibt es im Listen-Menü **„Liste aktualisieren…“**:
+
+1. Liste **exportieren** — dabei die Spalte **„ID“** ankreuzen
+   (JSON schreibt sie immer mit). Sie ist der Schlüssel zur Karte.
+2. Die Datei außerhalb der App bearbeiten — Tabellenprogramm,
+   Editor oder Chatbot. **Nur die Spalten mitgeben, die sich ändern
+   sollen**; die ID-Spalte muss bleiben.
+3. Über „Liste aktualisieren…“ die Datei wählen oder den Text
+   einfügen. Die App meldet danach, wie viele Karten aktualisiert bzw.
+   neu angelegt wurden.
+
+Regeln beim Aktualisieren:
+
+- Zugeordnet wird **über die ID** — ohne ID-Spalte bricht der Vorgang
+  mit einem Hinweis ab (sonst entstünden Dubletten).
+- Angefasst werden **nur die Spalten der Datei**. Alles andere bleibt
+  unverändert — auch der Lernstand.
+- Eine **leere Zelle löscht** den Wert dieser Spalte (so lassen sich
+  Notizen gezielt leeren). Ausnahme: leeres `front`/`back` wird
+  ignoriert, sonst wäre die Karte kaputt.
+- Zeilen mit **unbekannter oder fehlender ID** werden als neue Karten
+  angehängt (nur mit `front` und `back`).
+- **Gelöscht wird nie**: Karten, die in der Datei fehlen, bleiben in
+  der Liste.
+- **Buchlisten** sind nicht editierbar — dort heißt der Menüpunkt
+  „Notizen aktualisieren…“ und akzeptiert nur die Spalten `hints_gr`,
+  `hints_de`, `notes_gr`, `notes_de`. Sie landen wie im Notiz-Dialog
+  als Overlay neben der Buchliste.
+
 ## Audio (Aussprache)
 
 Die App spricht jedes griechische Wort selbst. In den **Einstellungen**
@@ -410,6 +444,23 @@ Die Wartezeit bis zur nächsten Fälligkeit hängt von der Box ab:
 Box 1 = sofort, Box 2 = 1 Tag, Box 3 = 3 Tage, Box 4 = 7 Tage,
 Box 5 = 30 Tage. Beim Start einer Trainingsrunde werden **überfällige
 Karten zuerst** gezogen, dann neue (noch nie trainierte), dann der Rest.
+Innerhalb des Restes rücken Wörter, die **heute schon** beantwortet
+wurden, ans Ende — so kommt bei mehreren Runden am selben Tag erst
+einmal alles andere dran.
+
+**Das gilt in allen Trainings gleich**, auch im Nomen-, Adjektiv- und
+Verbtraining: Gezogen werden dort zuerst die *Wörter* nach ihrem
+Lernstand, und je Wort kommt zunächst nur **eine** Form in die Runde.
+Erst wenn zu wenige Wörter übrig sind, werden weitere Formen desselben
+Worts nachgelegt. Im Adjektivtraining zählt die schwächere der beiden
+Karten (Adjektiv oder Nomen).
+
+**Boxen abwählen:** Auf jeder Trainings-Startseite gibt es eine Zeile
+mit den farbigen Box-Symbolen (1–5 und „neu“). Abgeschaltete Boxen
+kommen gar nicht erst in die Runde — praktisch, um die gekonnten
+Wörter (Box 4/5) auszuklammern und nur das Wackelige zu üben. Es lässt
+sich auch alles bis auf Box 5 abwählen; bleibt dann kein Wort übrig,
+sagt das die Startseite und es kommt keine Runde zustande.
 
 In der Statistik-Ansicht gilt eine Karte als „sicher“, wenn sie in
 Box 4 oder 5 liegt. Die „Problemwörter“ sind die Karten mit den meisten
@@ -451,6 +502,20 @@ Problemwörtern (erst ein neuer Fehler zählt wieder).
 Deklinations- und Konjugationsrunden zeigen am Ende zusätzlich ihr eigenes
 Rundenergebnis (x von y richtig); das ist unabhängig von der dauerhaften
 Vokabelstatistik.
+
+**Statistik je Training abschalten:** Unter Zahnrad → Abfrage →
+**„Statistik einschalten für“** lässt sich für jedes Training einzeln
+(Vokabel-, Nomen-, Adjektiv-, Verbtraining) festlegen, ob es den
+Lernstand überhaupt bewegen darf. Ist ein Training aus, fällt es
+komplett aus der Statistik: keine Box rauf oder runter, keine
+Fehlerzähler, auch keine Boxen-Punkte in der Ergebnisliste. Die
+Auswahl der Wörter richtet sich weiterhin nach den Boxen — man übt
+also normal weiter, nur ohne Folgen für den Lernstand.
+
+In der Ergebnisliste nach jeder Runde stehen **✗ und ✓ einmal in der
+Überschrift** der jeweiligen Gruppe („Falsche Karten:“ / „Richtig:“) —
+nicht mehr vor jedem einzelnen Wort. Vor den Wörtern bleibt (falls
+eingeschaltet) nur der zweigeteilte Boxen-Punkt.
 
 ### Statistik sichern
 

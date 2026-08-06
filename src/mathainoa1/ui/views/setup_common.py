@@ -66,3 +66,39 @@ def options_summary(page: ft.Page,
 def on_off(label: str, value: bool) -> str:
     """Kurzform "Label: an/aus" für describe()-Listen."""
     return f"{label}: {'an' if value else 'aus'}"
+
+
+def box_filter_row(page: ft.Page,
+                   boxes: Sequence[int] | None) -> tuple[ft.Control,
+                                                         Callable[[], list[int]]]:
+    """Box-Umschalter für die Trainings-Startseiten: welche Leitner-Boxen
+    dürfen in die Runde?
+
+    Abgewählte Boxen bleiben komplett draußen — auch Box 1/2, dann kommen
+    eben weniger (oder gar keine) Wörter zusammen. Gibt die Zeile und
+    einen Getter für die aktive Auswahl zurück; gespeichert wird sie vom
+    Aufrufer mit seinen übrigen Einstellungen.
+    """
+    from mathainoa1.logic.session import ALL_BOXES
+    from mathainoa1.ui.views.wordlist import box_chip_controls
+
+    active = {b for b in (boxes if boxes is not None else ALL_BOXES)
+              if b in ALL_BOXES} or set(ALL_BOXES)
+    chips = ft.Row(spacing=6, wrap=True,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER)
+
+    def rebuild() -> None:
+        chips.controls = [
+            ft.Text("Boxen", size=sz(13)),
+            *box_chip_controls(active, toggle),
+        ]
+
+    def toggle(b: int) -> None:
+        # Die letzte aktive Box darf abgewählt werden — dann gibt es
+        # schlicht keine Wörter mehr (bewusst erlaubt)
+        active.symmetric_difference_update({b})
+        rebuild()
+        page.update()
+
+    rebuild()
+    return chips, lambda: sorted(active)

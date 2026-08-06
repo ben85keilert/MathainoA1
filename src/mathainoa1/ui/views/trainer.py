@@ -5,7 +5,12 @@ from __future__ import annotations
 import flet as ft
 
 from mathainoa1.logic.answer_check import Result, almost_kind
-from mathainoa1.logic.session import TrainingSession, TrainingSettings, filter_cards
+from mathainoa1.logic.session import (
+    TrainingSession,
+    TrainingSettings,
+    cards_in_boxes,
+    filter_cards,
+)
 from mathainoa1.models import WORD_TYPES, VocabCard
 from mathainoa1.storage.content import ContentStore, filter_level
 from mathainoa1.storage.progress import ProgressStore, max_box_for_mode
@@ -21,7 +26,7 @@ from mathainoa1.ui.audio import (
     speaker_button,
 )
 from mathainoa1.ui.views.reference import has_word_forms
-from mathainoa1.ui.views.setup_common import on_off, options_summary
+from mathainoa1.ui.views.setup_common import box_filter_row, on_off, options_summary
 from mathainoa1.ui.views.wordlist import box_of, box_transition_dot
 from mathainoa1.ui.word_details import (  # noqa: F401 — Re-Export für grammar
     show_word_details,
@@ -39,17 +44,29 @@ ALL = "__all__"
 _last_wrong: dict[str, list[VocabCard]] = {}
 
 
+def training_cards(store: ContentStore, progress: ProgressStore,
+                   settings: TrainingSettings) -> list[VocabCard]:
+    """Kartenpool einer Runde: Worttyp-Filter plus die im Dialog
+    gewählten Leitner-Boxen."""
+    cards = filter_cards(store.cards_for(settings.list_id), settings)
+    return cards_in_boxes(cards, progress.all(), settings.boxes)
+
+
 def make_session(store: ContentStore, progress: ProgressStore,
                  settings: TrainingSettings,
                  must_include: list[VocabCard] | None = None,
                  ) -> TrainingSession:
-    cards = filter_cards(store.cards_for(settings.list_id), settings)
+    cards = training_cards(store, progress, settings)
     app = load_app_settings()
     session = TrainingSession(cards, settings, progress=progress.all(),
                               accent_resets_box=app.accent_resets_box,
                               case_resets_box=app.case_resets_box,
                               repeat_box_policy=app.repeat_round_box_policy,
                               must_include=list(must_include or []))
+    if not app.stats_vocab:
+        # Statistik fürs Vokabeltraining aus: die Runde läuft normal
+        # (inkl. Fehlerrunde), bewegt aber keine Boxen und keine Zähler
+        return session
 
     # Box-Deckel je Abfrageart (per Einstellungen abschaltbar); bei
     # "Gemischt" zählt die Richtung der jeweiligen Karte
@@ -235,6 +252,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
     )
 
     error_text = ft.Text("", color=ft.Colors.ERROR)
+    box_row, boxes_of = box_filter_row(nav.page, s.boxes)
 
     def cards_for_list() -> list[VocabCard]:
         return store.cards_for(dd_list.value)
@@ -283,6 +301,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             # einen evtl. alten persistierten Wert (sonst 0 Karten gefiltert)
             task=None,
             word_type=None if dd_type.value == ALL else dd_type.value,
+            boxes=boxes_of(),
         )
 
     def filtered_cards(settings: TrainingSettings) -> list[VocabCard]:
@@ -340,6 +359,11 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             return
         if not filtered_cards(settings):
             return
+        if not training_cards(store, progress, settings):
+            error_text.value = ("Keine Karten in den gewählten Boxen — bitte "
+                                "weitere Boxen dazuwählen.")
+            nav.page.update()
+            return
         save_default_settings(settings)
         # Fehler der letzten Runde dieser Liste garantiert mitnehmen
         wrong = (_last_wrong.pop(settings.list_id or ALL, [])
@@ -394,6 +418,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
             ft.Row([seg_mode, tf_count], spacing=12,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             seg_dir,
+            box_row,
             error_text,
             ft.Row(
                 [
@@ -703,6 +728,16 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     )
 
 
+def result_heading(icon: str, color: str, text: str) -> ft.Control:
+    """Überschrift einer Ergebnisgruppe mit dem Symbol der Gruppe —
+    die einzelnen Zeilen tragen deshalb kein eigenes ✓/✗ mehr."""
+    return ft.Row(
+        [ft.Icon(icon, color=color), ft.Text(text, weight=ft.FontWeight.BOLD)],
+        tight=True, spacing=6,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+
+
 def result_view(nav, store: ContentStore, progress: ProgressStore,
                 session: TrainingSession) -> ft.Control:
     stats = session.stats()
@@ -710,40 +745,40 @@ def result_view(nav, store: ContentStore, progress: ProgressStore,
     # (auch eine leere Liste — sie löscht veraltete Einträge)
     _last_wrong[session.settings.list_id or ALL] = list(stats["wrong_cards"])
     # Boxen vorher/nachher als zweigeteilter Punkt (Einstellungen):
-    # vorher = Momentaufnahme beim Rundenstart, nachher = aktueller Stand
-    show_dots = load_app_settings().result_box_dots and session.progress is not None
+    # vorher = Momentaufnahme beim Rundenstart, nachher = aktueller Stand.
+    # Ohne Statistik (Einstellungen) bewegt sich nichts — dann kein Punkt.
+    show_dots = (load_app_settings().result_box_dots
+                 and session.progress is not None
+                 and session.on_result is not None)
 
-    def leading_for(icon: str, color: str, card: VocabCard) -> ft.Control:
-        mark = ft.Icon(icon, color=color)
+    def leading_for(card: VocabCard) -> ft.Control | None:
         if not show_dots:
-            return mark
+            return None
         before = box_of(card, session.progress)
         p = progress.get(card.id)
         after = p.box if p and p.seen else 0
-        return ft.Row([mark, box_transition_dot(before, after)],
-                      tight=True, spacing=6)
+        return box_transition_dot(before, after)
 
     def edit_button(card: VocabCard) -> ft.Control:
         return ft.IconButton(
             ft.Icons.EDIT_NOTE, tooltip="Hinweise/Notizen bearbeiten",
             on_click=lambda e, c=card: edit_notes_dialog(nav.page, store, c))
 
-    def card_tile(card: VocabCard, icon: str, color: str) -> ft.Control:
+    def card_tile(card: VocabCard) -> ft.Control:
         return ft.ListTile(
             title=ft.Text(card.front),
             subtitle=ft.Text(card.back),
-            leading=leading_for(icon, color, card),
+            leading=leading_for(card),
             trailing=ft.Row([b for b in (word_details_button(card),
                                          edit_button(card))
                              if b is not None], tight=True, spacing=0),
         )
 
-    wrong_items = [card_tile(c, ft.Icons.CLOSE, ft.Colors.ERROR)
-                   for c in stats["wrong_cards"]]
+    wrong_items = [card_tile(c) for c in stats["wrong_cards"]]
     # Darunter auch die richtig beantworteten Wörter der Runde zeigen —
     # mit denselben Bearbeitungs-Symbolen wie die falschen
     correct_items = [
-        card_tile(a.card, ft.Icons.CHECK, ft.Colors.GREEN)
+        card_tile(a.card)
         for a in session.answers[: session.total_first_round]
         if session.counts_correct(a.result)
     ]
@@ -767,9 +802,13 @@ def result_view(nav, store: ContentStore, progress: ProgressStore,
             ft.Text(f"{stats['correct']} von {stats['total']} richtig",
                     size=sz(24), weight=ft.FontWeight.BOLD),
             ft.ProgressBar(value=stats["correct"] / max(1, stats["total"])),
-            ft.Text("Falsche Karten:" if wrong_items else "Alles richtig — μπράβο! 🎉"),
+            # ✗ und ✓ stehen einmal in der Überschrift statt vor jedem Wort
+            *([result_heading(ft.Icons.CLOSE, ft.Colors.ERROR,
+                              "Falsche Karten:")] if wrong_items
+              else [ft.Text("Alles richtig — μπράβο! 🎉")]),
             *wrong_items,
-            *([ft.Text("Richtig:")] if correct_items and wrong_items else []),
+            *([result_heading(ft.Icons.CHECK, ft.Colors.GREEN, "Richtig:")]
+              if correct_items else []),
             *correct_items,
             ft.Row(
                 [

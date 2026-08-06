@@ -37,6 +37,7 @@ from mathainoa1.logic.declension import (
     strip_acute,
     syllable_count,
 )
+from mathainoa1.logic.session import ALL_BOXES
 from mathainoa1.models import VERB_FORM_KEYS, VocabCard, parse_verb_forms_text
 
 PERSONS = [1, 2, 3]
@@ -226,6 +227,8 @@ class ConjugationSettings:
     carry_errors_next_round: bool = True
     accent_tolerant: bool = True
     list_id: str | None = None
+    # Leitner-Boxen, aus denen gezogen wird (0 = „neu"); alle = kein Filter
+    boxes: list[int] = field(default_factory=lambda: list(ALL_BOXES))
 
     def to_dict(self) -> dict:
         return asdict(self)

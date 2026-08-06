@@ -385,11 +385,26 @@ def help_view(nav, store=None) -> ft.Control:
             "für alle Trainings gleichermaßen und lässt sich in den "
             "Einstellungen (Zahnrad → Ergebnisliste) abschalten. Über "
             "den Stift daneben lassen sich falsche wie richtige Wörter "
-            "direkt bearbeiten.",
+            "direkt bearbeiten. ✗ und ✓ stehen einmal in der "
+            "Überschrift der Gruppe, nicht vor jedem Wort.",
             "Wörter, die heute schon (richtig) beantwortet wurden, rücken "
             "bei der Auswahl ans Ende — sie kommen erst wieder dran, wenn "
             "fällige, neue und ältere Karten aufgebraucht sind. So blockieren "
             "frisch gekonnte Wörter nicht mehrere Runden am selben Tag.",
+            "Nomen-, Adjektiv- und Verbtraining ziehen nach denselben "
+            "Regeln: erst die Wörter nach Lernstand (fällige, dann neue, "
+            "dann der Rest), je Wort zunächst nur eine Form. Erst wenn "
+            "die Wörter ausgehen, kommen weitere Formen desselben Worts "
+            "dazu; im Adjektivtraining zählt die schwächere der beiden "
+            "Karten.",
+            "Auf jeder Trainings-Startseite lassen sich einzelne Boxen "
+            "abwählen (Zeile „Boxen“ mit den farbigen Symbolen 1–5 und "
+            "„neu“) — abgewählte Wörter kommen gar nicht erst in die "
+            "Runde. Bleibt nichts übrig, sagt das die Startseite.",
+            "Statistik je Training abschaltbar (Zahnrad → Abfrage → "
+            "„Statistik einschalten für“): Ist ein Training aus, bewegt "
+            "es weder Boxen noch Fehlerzähler — geübt wird trotzdem "
+            "normal, die Wortauswahl folgt weiter den Boxen.",
             "In der Statistik-Ansicht lässt sich der Lernstand einer "
             "Liste über das Papierkorb-Symbol auf null zurücksetzen.",
         ]),
@@ -472,6 +487,14 @@ def help_view(nav, store=None) -> ft.Control:
            "importieren“ in der Vokabelverwaltung einfügen — dort Namen "
            "vergeben, Text einfügen, fertig. CSV und JSON werden "
            "automatisch erkannt."),
+        _p("Eine BESTEHENDE Liste ändert man dagegen über „Liste "
+           "aktualisieren…“ im Listen-Menü: Liste mit der Spalte „ID“ "
+           "exportieren, außerhalb im Sammelauftrag bearbeiten, wieder "
+           "einlesen. Zugeordnet wird über die ID; angefasst werden nur "
+           "die mitgelieferten Spalten (leere Zelle = Wert löschen), "
+           "Zeilen ohne bekannte ID werden angehängt, gelöscht wird "
+           "nichts. Bei Buchlisten sind so nur Hinweise und Notizen "
+           "änderbar."),
         _p("Einen der beiden Prompts zusammen mit dem Foto (oder Text) an "
            "einen Chatbot geben — er liefert die fertige Import-CSV:"),
         _bullets([
