@@ -96,6 +96,17 @@ def test_word_key_ignores_article_accents_and_brackets():
     assert ta.word_key("η λαϊκή (αγορά)") == ta.word_key("λαικη")
 
 
+def test_word_key_square_bracket_groups():
+    # Pflichtwahl [a/b] wird auf die erste Variante reduziert — die
+    # Berufe-Karten dürfen nicht alle auf denselben Schlüssel fallen
+    assert ta.word_key("[ο/η] γιατρός") == ta.word_key("ο γιατρός")
+    assert ta.word_key("[ο/η] γιατρός") != ta.word_key("[ο/η] δικηγόρος")
+    assert ta.word_key("δίπλα [από/σε]") == ta.word_key("δίπλα από")
+    assert ta.word_key("Πώς [είσαι/είστε];") == ta.word_key("Πώς είσαι;")
+    assert ta.word_key("[αυτός / αυτή] εδώ") == ta.word_key("αυτός εδώ")
+    assert ta.word_key("Με [δυο/δύο] λόγια...") == ta.word_key("Με δυο λόγια...")
+
+
 # --- Import -----------------------------------------------------------------
 
 def test_import_creates_lists_and_cards(env):

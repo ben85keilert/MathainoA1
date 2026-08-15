@@ -64,8 +64,13 @@ def lexicon_path() -> Path:
 
 def word_key(text: str) -> str:
     """Normalisierter Lemma-Schlüssel: ohne Klammern, Alternativen,
-    Artikel, Akzente und Groß-/Kleinschreibung."""
-    text = re.sub(r"\([^)]*\)", " ", text or "")
+    Artikel, Akzente und Groß-/Kleinschreibung.
+
+    Eckige Pflichtwahl-Gruppen ([ο/η] γιατρός) werden auf ihre erste
+    Variante reduziert, BEVOR am "/" getrennt wird — sonst entstünde
+    für alle solchen Karten derselbe degenerierte Schlüssel "[ο"."""
+    text = re.sub(r"\[([^\]/]*)/[^\]]*\]", r"\1", text or "")
+    text = re.sub(r"\([^)]*\)", " ", text)
     text = text.split("/")[0]
     text = re.sub(r"\s+", " ", text).strip()
     _art, word = _split_leading_article(text)
