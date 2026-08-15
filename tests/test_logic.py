@@ -406,19 +406,35 @@ def test_case_check_does_not_double_punish_accents():
     assert s.check_typed("η Αθηνα") == Result.ALMOST
 
 
-# --- Box-Reset-Policy (App-Einstellung) ---
+# --- Box-Policy bei strengen Akzent-/Schreibungsfehlern (App-Einstellung) ---
+
+
+def _strict_session(card, recorded=None, restored=None, penalized=None,
+                    progress=None, **kwargs):
+    """Session im Tippmodus DE->GR mit strengen Prüfungen und Fehlerrunde;
+    alle drei Box-Callbacks werden aufgezeichnet."""
+    return TrainingSession(
+        [card],
+        TrainingSettings(mode="typing", direction="de_gr", word_count=1,
+                         accent_tolerant=False, case_tolerant=False,
+                         repeat_errors=True),
+        progress=progress,
+        on_result=lambda c, ok: (recorded is not None
+                                 and recorded.append(ok)),
+        on_repeat_correct=lambda c, box: (restored is not None
+                                          and restored.append((c.id, box))),
+        on_repeat_penalty=lambda c, box: (penalized is not None
+                                          and penalized.append((c.id, box))),
+        **kwargs)
 
 
 def test_accent_strict_resets_box_when_enabled():
     recorded = []
-    s = TrainingSession(
-        [greek_card()],
-        TrainingSettings(mode="typing", direction="de_gr", word_count=1,
-                         accent_tolerant=False),
-        accent_resets_box=True,
-        on_result=lambda c, ok: recorded.append(ok))
+    s = _strict_session(greek_card(), recorded=recorded,
+                        accent_box_policy="reset")
     assert s.check_typed("καλημερα") == Result.ALMOST
-    # Policy an: strenger Akzentfehler setzt die Box zurück -> on_result(False)
+    # Policy "reset": strenger Akzentfehler setzt die Box zurück
+    # -> on_result(False)
     assert recorded == [False]
     # zählt weiterhin als Rundenfehler
     assert s.in_repeat_round and s.stats()["wrong"] == 1
@@ -426,12 +442,8 @@ def test_accent_strict_resets_box_when_enabled():
 
 def test_case_strict_resets_box_when_enabled():
     recorded = []
-    s = TrainingSession(
-        [noun_card()],
-        TrainingSettings(mode="typing", direction="de_gr", word_count=1,
-                         case_tolerant=False),
-        case_resets_box=True,
-        on_result=lambda c, ok: recorded.append(ok))
+    s = _strict_session(noun_card(), recorded=recorded,
+                        case_box_policy="reset")
     assert s.check_typed("η αθήνα") == Result.CASE
     assert recorded == [False]  # Box zurück
 
@@ -448,6 +460,128 @@ def test_strict_errors_box_neutral_by_default():
         on_result=lambda c, ok: recorded.append(ok))
     assert s.check_typed("καλημερα") == Result.ALMOST
     assert recorded == []  # Default: Box unverändert (kein on_result)
+
+
+def test_strict_error_keep_in_repeat_round_touches_nothing():
+    # Default "keep": strenger Fehler in der Fehlerrunde lässt die Box
+    # unverändert — kein on_result, keine Verschiebung, keine Absenkung
+    card = greek_card()
+    recorded, restored, penalized = [], [], []
+    s = _strict_session(card, recorded, restored, penalized,
+                        progress=_trained_progress([card]))
+    assert s.check_typed("καλημερα") == Result.ALMOST  # Erstrunde: neutral
+    assert s.in_repeat_round
+    assert s.check_typed("καλημερα") == Result.ALMOST  # Fehlerrunde
+    assert (recorded, restored, penalized) == ([], [], [])
+
+
+def test_strict_error_reset_in_repeat_round_lowers_box():
+    # Erstrunden-Fehler war box-neutral (CASE, Policy "keep"), der
+    # Fehlerrunden-Fehler ist ein strenger Akzentfehler mit "reset"
+    # -> Box 1 über on_repeat_penalty
+    card = noun_card()
+    recorded, penalized = [], []
+    s = _strict_session(card, recorded=recorded, penalized=penalized,
+                        progress=_trained_progress([card]),
+                        accent_box_policy="reset")
+    assert s.check_typed("η αθήνα") == Result.CASE  # neutral, in Fehlerrunde
+    assert s.in_repeat_round and recorded == []
+    assert s.check_typed("η Αθηνα") == Result.ALMOST  # Akzent falsch
+    assert penalized == [(card.id, 1)]
+
+
+def test_strict_error_reset_no_penalty_after_real_error():
+    # Nach echtem Erstrunden-Fehler steht die Karte schon auf Box 1 —
+    # der Guard verhindert, dass set_box sie wieder anheben würde
+    card = greek_card()
+    recorded, penalized = [], []
+    s = _strict_session(card, recorded=recorded, penalized=penalized,
+                        progress=_trained_progress([card]),
+                        accent_box_policy="reset")
+    assert s.check_typed("falsch") == Result.WRONG
+    assert recorded == [False] and s.in_repeat_round
+    assert s.check_typed("καλημερα") == Result.ALMOST
+    assert penalized == []
+
+
+def test_strict_error_repeat_step_back_in_repeat_round():
+    card = greek_card()
+    recorded, penalized = [], []
+    s = _strict_session(card, recorded=recorded, penalized=penalized,
+                        progress=_trained_progress([card], box=4),
+                        accent_box_policy="repeat_step_back")
+    assert s.check_typed("καλημερα") == Result.ALMOST  # Erstrunde: neutral
+    assert recorded == [] and s.in_repeat_round
+    assert s.check_typed("καλημερα") == Result.ALMOST  # Fehlerrunde
+    assert penalized == [(card.id, 3)]  # eine Box unter Box 4
+
+
+def test_strict_error_repeat_step_back_floors_at_box1():
+    card = greek_card()
+    penalized = []
+    s = _strict_session(card, penalized=penalized,
+                        progress=_trained_progress([card], box=1),
+                        accent_box_policy="repeat_step_back")
+    s.check_typed("καλημερα")
+    assert s.in_repeat_round
+    s.check_typed("καλημερα")
+    assert penalized == [(card.id, 1)]  # Untergrenze Box 1
+
+
+def test_strict_error_repeat_correct_in_repeat_round():
+    # "repeat_correct": strenger Fehler in der Fehlerrunde wird wie eine
+    # richtige Antwort behandelt — Zielbox laut Fehlerrunden-Regel
+    # (Standard step_down: eine unter der ursprünglichen Box)
+    card = greek_card()
+    restored, penalized = [], []
+    s = _strict_session(card, restored=restored, penalized=penalized,
+                        progress=_trained_progress([card], box=4),
+                        accent_box_policy="repeat_correct")
+    assert s.check_typed("falsch") == Result.WRONG  # echter Fehler -> Box 1
+    assert s.in_repeat_round
+    assert s.check_typed("καλημερα") == Result.ALMOST
+    assert restored == [(card.id, 3)] and penalized == []
+
+
+def test_strict_error_repeat_correct_policy_none_does_nothing():
+    card = greek_card()
+    restored = []
+    s = _strict_session(card, restored=restored,
+                        progress=_trained_progress([card], box=4),
+                        accent_box_policy="repeat_correct",
+                        repeat_box_policy="none")
+    s.check_typed("falsch")
+    assert s.in_repeat_round
+    s.check_typed("καλημερα")
+    assert restored == []
+
+
+def test_strict_policy_ignored_for_new_cards():
+    # Neue Karte ohne Lernstand: Policy greift nicht, der strenge Fehler
+    # wird normal als falsch verbucht (Box 1)
+    recorded, penalized = [], []
+    s = _strict_session(greek_card(), recorded=recorded, penalized=penalized,
+                        accent_box_policy="repeat_step_back")
+    assert s.check_typed("καλημερα") == Result.ALMOST
+    assert recorded == [False]
+    assert s.in_repeat_round
+    s.check_typed("καλημερα")
+    assert penalized == []  # auch in der Fehlerrunde keine Policy-Wirkung
+
+
+def test_tolerance_takes_precedence_over_policy():
+    # Akzent-Toleranz an: ALMOST zählt als richtig, die Policy greift nie
+    card = greek_card()
+    recorded = []
+    s = TrainingSession(
+        [card],
+        TrainingSettings(mode="typing", direction="de_gr", word_count=1,
+                         accent_tolerant=True),
+        progress=_trained_progress([card]),
+        accent_box_policy="reset",
+        on_result=lambda c, ok: recorded.append(ok))
+    assert s.check_typed("καλημερα") == Result.ALMOST
+    assert recorded == [True]
 
 
 # --- [a/b]-Gruppen und optionale deutsche Klammern ---

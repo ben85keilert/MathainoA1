@@ -517,16 +517,61 @@ def test_declension_case_error_new_card_starts_box1():
     assert recorded == [False]
 
 
-def test_declension_accent_resets_box_policy():
+def test_declension_case_reset_box_policy():
     cards = [noun("η Αθήνα", "η", "-", back="Athen")]
     settings = DeclensionSettings(cases=["acc"], numbers=["sg"], direction="de",
                                   case_tolerant=False, word_count=5)
     recorded = []
     session = DeclensionSession(
-        generate_tasks(cards, settings), settings, case_resets_box=True,
+        generate_tasks(cards, settings), settings, case_box_policy="reset",
         on_result=lambda card, ok: recorded.append(ok))
     session.check_typed(session.current.expected.lower())  # CASE
-    assert recorded == [False]  # Policy an -> Box zurück
+    assert recorded == [False]  # Policy "reset" -> Box zurück
+
+
+def _repeat_round_case_session(policy, box=4, **extra):
+    """Session mit einer gelernten Eigennamen-Karte und Fehlerrunde; die
+    Erstrunde endet mit einem box-neutralen CASE-Fehler."""
+    from mathainoa1.storage.progress import CardProgress
+
+    cards = [noun("η Αθήνα", "η", "-", back="Athen")]
+    settings = DeclensionSettings(cases=["acc"], numbers=["sg"],
+                                  direction="de", case_tolerant=False,
+                                  repeat_errors=True, word_count=1)
+    tasks = generate_tasks(cards, settings)
+    card_id = tasks[0].card.id
+    session = DeclensionSession(
+        tasks, settings, case_box_policy=policy,
+        progress={card_id: CardProgress(card_id, box=box, correct=box)},
+        **extra)
+    return session, card_id
+
+
+def test_declension_case_repeat_step_back_in_repeat_round():
+    penalized = []
+    session, card_id = _repeat_round_case_session(
+        "repeat_step_back",
+        on_repeat_penalty=lambda card, b: penalized.append((card.id, b)))
+    session.check_typed(session.current.expected.lower())  # CASE, neutral
+    assert session.in_repeat_round and penalized == []
+    session.check_typed(session.current.expected.lower())  # Fehlerrunde
+    assert penalized == [(card_id, 3)]  # eine Box unter Box 4
+
+
+def test_declension_case_repeat_correct_in_repeat_round():
+    # "repeat_correct": Zielbox laut Fehlerrunden-Regel; ohne gemerkte
+    # Erstrunden-Box (der CASE-Fehler war neutral) gilt Box 1 als
+    # Ursprung -> step_down = Box 2 (restore_box hebt nie ab, also
+    # faktisch folgenlos — wie eine richtige Antwort auch)
+    restored, penalized = [], []
+    session, card_id = _repeat_round_case_session(
+        "repeat_correct",
+        on_repeat_correct=lambda card, b: restored.append((card.id, b)),
+        on_repeat_penalty=lambda card, b: penalized.append((card.id, b)))
+    session.check_typed(session.current.expected.lower())
+    assert session.in_repeat_round
+    session.check_typed(session.current.expected.lower())
+    assert restored == [(card_id, 2)] and penalized == []
 
 
 # --- Nominativ-Training (nur Plural = Pluraltraining) ---
@@ -939,7 +984,10 @@ def test_session_selects_by_progress():
 
     from mathainoa1.logic.declension import DeclensionSession
 
-    now = datetime(2026, 8, 6, 12, 0)
+    # Die Session ruft select_tasks ohne now-Parameter auf (echte Zeit) —
+    # der Lernstand muss daher relativ zu jetzt gebaut werden, sonst
+    # kippt der Test, sobald das feste Datum in der Vergangenheit liegt
+    now = datetime.now()
     settings = DeclensionSettings(cases=["acc"], numbers=["sg"], word_count=2)
     tasks = decl.generate_tasks(_noun_cards(), settings)
     session = DeclensionSession(tasks, settings, progress=_progress_map(now))

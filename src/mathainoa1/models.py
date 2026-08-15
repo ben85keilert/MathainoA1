@@ -179,16 +179,19 @@ class SelectionList:
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     card_ids: list[str] = field(default_factory=list)
     kind: str = "words"
+    book: str | None = None  # "A1"/"A2", None = immer sichtbar (Altbestand)
 
     def to_dict(self) -> dict:
         return {"id": self.id, "name": self.name,
-                "card_ids": self.card_ids, "kind": self.kind}
+                "card_ids": self.card_ids, "kind": self.kind,
+                "book": self.book}
 
     @classmethod
     def from_dict(cls, d: dict) -> "SelectionList":
         return cls(name=d["name"], id=d.get("id", uuid.uuid4().hex[:12]),
                    card_ids=list(d.get("card_ids", [])),
-                   kind=d.get("kind", "words"))
+                   kind=d.get("kind", "words"),
+                   book=d.get("book"))
 
 
 @dataclass

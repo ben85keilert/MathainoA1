@@ -340,6 +340,24 @@ def test_settings_view_builds_and_applies_theme(tmp_path, monkeypatch):
     assert nav.page.theme is not None
 
 
+def test_settings_view_strict_error_policies(tmp_path, monkeypatch):
+    """Die Abfrage-Sektion zeigt je Fehlerart (Akzent/Schreibung) die
+    4-Punkte-Auswahl fürs Box-Verhalten."""
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.ui.views import settings as settings_mod
+
+    nav = _fake_nav()
+    found: list[str] = []
+    _collect_texts_and_tooltips(settings_mod.settings_view(nav), found)
+    assert "Akzentfehler" in found
+    assert "Schreibungsfehler (Groß-/Klein, nur Nomen)" in found
+    # je Fehlerart eine eigene Radio-Gruppe mit denselben vier Optionen
+    reset_label = ("Setzt die Box zurück (Box 1) — gilt auch in der "
+                   "Fehlerrunde")
+    assert found.count(reset_label) == 2
+    assert found.count("In der Fehlerrunde eine Box zurück") == 2
+
+
 # --- Erweiterte Funktionen (Feature-Framework) und Textanalyse --------------
 
 def _collect_texts_and_tooltips(ctrl, out):
@@ -1233,15 +1251,17 @@ def test_leitner_wiring_respects_stats_switch(tmp_path, monkeypatch):
     settings = DeclensionSettings(direction="de")
     progress = ProgressStore(tmp_path / "w.db")
     try:
-        on_result, on_repeat = grammar._leitner_wiring(
+        on_result, on_repeat, on_penalty = grammar._leitner_wiring(
             progress, settings, lambda: "typing", stats_on=True)
-        assert on_result is not None and on_repeat is not None
+        assert (on_result is not None and on_repeat is not None
+                and on_penalty is not None)
         assert grammar._leitner_wiring(
-            progress, settings, lambda: "typing", stats_on=False) == (None, None)
+            progress, settings, lambda: "typing",
+            stats_on=False) == (None, None, None)
         # Vorgabe Griechisch zählt weiterhin gar nicht
         assert grammar._leitner_wiring(
             DeclensionSettings(direction="gr"), DeclensionSettings(direction="gr"),
-            lambda: "typing") == (None, None)
+            lambda: "typing") == (None, None, None)
     finally:
         progress.close()
 

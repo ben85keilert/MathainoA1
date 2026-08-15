@@ -46,6 +46,22 @@ def test_restore_box_after_repeat_round(tmp_path):
     assert s.restore_box("unbekannt", 3, NOW) is None
 
 
+def test_set_box_can_lower(tmp_path):
+    # set_box (Fehlerrunden-Policies "reset"/"repeat_step_back") darf die
+    # Box anders als restore_box auch senken; Zähler bleiben unangetastet
+    s = store(tmp_path)
+    for _ in range(3):
+        s.record("c1", True, NOW)   # Box 4
+    p = s.set_box("c1", 2, NOW)
+    assert p.box == 2
+    assert p.due == NOW + timedelta(days=BOX_INTERVALS[2])
+    assert (p.correct, p.wrong, p.streak) == (3, 0, 3)
+    # geklemmt auf Box 1..MAX_BOX, unbekannte Karte -> None
+    assert s.set_box("c1", 0, NOW).box == 1
+    assert s.set_box("c1", 99, NOW).box == 5
+    assert s.set_box("unbekannt", 1, NOW) is None
+
+
 def test_box5_clears_wrong_counter(tmp_path):
     # Box 5 erreicht = gelernt: der Fehlerzähler wird gelöscht, das Wort
     # verschwindet aus den Problemwörtern

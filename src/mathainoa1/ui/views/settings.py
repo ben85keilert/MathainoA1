@@ -13,6 +13,7 @@ import flet as ft
 from mathainoa1.storage import backup
 from mathainoa1.storage.content import LEVELS
 from mathainoa1.storage.settings import (
+    STRICT_BOX_POLICIES,
     TTS_GOOGLE,
     TTS_SYSTEM,
     AppSettings,
@@ -219,22 +220,35 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     menu_list.on_reorder = on_menu_reorder
     rebuild_menu_rows()
 
-    # --- Abfrage: Box-Reset bei strengen Fehlern ---
+    # --- Abfrage: Box-Verhalten bei strengen Akzent-/Schreibungsfehlern ---
     # Lange Schalter-/Radio-Labels laufen über _switch_row bzw.
     # _wrapping_radio_group, damit sie auf schmalen Displays umbrechen
-    sw_accent = ft.Switch(value=s.accent_resets_box)
-    sw_case = ft.Switch(value=s.case_resets_box)
+    _strict_options = [
+        ("reset", "Setzt die Box zurück (Box 1) — gilt auch in der "
+                  "Fehlerrunde"),
+        ("keep", "Box bleibt unverändert (Standard)"),
+        ("repeat_correct", "In der Fehlerrunde wie richtig — "
+                           "Box-Verschiebung nach der Fehlerrunden-Regel "
+                           "(siehe unten)"),
+        ("repeat_step_back", "In der Fehlerrunde eine Box zurück"),
+    ]
 
-    def on_accent(e):
-        s.accent_resets_box = sw_accent.value
+    def save_accent_policy(v):
+        s.accent_box_policy = v or "keep"
         save_app_settings(s)
 
-    def on_case(e):
-        s.case_resets_box = sw_case.value
+    def save_case_policy(v):
+        s.case_box_policy = v or "keep"
         save_app_settings(s)
 
-    sw_accent.on_change = on_accent
-    sw_case.on_change = on_case
+    rg_accent_policy = _wrapping_radio_group(
+        value=(s.accent_box_policy
+               if s.accent_box_policy in STRICT_BOX_POLICIES else "keep"),
+        options=_strict_options, on_select=save_accent_policy, page=page)
+    rg_case_policy = _wrapping_radio_group(
+        value=(s.case_box_policy
+               if s.case_box_policy in STRICT_BOX_POLICIES else "keep"),
+        options=_strict_options, on_select=save_case_policy, page=page)
 
     # --- Abfrage: Beschränkungen durch die Abfragemodi ---
     sw_high = ft.Switch(value=s.high_boxes_need_production)
@@ -540,9 +554,12 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     return ft.Column(
         [
             _h("Stufe"),
-            ft.Text("Filtert, welche Vokabellisten in Training, Verwaltung "
-                    "und Statistik erscheinen. A2 zeigt auch A1-Listen. "
-                    "Eigene Listen ohne Stufe sind immer sichtbar.",
+            ft.Text("Filtert, welche Listen in Training, Verwaltung, Suche "
+                    "und Statistik erscheinen. Die Stufen sind strikt "
+                    "getrennt — jede zeigt nur ihre eigenen Listen; zum "
+                    "Üben von A1-Listen hierher zurückschalten. Listen und "
+                    "Auswahllisten ohne Stufe sind immer sichtbar; neue "
+                    "erhalten die gerade aktive Stufe.",
                     size=sz(13), italic=True),
             seg_level,
             ft.Divider(),
@@ -564,16 +581,19 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
                          height=min(480, sz(60) * max(1, len(menu_keys)))),
             ft.Divider(),
             _h("Abfrage"),
+            ft.Text("Akzent- und Schreibungsfehler (sonst richtige Antwort)",
+                    size=sz(13)),
             ft.Text("Greift nur, wenn beim Training „Akzentfehler tolerieren“ "
-                    "bzw. „Groß-/Kleinschreibung tolerieren“ ausgeschaltet ist. "
-                    "Aus = die Box bleibt bei so einem Fehler unverändert.",
+                    "bzw. „Groß-/Kleinschreibung tolerieren“ ausgeschaltet "
+                    "ist. So ein Fehler zählt immer als Fehler der Runde und "
+                    "kommt in die Fehlerrunde — hier steht, was dabei mit "
+                    "der Leitner-Box passiert. Neue (graue) Wörter starten "
+                    "bei so einem Fehler immer normal in Box 1.",
                     size=sz(13), italic=True),
-            _switch_row(sw_accent,
-                        "Akzentfehler setzt die Box zurück (auf Box 1)",
-                        page),
-            _switch_row(sw_case,
-                        "Groß-/Kleinfehler setzt die Box zurück (auf Box 1)",
-                        page),
+            ft.Text("Akzentfehler", size=sz(13)),
+            rg_accent_policy,
+            ft.Text("Schreibungsfehler (Groß-/Klein, nur Nomen)", size=sz(13)),
+            rg_case_policy,
             ft.Divider(),
             ft.Text("Beschränkung durch die Abfragemodi", size=sz(13)),
             ft.Text("Steuert, wie hoch eine Karte je nach Abfrageart steigen "

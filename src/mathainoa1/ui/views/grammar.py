@@ -67,8 +67,9 @@ from mathainoa1.ui.word_details import (
 
 
 def _make_session(tasks, settings, on_result=None, progress=None,
-                  on_repeat_correct=None, must_include=None) -> DeclensionSession:
-    """DeclensionSession mit den App-Policies: Box-Reset bei strengen
+                  on_repeat_correct=None, on_repeat_penalty=None,
+                  must_include=None) -> DeclensionSession:
+    """DeclensionSession mit den App-Policies: Box-Verhalten bei strengen
     Fehlern und Fehlerrunden-Wiederherstellung (wie Vokabeltraining).
 
     Die Aufgaben werden in der Session nach Lernstand ausgewählt (siehe
@@ -77,27 +78,29 @@ def _make_session(tasks, settings, on_result=None, progress=None,
     app = load_app_settings()
     all_progress = progress.all() if progress else None
     return DeclensionSession(tasks, settings, on_result=on_result,
-                             accent_resets_box=app.accent_resets_box,
-                             case_resets_box=app.case_resets_box,
+                             accent_box_policy=app.accent_box_policy,
+                             case_box_policy=app.case_box_policy,
                              progress=all_progress,
                              repeat_box_policy=app.repeat_round_box_policy,
                              on_repeat_correct=on_repeat_correct,
+                             on_repeat_penalty=on_repeat_penalty,
                              must_include=must_include)
 
 
 def _leitner_wiring(progress, settings, mode_of, stats_on: bool = True):
     """Volle Leitner-Aufzeichnung fürs Beugungstraining — nur bei Vorgabe
     „Deutsch“ (aktives Erinnern des griechischen Worts): richtig = eine
-    Box rauf (gedeckelt), falsch = zurück in Box 1; dazu die
-    Fehlerrunden-Wiederherstellung. Bei Vorgabe „Griechisch“ (None, None).
+    Box rauf (gedeckelt), falsch = zurück in Box 1; dazu
+    Fehlerrunden-Wiederherstellung und -Absenkung. Bei Vorgabe
+    „Griechisch“ (None, None, None).
 
     stats_on: Statistik dieses Trainings laut Einstellungen — aus
-    bedeutet ebenfalls (None, None), die Runde bewegt dann nichts.
+    bedeutet ebenfalls (None, None, None), die Runde bewegt dann nichts.
 
     mode_of() liefert den aktuellen Abfragemodus („typing“/„flashcard“) —
     als Callable, weil er im Lauf umschaltbar ist."""
     if settings.direction != "de" or not stats_on:
-        return None, None
+        return None, None, None
     app = load_app_settings()
 
     def cap() -> int:
@@ -110,7 +113,8 @@ def _leitner_wiring(progress, settings, mode_of, stats_on: bool = True):
 
     on_result = lambda card, ok: progress.record(card.id, ok, max_box=cap())
     on_repeat_correct = lambda card, box: progress.restore_box(card.id, box)
-    return on_result, on_repeat_correct
+    on_repeat_penalty = lambda card, box: progress.set_box(card.id, box)
+    return on_result, on_repeat_correct, on_repeat_penalty
 
 
 def _verb_sample(verb: conj.Verb) -> str:
@@ -232,13 +236,14 @@ def _grouped_word_rows(nav, store: ContentStore, source_id: str,
 def setup_view(nav, store: ContentStore, progress: ProgressStore,
                preselect_id: str | None = None) -> ft.Control:
     s = load_declension_settings()
+    level = load_app_settings().level
     lists = filter_level(
         sorted(store.lists.values(),
                key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
-        load_app_settings().level)
-    selections = store.selections_of()
+        level)
+    selections = store.visible_selections(level)
     if not lists:
-        return ft.Text("Keine Vokabellisten gefunden.")
+        return ft.Text("Keine Vokabellisten auf der aktiven Stufe — erst eine Liste anlegen oder die Stufe wechseln (Einstellungen).")
     valid_ids = {l.id for l in lists} | {x.id for x in selections}
     if preselect_id and preselect_id in valid_ids:
         s.list_id = preselect_id
@@ -428,12 +433,13 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
         save_declension_settings(settings)
         # Bei deutscher Vorgabe volle Leitner-Wertung: richtig = Box rauf
         # (gedeckelt), falsch = Box 1, Fehlerrunde stellt gemäß Policy her
-        on_result, on_repeat = _leitner_wiring(
+        on_result, on_repeat, on_penalty = _leitner_wiring(
             progress, settings, lambda: settings.mode,
             stats_on=load_app_settings().stats_nouns)
         session = _make_session(tasks, settings, on_result=on_result,
                                 progress=progress,
-                                on_repeat_correct=on_repeat)
+                                on_repeat_correct=on_repeat,
+                                on_repeat_penalty=on_penalty)
         nav.go("Nomentraining", run_view(
             nav, store, session, title="Nomentraining",
             make_tasks=make_tasks, progress=progress))
@@ -511,9 +517,9 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
         sorted(store.lists.values(),
                key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
         app_settings.level)
-    selections = store.selections_of("adjektive")
+    selections = store.visible_selections(app_settings.level, "adjektive")
     if not lists and not selections:
-        return ft.Text("Keine Vokabellisten gefunden.")
+        return ft.Text("Keine Vokabellisten auf der aktiven Stufe — erst eine Liste anlegen oder die Stufe wechseln (Einstellungen).")
     valid_ids = {l.id for l in lists} | {x.id for x in selections}
     if preselect_id and preselect_id in valid_ids:
         s.list_id = preselect_id
@@ -646,7 +652,8 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
         # kind="adjektive": die Liste erscheint nur im Adjektivtraining
         nav.go("Neue Adjektiv-Auswahlliste",
                selection_editor(nav, store,
-                                SelectionList(name="", kind="adjektive"),
+                                SelectionList(name="", kind="adjektive",
+                                              book=load_app_settings().level),
                                 on_saved, progress))
 
     def open_combos(e):
@@ -668,11 +675,13 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
 
     def noun_pool(list_id) -> tuple[list, bool]:
         """Blacklisting-Nomenquelle: Nomen der gewählten Liste — hat sie
-        keine (reine Adjektivliste), alle Nomen der App (True = Fallback)."""
+        keine (reine Adjektivliste), alle Nomen der aktiven Stufe
+        (True = Fallback)."""
         nouns = decl.declinable_nouns(store.cards_for(list_id))
         if nouns:
             return nouns, False
-        return decl.declinable_nouns(store.all_cards()), True
+        return decl.declinable_nouns(
+            store.visible_cards(load_app_settings().level)), True
 
     def build_tasks(st: DeclensionSettings, items, pairs, blocked,
                     notify: bool = False, apply_boxes: bool = True):
@@ -681,13 +690,16 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
             if fallback and notify and nouns:
                 nav.page.show_dialog(ft.SnackBar(ft.Text(
                     "Die Liste enthält keine Nomen — kombiniert wird mit "
-                    "allen Nomen der App."),
+                    "allen Nomen der aktiven Stufe."),
                     duration=ft.Duration(milliseconds=1500)))
             tasks = decl.generate_adjective_tasks(
                 items, nouns, blocked, st, mode="blacklist")
         else:
             tasks = decl.generate_adjective_tasks(
-                items, decl.declinable_nouns(store.all_cards()), pairs, st)
+                items,
+                decl.declinable_nouns(
+                    store.visible_cards(load_app_settings().level)),
+                pairs, st)
         # Box-Filter: es zählt die schwächere der beiden Karten (Nomen
         # und Adjektiv wandern gemeinsam)
         if not apply_boxes:
@@ -733,12 +745,13 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
         save_adjective_settings(settings)
         # Adjektivaufgaben werten Nomen- UND Adjektivkarte gemeinsam
         # (task.scored_cards in der Session)
-        on_result, on_repeat = _leitner_wiring(
+        on_result, on_repeat, on_penalty = _leitner_wiring(
             progress, settings, lambda: settings.mode,
             stats_on=load_app_settings().stats_adjectives)
         session = _make_session(tasks, settings, on_result=on_result,
                                 progress=progress,
-                                on_repeat_correct=on_repeat)
+                                on_repeat_correct=on_repeat,
+                                on_repeat_penalty=on_penalty)
         nav.go("Adjektivtraining", run_view(
             nav, store, session, title="Adjektivtraining",
             make_tasks=make_tasks, progress=progress))
@@ -825,8 +838,12 @@ def combos_view(nav, store: ContentStore, source_id: str | None = None,
     blacklist = mode == "blacklist"
     pairs, blocked = load_combos()
     active_dict = blocked if blacklist else pairs
+    # all_cards bewusst stufenübergreifend: es dient dem Aufräumen toter
+    # Verbindungen — mit Stufenfilter gingen beim Stufenwechsel die
+    # Verbindungen der anderen Stufe verloren
     all_cards = store.all_cards()
-    adj_cards = (store.cards_for(source_id) if source_id else all_cards)
+    adj_cards = (store.cards_for(source_id) if source_id
+                 else store.visible_cards(load_app_settings().level))
     by_key: dict[str, tuple] = {}
     for c, a in decl.usable_adjective_cards(adj_cards):
         by_key.setdefault(combo_key(a.word), (c, a))
@@ -848,11 +865,12 @@ def combos_view(nav, store: ContentStore, source_id: str | None = None,
             key=k, text=f"{a.word} — {a.meaning}" if a.meaning else a.word)
             for k, (_c, a) in adj_sorted],
     )
+    level = load_app_settings().level
     lists = filter_level(
         sorted(store.lists.values(),
                key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
-        load_app_settings().level)
-    selections = store.selections_of()
+        level)
+    selections = store.visible_selections(level)
     noun_list_ids = {l.id for l in lists} | {x.id for x in selections}
     dd_list = ft.Dropdown(
         label="Nomen aus Liste",
@@ -987,13 +1005,14 @@ def combos_view(nav, store: ContentStore, source_id: str | None = None,
 def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                            preselect_id: str | None = None) -> ft.Control:
     s = load_conjugation_settings()
+    level = load_app_settings().level
     lists = filter_level(
         sorted(store.lists.values(),
                key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
-        load_app_settings().level)
-    selections = store.selections_of()
+        level)
+    selections = store.visible_selections(level)
     if not lists:
-        return ft.Text("Keine Vokabellisten gefunden.")
+        return ft.Text("Keine Vokabellisten auf der aktiven Stufe — erst eine Liste anlegen oder die Stufe wechseln (Einstellungen).")
     valid_ids = {l.id for l in lists} | {x.id for x in selections}
     if preselect_id and preselect_id in valid_ids:
         s.list_id = preselect_id
@@ -1198,12 +1217,13 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             nav.page.update()
             return
         save_conjugation_settings(settings)
-        on_result, on_repeat = _leitner_wiring(
+        on_result, on_repeat, on_penalty = _leitner_wiring(
             progress, settings, lambda: settings.mode,
             stats_on=load_app_settings().stats_verbs)
         session = _make_session(tasks, settings, on_result=on_result,
                                 progress=progress,
-                                on_repeat_correct=on_repeat)
+                                on_repeat_correct=on_repeat,
+                                on_repeat_penalty=on_penalty)
         nav.go("Verbtraining", run_view(
             nav, store, session, title="Verbtraining",
             make_tasks=make_tasks, progress=progress))
@@ -1653,6 +1673,7 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
                                  on_result=session.on_result,
                                  progress=progress,
                                  on_repeat_correct=session.on_repeat_correct,
+                                 on_repeat_penalty=session.on_repeat_penalty,
                                  must_include=wrong)
         nav.go(title, run_view(nav, store, session2, title, make_tasks,
                                progress=progress))

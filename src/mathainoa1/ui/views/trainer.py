@@ -59,8 +59,8 @@ def make_session(store: ContentStore, progress: ProgressStore,
     cards = training_cards(store, progress, settings)
     app = load_app_settings()
     session = TrainingSession(cards, settings, progress=progress.all(),
-                              accent_resets_box=app.accent_resets_box,
-                              case_resets_box=app.case_resets_box,
+                              accent_box_policy=app.accent_box_policy,
+                              case_box_policy=app.case_box_policy,
                               repeat_box_policy=app.repeat_round_box_policy,
                               must_include=list(must_include or []))
     if not app.stats_vocab:
@@ -82,6 +82,10 @@ def make_session(store: ContentStore, progress: ProgressStore,
         card.id, ok, max_box=max_box_for(card))
     # Richtig in der Fehlerrunde: Zielbox laut Policy setzen
     session.on_repeat_correct = lambda card, box: progress.restore_box(
+        card.id, box)
+    # Strenger Akzent-/Schreibungsfehler in der Fehlerrunde: Box absenken
+    # (Policies "reset"/"repeat_step_back")
+    session.on_repeat_penalty = lambda card, box: progress.set_box(
         card.id, box)
     return session
 
@@ -188,13 +192,14 @@ def typing_controls(tf_answer: ft.TextField, check) -> list[ft.Control]:
 def setup_view(nav, store: ContentStore, progress: ProgressStore,
                preselect_id: str | None = None) -> ft.Control:
     s = load_default_settings()
+    level = load_app_settings().level
     lists = filter_level(
         sorted(store.lists.values(),
                key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
-        load_app_settings().level)
-    selections = store.selections_of()
+        level)
+    selections = store.visible_selections(level)
     if not lists:
-        return ft.Text("Keine Vokabellisten gefunden.")
+        return ft.Text("Keine Vokabellisten auf der aktiven Stufe — erst eine Liste anlegen oder die Stufe wechseln (Einstellungen).")
     valid_ids = {l.id for l in lists} | {x.id for x in selections}
     # frisch erstellte Auswahlliste direkt vorwählen
     if preselect_id and preselect_id in valid_ids:

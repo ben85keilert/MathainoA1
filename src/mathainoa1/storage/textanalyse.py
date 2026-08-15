@@ -574,6 +574,10 @@ class LexiconStore:
         Liste „Zusatzwörter – <title>", per Name gesucht — so bleiben
         die Zusatzwörter kapitelweise überschaubar. Ohne Titel: die
         bisherige globale Liste (Alt-Pakete), per gespeicherter id.
+
+        Die Suche läuft bewusst ohne Stufenfilter über alle Listen —
+        sonst entstünden beim Import auf der „falschen“ Stufe
+        Duplikat-Listen gleichen Namens.
         """
         if title:
             name = self.EXTRA_LIST_PREFIX + title

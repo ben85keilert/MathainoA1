@@ -16,6 +16,9 @@ from mathainoa1.logic.session import TrainingSettings
 TTS_SYSTEM = "system"  # Systemstimme des Geräts (flet-system-tts, offline)
 TTS_GOOGLE = "google"  # gTTS-MP3 von Google-Servern, lokal gecacht
 
+# Gültige Werte für accent_box_policy/case_box_policy (siehe AppSettings)
+STRICT_BOX_POLICIES = ("reset", "keep", "repeat_correct", "repeat_step_back")
+
 
 @dataclass
 class AppSettings:
@@ -24,10 +27,17 @@ class AppSettings:
 
     theme: str = "system"  # "light" | "dark" | "system"
     seed: str = "blue"  # Akzentfarbe, Schlüssel aus ui/views/settings.SEED_COLORS
-    # Strenger Fehler (Akzent/Groß-Klein, wenn Toleranz aus) setzt die Box
-    # auf 1 statt sie unverändert zu lassen
-    accent_resets_box: bool = False
-    case_resets_box: bool = False
+    # Was mit der Leitner-Box passiert, wenn eine sonst richtige Antwort
+    # nur an Akzent bzw. Groß-/Kleinschreibung scheitert (und die
+    # jeweilige Toleranz im Training aus ist). Werte:
+    # "reset"            = Box 1, auch in der Fehlerrunde
+    # "keep"             = Box unverändert (Standard)
+    # "repeat_correct"   = Erstrunde neutral; in der Fehlerrunde wie eine
+    #                      richtige Antwort (Fehlerrunden-Regel, s.u.)
+    # "repeat_step_back" = Erstrunde neutral; in der Fehlerrunde eine Box
+    #                      zurück (mindestens Box 1)
+    accent_box_policy: str = "keep"
+    case_box_policy: str = "keep"
     # Beschränkungen durch die Abfragemodi (Standard an):
     # Box 4+5 nur über D->G; Box 5 nur über getipptes D->G
     high_boxes_need_production: bool = True
@@ -46,8 +56,9 @@ class AppSettings:
     # Prüfen beim Schreiben: False = "Prüfen"-Button mittig unter dem
     # Antwortfeld (Standard), True = rundes Häkchen rechts daneben
     check_beside_field: bool = False
-    # Sichtbare Stufe: "A1" | "A2". A2 zeigt auch A1-Listen; Listen ohne
-    # Stufe (book=None, alle eigenen) sind immer sichtbar.
+    # Sichtbare Stufe: "A1" | "A2" — strikt getrennt (jede Stufe zeigt
+    # nur ihre eigenen Listen, siehe content.filter_level); Listen und
+    # Auswahllisten ohne Stufe (book=None) sind immer sichtbar.
     level: str = "A1"
     # Eingeschaltete erweiterte Funktionen (Schlüssel aus ui/features.FEATURES).
     # Unbekannte Schlüssel (z.B. entfernte Features) werden ignoriert.
@@ -96,6 +107,13 @@ class AppSettings:
             data["repeat_round_box_policy"] = {
                 "off": "none", "on": "original", "auto": "step_down",
             }.get(d["repeat_round_promotion"], "step_down")
+        # Migration der alten Bool-Schalter accent_resets_box/case_resets_box
+        for new, old in (("accent_box_policy", "accent_resets_box"),
+                         ("case_box_policy", "case_resets_box")):
+            if new not in data and old in d:
+                data[new] = "reset" if d[old] else "keep"
+            if new in data and data[new] not in STRICT_BOX_POLICIES:
+                del data[new]
         return cls(**data)
 
 

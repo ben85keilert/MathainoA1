@@ -23,22 +23,27 @@ from mathainoa1.models import (
 )
 
 
-# Stufen in aufsteigender Reihenfolge; die Stufen-Einstellung zeigt eine
-# Liste, wenn ihre Stufe <= der eingestellten ist (A2 sieht also auch A1).
+# Bekannte Stufen; die Stufen sind strikt getrennt (A1 zeigt nur A1,
+# A2 nur A2), Einträge ohne Stufe (book=None) sind immer sichtbar.
 LEVELS = ["A1", "A2"]
+# Sichtbare Buch-Stufen je eingestellter Stufe. Künftige Stufen tragen
+# hier mehrere Werte ein, z.B. "A2+": {"A2", "A2+"} (abwärtskompatibel
+# zu A2, weiter strikt gegenüber A1).
+LEVEL_VISIBILITY: dict[str, set[str]] = {"A1": {"A1"}, "A2": {"A2"}}
 
 
-def filter_level(lists, level: str) -> list[VocabList]:
-    """Filtert Listen nach der eingestellten Stufe.
+def filter_level(items, level: str) -> list:
+    """Strikter Stufenfilter für Vokabel- UND Auswahllisten (Duck-Typing
+    über .book).
 
-    Listen ohne Stufe (book=None, alle eigenen) sind immer sichtbar;
-    unbekannte Stufenwerte verhalten sich wie die höchste Stufe.
+    Einträge ohne Stufe (book=None, alter eigener Bestand) und mit
+    unbekanntem book-Wert sind immer sichtbar; eine unbekannte
+    Stufen-Einstellung zeigt alles.
     """
-    if level not in LEVELS:
-        return list(lists)
-    rank = LEVELS.index(level)
-    return [l for l in lists
-            if l.book not in LEVELS or LEVELS.index(l.book) <= rank]
+    visible = LEVEL_VISIBILITY.get(level)
+    if visible is None:
+        return list(items)
+    return [x for x in items if x.book not in LEVELS or x.book in visible]
 
 
 def load_list(path: Path) -> VocabList:
@@ -214,24 +219,29 @@ class ContentStore:
         return "?"
 
     def search_cards(
-        self, query: str
+        self, query: str, level: str | None = None
     ) -> list[tuple[VocabList, VocabCard, list[str]]]:
-        """Sucht ein Wort (Deutsch oder Griechisch) über alle Vokabellisten.
+        """Sucht ein Wort (Deutsch oder Griechisch) über die Vokabellisten.
 
         Case- und akzentunabhängig; Teilstring auf Vorder- oder Rückseite.
         Eine Zeile pro Karte — dasselbe Wort in zwei Listen ergibt zwei
         Treffer. Der dritte Wert nennt die Auswahllisten, in denen die Karte
-        referenziert ist (leer = kein Stern).
+        referenziert ist (leer = kein Stern). Mit level werden Listen und
+        Auswahllisten-Sterne strikt auf die Stufe gefiltert.
         """
         key = strip_accents(normalize(query))
         if not key:
             return []
+        source = (self.ordered_lists() if level is None
+                  else self.visible_lists(level))
+        sels = (list(self.selections.values()) if level is None
+                else filter_level(list(self.selections.values()), level))
         results: list[tuple[VocabList, VocabCard, list[str]]] = []
-        for vlist in self.ordered_lists():
+        for vlist in source:
             for card in vlist.cards:
                 if (key in strip_accents(normalize(card.front))
                         or key in strip_accents(normalize(card.back))):
-                    in_selections = [s.name for s in self.selections.values()
+                    in_selections = [s.name for s in sels
                                      if card.id in s.card_ids]
                     results.append((vlist, card, in_selections))
         return results
@@ -341,6 +351,21 @@ class ContentStore:
 
     def all_cards(self) -> list[VocabCard]:
         return [c for l in self.lists.values() for c in l.cards]
+
+    # --- Stufen-bewusste Sichten (strikte A1/A2-Trennung) ---
+
+    def visible_lists(self, level: str) -> list[VocabList]:
+        """ordered_lists() auf die eingestellte Stufe gefiltert."""
+        return filter_level(self.ordered_lists(), level)
+
+    def visible_cards(self, level: str) -> list[VocabCard]:
+        """Alle Karten der auf der Stufe sichtbaren Listen."""
+        return [c for l in self.visible_lists(level) for c in l.cards]
+
+    def visible_selections(self, level: str,
+                           kind: str = "words") -> list[SelectionList]:
+        """selections_of() auf die eingestellte Stufe gefiltert."""
+        return filter_level(self.selections_of(kind), level)
 
 
 # --- Import / Export ---

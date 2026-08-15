@@ -299,16 +299,116 @@ def test_search_empty_query(tmp_path):
     assert store.search_cards("   ") == []
 
 
+# --- Stufenfilter (strikte A1/A2-Trennung) ---
+
+
+def test_filter_level_strict():
+    a1 = VocabList(name="A1-Liste", book="A1")
+    a2 = VocabList(name="A2-Liste", book="A2")
+    none = VocabList(name="Eigene")
+    assert content.filter_level([a1, a2, none], "A1") == [a1, none]
+    assert content.filter_level([a1, a2, none], "A2") == [a2, none]
+
+
+def test_filter_level_unknown_values_visible():
+    # unbekannte Stufen-Einstellung zeigt alles; unbekannter book-Wert
+    # ist immer sichtbar
+    a1 = VocabList(name="A1-Liste", book="A1")
+    odd = VocabList(name="Kurios", book="B1")
+    assert content.filter_level([a1, odd], "Z9") == [a1, odd]
+    assert content.filter_level([a1, odd], "A2") == [odd]
+
+
+def test_filter_level_future_visibility_mapping(monkeypatch):
+    # Zukunftsvertrag: eine Stufe kann mehrere Buch-Stufen sehen
+    # (A2+ soll später A2 einschließen, A1 aber weiter ausblenden)
+    monkeypatch.setitem(content.LEVEL_VISIBILITY, "A2+", {"A2", "A2+"})
+    monkeypatch.setattr(content, "LEVELS", ["A1", "A2", "A2+"])
+    a1 = VocabList(name="A1-Liste", book="A1")
+    a2 = VocabList(name="A2-Liste", book="A2")
+    a2p = VocabList(name="A2+-Liste", book="A2+")
+    assert content.filter_level([a1, a2, a2p], "A2+") == [a2, a2p]
+
+
+def test_filter_level_selection_lists():
+    from mathainoa1.models import SelectionList
+    s1 = SelectionList(name="Alt")  # book=None: immer sichtbar
+    s2 = SelectionList(name="Neu", book="A2")
+    assert content.filter_level([s1, s2], "A1") == [s1]
+    assert content.filter_level([s1, s2], "A2") == [s1, s2]
+
+
+def test_selection_list_book_roundtrip():
+    from mathainoa1.models import SelectionList
+    sel = SelectionList(name="Auswahl", card_ids=["c1"], book="A2")
+    assert SelectionList.from_dict(sel.to_dict()) == sel
+    # Alt-Dateien ohne book laden als None (immer sichtbar)
+    old = SelectionList.from_dict({"name": "Alt", "card_ids": []})
+    assert old.book is None
+
+
+def _level_store(tmp_path):
+    from mathainoa1.models import SelectionList
+    store = content.ContentStore(tmp_path / "book", tmp_path / "user")
+    store.load_all()
+    l1 = VocabList(name="A1-Liste", book="A1", cards=[
+        VocabCard(front="ο δρόμος", back="Straße", article="ο",
+                  word_type="Nomen")])
+    l2 = VocabList(name="A2-Liste", book="A2", cards=[
+        VocabCard(front="το σπίτι", back="Haus", article="το",
+                  word_type="Nomen")])
+    store.save_user_list(l1)
+    store.save_user_list(l2)
+    store.save_selection(SelectionList(name="A2-Auswahl", book="A2",
+                                       card_ids=[l2.cards[0].id]))
+    return store, l1, l2
+
+
+def test_visible_lists_cards_selections(tmp_path):
+    store, l1, l2 = _level_store(tmp_path)
+    assert [l.id for l in store.visible_lists("A1")] == [l1.id]
+    assert [c.front for c in store.visible_cards("A2")] == ["το σπίτι"]
+    assert [s.name for s in store.visible_selections("A2")] == ["A2-Auswahl"]
+    assert store.visible_selections("A1") == []
+
+
+def test_search_cards_respects_level(tmp_path):
+    store, l1, l2 = _level_store(tmp_path)
+    # A1: die A2-Karte ist unsichtbar; ohne Level wie bisher alles
+    assert store.search_cards("Haus", level="A1") == []
+    assert store.search_cards("Haus", level="A2")
+    assert store.search_cards("Haus")
+    # Auswahllisten-Sterne folgen ebenfalls der Stufe
+    hits = store.search_cards("σπίτι", level="A2")
+    assert hits[0][2] == ["A2-Auswahl"]
+
+
 def test_app_settings_roundtrip():
     from mathainoa1.storage.settings import AppSettings
-    s = AppSettings(theme="dark", seed="green", accent_resets_box=True,
-                    case_resets_box=True, high_boxes_need_production=False,
+    s = AppSettings(theme="dark", seed="green", accent_box_policy="reset",
+                    case_box_policy="repeat_step_back",
+                    high_boxes_need_production=False,
                     top_box_needs_typing=False, autoplay_audio=True)
     assert AppSettings.from_dict(s.to_dict()) == s
     # unbekannte Keys werden ignoriert, Defaults greifen (Beschränkungen an)
     d = AppSettings.from_dict({"foo": 1})
     assert d.theme == "system"
     assert d.high_boxes_need_production and d.top_box_needs_typing
+
+
+def test_app_settings_migrates_strict_box_switches():
+    from mathainoa1.storage.settings import AppSettings
+    # alte Bool-Schalter werden auf die neuen Policies abgebildet
+    s = AppSettings.from_dict({"accent_resets_box": True,
+                               "case_resets_box": False})
+    assert s.accent_box_policy == "reset"
+    assert s.case_box_policy == "keep"
+    # ohne alte Schlüssel gilt der Default
+    d = AppSettings.from_dict({})
+    assert d.accent_box_policy == "keep" and d.case_box_policy == "keep"
+    # unbekannter Policy-Wert fällt auf den Default zurück
+    assert AppSettings.from_dict(
+        {"accent_box_policy": "bogus"}).accent_box_policy == "keep"
 
 
 def test_app_settings_adjective_mode_default():

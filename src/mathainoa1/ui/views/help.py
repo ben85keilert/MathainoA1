@@ -328,7 +328,9 @@ def help_view(nav, store=None) -> ft.Control:
             "ursprüngliche Box oder eine Box darunter — mindestens "
             "Box 2 (Standard). Dieselbe Regel gilt auch in den "
             "Fehlerrunden des Nomen-/Adjektiv-/Verbtrainings mit "
-            "Vorgabe Deutsch.",
+            "Vorgabe Deutsch. Für Akzent- und Schreibungsfehler in der "
+            "Fehlerrunde gilt die eigene Einstellung „Akzent- und "
+            "Schreibungsfehler“ (siehe unten).",
         ]),
         ft.Text("Akzent- und Groß-/Kleinschreibung tolerieren", size=sz(14),
                 weight=ft.FontWeight.BOLD),
@@ -338,10 +340,19 @@ def help_view(nav, store=None) -> ft.Control:
             "verziehen und die Antwort zählt als richtig.",
             "Ist der Schalter AUS, ist eine sonst richtige Antwort mit "
             "nur diesem Fehler ein „Fast“: Sie zählt als Fehler der Runde "
-            "und wird in dieser und der nächsten Runde wiederholt — die "
-            "Leitner-Box bleibt dabei aber unverändert (weder hoch noch "
-            "zurück). Ausnahme: Neue (graue) Wörter haben noch keine Box "
-            "zu schützen — sie starten bei so einem Fehler ganz normal "
+            "und wird in dieser und der nächsten Runde wiederholt.",
+            "Was dabei mit der Leitner-Box passiert, bestimmt die "
+            "Einstellung Zahnrad → Abfrage → „Akzent- und "
+            "Schreibungsfehler“ — getrennt für Akzent- und "
+            "Schreibungsfehler, mit vier Stufen: Box zurücksetzen "
+            "(Box 1, gilt auch in der Fehlerrunde), Box bleibt "
+            "unverändert (Standard — dann ändert auch ein solcher "
+            "Fehler in der Fehlerrunde nichts an der Box), in der "
+            "Fehlerrunde wie richtig (Verschiebung nach der "
+            "Fehlerrunden-Regel), oder in der Fehlerrunde eine Box "
+            "zurück (mindestens Box 1).",
+            "Ausnahme: Neue (graue) Wörter haben noch keine Box zu "
+            "schützen — sie starten bei so einem Fehler ganz normal "
             "in Box 1.",
             "Groß-/Kleinschreibung wird nur bei Nomen geprüft (z.B. „η "
             "Αθήνα“, deutsch „Straße“), nie bei Phrasen oder anderen "
@@ -377,7 +388,10 @@ def help_view(nav, store=None) -> ft.Control:
             "Die Fehlerrunde wiederholt falsche Karten sofort in der "
             "Reihenfolge der Fehler; in der nächsten Runde sind sie "
             "garantiert wieder dabei, gemischt zwischen den übrigen und "
-            "neuen Wörtern.",
+            "neuen Wörtern. Falsche Antworten in der Fehlerrunde bleiben "
+            "für die Box folgenlos — außer Akzent- und "
+            "Schreibungsfehler, für die die Einstellung „Akzent- und "
+            "Schreibungsfehler“ gilt (Kapitel „Wertung“).",
             "Die Ergebnisliste nach jeder Runde zeigt vor jedem Wort "
             "einen zweigeteilten Farbpunkt: die linke Hälfte ist die "
             "Box vor der Runde, die rechte die Box danach (grau = noch "
@@ -530,11 +544,18 @@ def help_view(nav, store=None) -> ft.Control:
                       ft.Icons.TUNE, [
         ft.Text("Stufe (A1/A2)", size=sz(14), weight=ft.FontWeight.BOLD),
         _bullets([
-            "In den Einstellungen umschaltbar: A1 zeigt nur A1-Listen, "
-            "A2 zeigt A1- und A2-Listen. Eigene Listen ohne Stufe sind "
-            "immer sichtbar.",
-            "Die Stufe einer eigenen Liste wird beim Anlegen oder über "
-            "„Umbenennen“ in der Vokabelverwaltung gesetzt.",
+            "In den Einstellungen umschaltbar; die Stufen sind strikt "
+            "getrennt: A1 zeigt nur A1-Listen, A2 nur A2-Listen. Zum "
+            "Üben alter A1-Listen auf A1 zurückschalten.",
+            "Listen und Auswahllisten ohne Stufe sind auf jeder Stufe "
+            "sichtbar. Neue eigene Listen und Auswahllisten erhalten "
+            "beim Anlegen automatisch die aktive Stufe.",
+            "Die Stufe lässt sich über „Umbenennen“ in der "
+            "Vokabelverwaltung ändern — bei Listen wie bei "
+            "Auswahllisten.",
+            "Der Filter wirkt auch in der Wortsuche, den Ziellisten beim "
+            "Verschieben/Kopieren und den Adjektiv-Kombinationen; die "
+            "Inhalte einer geöffneten Auswahlliste werden nie gefiltert.",
             "Der Lernfortschritt hängt an der Karte und gilt "
             "stufenübergreifend.",
         ]),

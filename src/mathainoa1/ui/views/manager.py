@@ -47,8 +47,9 @@ ARTICLES = ["", "ο", "η", "το", "οι", "τα"]
 
 
 def _level_dropdown(value: str | None) -> ft.Dropdown:
-    """Stufen-Auswahl für eigene Listen: leer = keine Stufe (immer
-    sichtbar), sonst A1/A2 (siehe content.filter_level)."""
+    """Stufen-Auswahl für eigene Listen und Auswahllisten: leer = keine
+    Stufe (auf jeder Stufe sichtbar), sonst A1/A2 — die Stufen sind
+    strikt getrennt (siehe content.filter_level)."""
     return ft.Dropdown(
         label="Stufe", value=value or "",
         options=[ft.DropdownOption(key="", text="Keine (immer sichtbar)")]
@@ -161,12 +162,16 @@ def rename_dialog(page: ft.Page, store: ContentStore, vlist: VocabList,
 
 def rename_selection_dialog(page: ft.Page, store: ContentStore,
                             sel: SelectionList, on_saved=None) -> None:
-    """Dialog zum Umbenennen einer Auswahlliste."""
+    """Dialog zum Umbenennen einer Auswahlliste — inkl. Stufe (wie
+    rename_dialog, damit sich eine falsch gestufte Auswahlliste
+    korrigieren lässt)."""
     tf = ft.TextField(label="Name", value=sel.name, autofocus=True)
+    dd_level = _level_dropdown(sel.book)
 
     def save(e):
         if tf.value.strip():
             sel.name = tf.value.strip()
+            sel.book = dd_level.value or None
             store.save_selection(sel)
             page.pop_dialog()
             if on_saved:
@@ -174,7 +179,7 @@ def rename_selection_dialog(page: ft.Page, store: ContentStore,
 
     page.show_dialog(ft.AlertDialog(
         title=ft.Text("Auswahlliste umbenennen"),
-        content=tf,
+        content=ft.Column([tf, dd_level], tight=True, spacing=12),
         actions=[ft.TextButton("Abbrechen", on_click=lambda e: page.pop_dialog()),
                  ft.FilledButton("Speichern", on_click=save)],
     ))
@@ -214,9 +219,9 @@ def manager_view(nav, store: ContentStore,
     def refresh():
         # Stufenfilter — im Sortiermodus bewusst ungefiltert, sonst würden
         # ausgeblendete Listen beim Speichern aus list_order.json fallen
+        level = load_app_settings().level
         ordered = (store.ordered_lists() if state["sort_mode"] else
-                   filter_level(store.ordered_lists(),
-                                load_app_settings().level))
+                   filter_level(store.ordered_lists(), level))
         sort_btn = ft.IconButton(
             icon=ft.Icons.CHECK if state["sort_mode"] else ft.Icons.SWAP_VERT,
             icon_color=ft.Colors.PRIMARY if state["sort_mode"] else None,
@@ -237,7 +242,10 @@ def manager_view(nav, store: ContentStore,
                                   on_click=import_text_dialog),
             ], spacing=8, wrap=True),
         ]
-        ordered_sels = store.ordered_selections()
+        # Auswahllisten folgen derselben Sortiermodus-Ausnahme (ihre
+        # Reihenfolge liegt ebenfalls in list_order.json)
+        ordered_sels = (store.ordered_selections() if state["sort_mode"]
+                        else filter_level(store.ordered_selections(), level))
         if ordered_sels:
             rows.append(ft.Text("Auswahllisten", size=sz(16), weight=ft.FontWeight.BOLD))
             if state["sort_mode"]:
@@ -259,7 +267,10 @@ def manager_view(nav, store: ContentStore,
                     rows.append(selection_tile(sel))
         # Adjektiv-Auswahllisten: eigener Abschnitt zwischen Auswahl-
         # und Vokabellisten; dieselben Funktionen wie Auswahllisten
-        adjective_sels = store.ordered_selections("adjektive")
+        adjective_sels = (store.ordered_selections("adjektive")
+                          if state["sort_mode"] else
+                          filter_level(store.ordered_selections("adjektive"),
+                                       level))
         if adjective_sels:
             rows.append(ft.Text("Adjektiv-Listen", size=sz(16),
                                 weight=ft.FontWeight.BOLD))
@@ -308,7 +319,8 @@ def manager_view(nav, store: ContentStore,
         # kind="adjektive": die Liste ist im Adjektivtraining wählbar
         nav.go("Neue Adjektiv-Liste",
                selection_editor(nav, store,
-                                SelectionList(name="", kind="adjektive"),
+                                SelectionList(name="", kind="adjektive",
+                                              book=load_app_settings().level),
                                 on_saved_selection, progress))
 
     def on_saved_selection(sel):
@@ -431,7 +443,8 @@ def manager_view(nav, store: ContentStore,
 
     def new_list_dialog(e):
         tf_name = ft.TextField(label="Name", autofocus=True)
-        dd_level = _level_dropdown(None)
+        # neue Listen erben die aktive Stufe (abwählbar über "Keine")
+        dd_level = _level_dropdown(load_app_settings().level)
         def create(e):
             name = (tf_name.value or "").strip()
             if not name:
@@ -812,10 +825,11 @@ def search_view(nav, store: ContentStore) -> ft.Control:
         query = (tf.value or "").strip()
         if not query:
             results.controls = [ft.Text("Tippe zum Suchen — es wird in allen "
-                                        "Listen gesucht.", italic=True)]
+                                        "Listen der aktiven Stufe gesucht.",
+                                        italic=True)]
             page.update()
             return
-        hits = store.search_cards(query)
+        hits = store.search_cards(query, level=load_app_settings().level)
         if not hits:
             results.controls = [ft.Text("Keine Treffer.", italic=True)]
             page.update()
@@ -882,7 +896,8 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
     """
     page = nav.page
     all_progress = progress.all()
-    sel = selection or SelectionList(name="")
+    # neue Auswahllisten erben die aktive Stufe
+    sel = selection or SelectionList(name="", book=load_app_settings().level)
     selected_ids: set[str] = set(sel.card_ids)
     to_remove: set[str] = set()
     # unabhängige Box-Filter je Reiter (alle Boxen aktiv = nichts ausgeblendet)
@@ -894,6 +909,11 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
         sorted(store.lists.values(),
                key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
         load_app_settings().level)
+    if not lists:
+        # strikte Stufe ohne Listen (z.B. frisches A2): ohne Quellliste
+        # gibt es nichts auszuwählen
+        return ft.Text("Keine Vokabellisten auf der aktiven Stufe — erst "
+                       "eine Liste anlegen oder die Stufe wechseln.")
     dd_list = ft.Dropdown(
         label="Liste", value=lists[0].id,
         options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists],
@@ -1831,7 +1851,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         ))
 
     def move_selected(e):
-        targets = [l for l in store.ordered_lists()
+        targets = [l for l in store.visible_lists(load_app_settings().level)
                    if l.editable and l.id != vlist.id]
         if not targets:
             snack("Keine andere eigene Liste vorhanden.")
@@ -1852,7 +1872,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         pick_list_dialog(f"{len(selected)} Karten verschieben", targets, do)
 
     def copy_selected(e):
-        targets = [l for l in store.ordered_lists()
+        targets = [l for l in store.visible_lists(load_app_settings().level)
                    if l.editable and l.id != vlist.id]
         if not targets:
             snack("Keine eigene Zielliste vorhanden — erst eine anlegen.")
@@ -1890,8 +1910,9 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
 
     def add_to_selection_selected(e):
         # Wort- und Adjektiv-Auswahllisten anbieten (letztere markiert)
-        sels = store.selections_of()
-        adj_sels = store.selections_of("adjektive")
+        level = load_app_settings().level
+        sels = store.visible_selections(level)
+        adj_sels = store.visible_selections(level, "adjektive")
         NEW = "__new__"
         dd = ft.Dropdown(
             label="Auswahlliste",
@@ -1922,7 +1943,8 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
                     page.update()
                     return
                 sel = SelectionList(name=name,
-                                    card_ids=[c.id for c in cards])
+                                    card_ids=[c.id for c in cards],
+                                    book=load_app_settings().level)
                 store.save_selection(sel)
                 page.pop_dialog()
                 snack(f"Auswahlliste „{name}“ mit {len(cards)} "

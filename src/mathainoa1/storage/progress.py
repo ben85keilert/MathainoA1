@@ -143,6 +143,23 @@ class ProgressStore:
         self._save(p)
         return p
 
+    def set_box(self, card_id: str, box: int,
+                now: datetime | None = None) -> CardProgress | None:
+        """Box direkt setzen — darf anders als restore_box() auch sinken.
+
+        Für die Fehlerrunden-Policies "reset"/"repeat_step_back" bei
+        Akzent-/Schreibungsfehlern; Zähler und Streak bleiben
+        unverändert (der Rundenfehler ist bereits verbucht)."""
+        p = self.get(card_id)
+        if p is None:
+            return None
+        now = now or datetime.now()
+        p.box = max(1, min(box, MAX_BOX))
+        p.last_seen = now
+        p.due = now + timedelta(days=BOX_INTERVALS[p.box])
+        self._save(p)
+        return p
+
     def _save(self, p: CardProgress) -> None:
         self.conn.execute(
             """INSERT INTO card_progress

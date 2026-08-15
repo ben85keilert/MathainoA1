@@ -34,18 +34,28 @@ auch im hellen Modus bleibt alles lesbar.
 ## Stufen (A1/A2)
 
 In den **Einstellungen** (Zahnrad) lässt sich die sichtbare **Stufe**
-umschalten: **A1** zeigt nur A1-Listen, **A2** zeigt A1- **und**
-A2-Listen (der A1-Wortschatz bleibt auf A2 relevant). Eigene Listen
-ohne Stufe sind in beiden Modi immer sichtbar — nach dem Update
-verschwindet also nichts. Die Stufe einer eigenen Liste wird beim
-Anlegen oder über „Umbenennen“ in der Vokabelverwaltung gesetzt.
+umschalten. Die Stufen sind **strikt getrennt**: **A1** zeigt nur
+A1-Listen, **A2** nur A2-Listen — der Wortschatz wird nicht kumuliert
+angezeigt. Wer alte A1-Listen üben will, schaltet dafür auf A1 zurück.
+Listen und Auswahllisten **ohne** Stufe sind auf jeder Stufe sichtbar —
+nach dem Update verschwindet also nichts vom Altbestand.
 
-Der Filter wirkt in Training, Verwaltung und Statistik; Auswahllisten
-(★) werden nie gefiltert, und der Lernfortschritt ist stufenübergreifend
-(er hängt an der Karte, nicht an der Stufe). Hinweis: A1-Listen können
-für A2 unvollständig sein (z.B. fehlen Vokativ oder Aoristformen) —
-solche Karten lassen sich später über den Reimport einer korrigierten
-Textanalyse anreichern.
+Neue eigene Listen und neue Auswahllisten (★) erhalten beim Anlegen
+automatisch die gerade aktive Stufe (bei Listen im Dialog abwählbar).
+Nachträglich lässt sich die Stufe über „Umbenennen“ in der
+Vokabelverwaltung ändern — bei Listen wie bei Auswahllisten.
+
+Der Filter wirkt in Training, Verwaltung, **Suche**, Statistik, den
+Ziellisten beim Verschieben/Kopieren von Karten und den
+Adjektiv-Kombinationen des Beugungstrainings. Der Sortiermodus der
+Verwaltung zeigt weiterhin alle Stufen (damit die gespeicherte
+Reihenfolge vollständig bleibt), und die **Inhalte** einer geöffneten
+Auswahlliste werden nie gefiltert — eine alte Auswahlliste ohne Stufe
+darf Karten beider Stufen enthalten. Der Lernfortschritt ist
+stufenübergreifend (er hängt an der Karte, nicht an der Stufe).
+Hinweis: A1-Listen können für A2 unvollständig sein (z.B. fehlen
+Vokativ oder Aoristformen) — solche Karten lassen sich später über den
+Reimport einer korrigierten Textanalyse anreichern.
 
 ## Erweiterte Funktionen
 
@@ -178,7 +188,10 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
 
 ## So wertet die Abfrage
 
-- Groß-/Kleinschreibung und mehrfache Leerzeichen sind egal.
+- Groß-/Kleinschreibung und mehrfache Leerzeichen sind egal — Ausnahme:
+  bei **Nomen** mit ausgeschaltetem „Groß-/Kleinschreibung tolerieren“
+  zählt eine sonst richtige Antwort mit falscher Schreibung als Fehler
+  der Runde (siehe unten).
 - Satzzeichen am Anfang/Ende (`; · ! ? . , …`) sind egal.
 - **Kommas zählen nie als Fehler** — auch mitten im Satz: „Γεια σου, τι
   κάνεις;“ und „Γεια σου τι κάνεις“ sind gleichwertig (auf der
@@ -197,10 +210,15 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
 - **Griechisch**: fehlende oder falsche Akzente und ein falsches
   Schluss-ς ergeben „Fast!“. Mit „Akzentfehler tolerieren“ zählt das als
   richtig. Ist die Toleranz **aus**, zählt der Akzentfehler in der Runde
-  als Fehler (Fehlerrunde und Rundenergebnis) — die Leitner-Box bleibt
-  dabei aber unverändert: weder hoch noch zurück. Ausnahme: **neue
-  (graue) Wörter** haben noch keine Box zu schützen — sie starten bei so
-  einem Fehler ganz normal in Box 1 und gelten nicht länger als „neu“.
+  als Fehler (Fehlerrunde und Rundenergebnis). Was dabei mit der
+  Leitner-Box passiert, bestimmt die Einstellung **Zahnrad → Abfrage →
+  „Akzent- und Schreibungsfehler“** (getrennt für Akzent- und
+  Schreibungsfehler, siehe „Wie kommt die Statistik zustande?“). Im
+  Standard **„Box bleibt unverändert“** rührt so ein Fehler die Box
+  nicht an — weder hoch noch zurück, auch nicht in der Fehlerrunde.
+  Ausnahme: **neue (graue) Wörter** haben noch keine Box zu schützen —
+  sie starten bei so einem Fehler ganz normal in Box 1 und gelten nicht
+  länger als „neu“.
 - **Deutsch**: Enthält die Rückseite mehrere Bedeutungen (getrennt durch
   Komma, „/“ oder als eigene Sätze), genügt eine davon. Text in Klammern
   ist Zusatzinfo und muss nicht mitgetippt werden.
@@ -436,6 +454,31 @@ als Karteikarte **Box 3**, Deutsch → Griechisch getippt **Box 4** —
 **Box 5** erreicht nur noch das Nomen-/Adjektiv-/Verbtraining mit
 Vorgabe Deutsch.
 
+**Akzent- und Schreibungsfehler:** Unter Zahnrad → Abfrage →
+**„Akzent- und Schreibungsfehler“** lässt sich — getrennt für
+Akzentfehler und Schreibungsfehler (Groß-/Klein, nur Nomen) —
+einstellen, was mit der Box passiert, wenn eine sonst richtige Antwort
+nur daran scheitert. Die Einstellung greift nur, wenn die jeweilige
+Toleranz im Training aus ist; der Fehler zählt immer als Fehler der
+Runde und kommt in die Fehlerrunde. Vier Stufen:
+
+- **Setzt die Box zurück (Box 1)** — wie ein normaler Fehler; gilt auch
+  in der Fehlerrunde.
+- **Box bleibt unverändert (Standard)** — weder hoch noch zurück, auch
+  in der Fehlerrunde nicht.
+- **In der Fehlerrunde wie richtig** — in der Erstrunde bleibt die Box
+  unverändert; passiert der Fehler in der Fehlerrunde, wird die Antwort
+  für die Box wie eine richtige behandelt (Verschiebung nach der
+  „Fehlerrunde“-Regel, siehe unten).
+- **In der Fehlerrunde eine Box zurück** — in der Erstrunde bleibt die
+  Box unverändert; in der Fehlerrunde fällt die Karte eine Box tiefer
+  (mindestens Box 1 — bewusst tiefer als die „Fehlerrunde“-Regel, die
+  bei Box 2 endet).
+
+Neue (graue) Wörter starten bei so einem Fehler immer normal in Box 1;
+ist die jeweilige Toleranz im Training an, zählt die Antwort als
+richtig und keine dieser Stufen greift.
+
 Über das Papierkorb-Symbol in der Statistik-Ansicht lässt sich der
 Lernstand einer Liste komplett auf null zurücksetzen; die Karten gelten
 danach wieder als neu.
@@ -478,7 +521,11 @@ Problemwörtern (erst ein neuer Fehler zählt wieder).
   bestraft). Vier Stufen: keine Verbesserung (Wort bleibt in Box 1),
   Box 2, zurück in die ursprüngliche Box, oder eine Box unter der
   ursprünglichen — mindestens Box 2 (Standard). Falsche Antworten in
-  der Fehlerrunde bleiben immer folgenlos.
+  der Fehlerrunde bleiben folgenlos — Ausnahme: Akzent- und
+  Schreibungsfehler folgen der Einstellung **„Akzent- und
+  Schreibungsfehler“** (siehe oben) und können die Box dort je nach
+  Stufe zurücksetzen, absenken oder wie eine richtige Antwort
+  verschieben.
   - Im Tipp-Modus zählt „Fast!“ (nur Akzent-/Schluss-ς-Fehler) als richtig.
   - Im Karteikarten-Modus zählt die Selbstbewertung („Gewusst“ /
     „Nicht gewusst“).

@@ -814,23 +814,29 @@ class DeclensionSession:
     """
 
     def __init__(self, tasks: list[DeclensionTask], settings: DeclensionSettings,
-                 on_result=None, accent_resets_box: bool = False,
-                 case_resets_box: bool = False,
+                 on_result=None, accent_box_policy: str = "keep",
+                 case_box_policy: str = "keep",
                  progress: dict | None = None,
                  repeat_box_policy: str = "step_down",
                  on_repeat_correct=None,
+                 on_repeat_penalty=None,
                  must_include: list[DeclensionTask] | None = None):
         self.settings = settings
         self.on_result = on_result
-        # App-Policy: strenger Akzent-/Groß-Klein-Fehler setzt die Box auf 1
-        self.accent_resets_box = accent_resets_box
-        self.case_resets_box = case_resets_box
+        # App-Policy je Fehlerart für strenge Akzent-/Groß-Klein-Fehler:
+        # "reset" | "keep" | "repeat_correct" | "repeat_step_back"
+        # (wie TrainingSession)
+        self.accent_box_policy = accent_box_policy
+        self.case_box_policy = case_box_policy
         # card_id -> CardProgress (Momentaufnahme beim Start) — für
         # Box-Neutralität, Aufgabenauswahl und die Fehlerrunden-
         # Wiederherstellung
         self.progress = progress
         self.repeat_box_policy = repeat_box_policy
         self.on_repeat_correct = on_repeat_correct
+        # Fehlerrunden-Absenkung (Policies "reset"/"repeat_step_back"):
+        # (card, Zielbox) — z.B. ProgressStore.set_box
+        self.on_repeat_penalty = on_repeat_penalty
         # Auswahl nach Lernstand (fällige/neue Wörter zuerst) statt der
         # ersten n Aufgaben — wie im Vokabeltraining
         self.queue = select_tasks(tasks, max(1, settings.word_count),
@@ -888,20 +894,21 @@ class DeclensionSession:
         self.answers.append(TaskAnswer(task, result, given))
         self.queue.pop(0)
         # Strenge Fehler (Akzent bei strenger Prüfung, Groß-/Kleinschreibung)
-        # sind je nach App-Policy Leitner-neutral oder setzen die Box zurück;
-        # beide zählen als Rundenfehler
+        # folgen der App-Policy je Fehlerart (wie TrainingSession._record);
+        # in jedem Fall zählen sie als Rundenfehler
         strict_accent = (result == Result.ALMOST
                          and not self.settings.accent_tolerant)
         strict_case = result == Result.CASE
         ok = self.counts_correct(result)
         for card in task.scored_cards:
-            box_neutral = ((strict_accent and not self.accent_resets_box)
-                           or (strict_case and not self.case_resets_box))
-            # "Box-neutral" nur bei Karten MIT Lernstand — eine neue Karte
-            # hat keine Box zu schützen (wie TrainingSession._record)
+            policy = (self.accent_box_policy if strict_accent
+                      else self.case_box_policy if strict_case else None)
+            # Die Policy greift nur bei Karten MIT Lernstand — eine neue
+            # Karte hat keine Box zu schützen (wie TrainingSession._record)
             prev = (self.progress or {}).get(card.id)
-            if box_neutral and (prev is None or not prev.seen):
-                box_neutral = False
+            if policy is not None and (prev is None or not prev.seen):
+                policy = None
+            box_neutral = policy is not None and policy != "reset"
             if (not self.in_repeat_round and not box_neutral and not ok
                     and prev is not None and prev.seen):
                 # Box vor dem Reset merken — für die mögliche
@@ -913,6 +920,19 @@ class DeclensionSession:
                 target = self.repeat_target_box(card)
                 if target is not None:
                     self.on_repeat_correct(card, target)
+            if self.in_repeat_round and policy is not None:
+                # Strenger Fehler in der Fehlerrunde (Guard wie in
+                # TrainingSession: nach echtem Erstrunden-Fehler steht die
+                # Karte schon auf Box 1 — nicht wieder anheben)
+                if (policy in ("reset", "repeat_step_back")
+                        and self.on_repeat_penalty
+                        and card.id not in self._prev_box):
+                    target = 1 if policy == "reset" else max(1, prev.box - 1)
+                    self.on_repeat_penalty(card, target)
+                elif policy == "repeat_correct" and self.on_repeat_correct:
+                    target = self.repeat_target_box(card)
+                    if target is not None:
+                        self.on_repeat_correct(card, target)
         if (not self.counts_correct(result) and self.settings.repeat_errors
                 and not self.in_repeat_round):
             self._wrong_pending.append(task)

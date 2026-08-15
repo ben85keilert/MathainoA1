@@ -83,7 +83,12 @@ def alpha_key(card: VocabCard) -> str:
 
 
 def origin_names(store) -> dict[str, str]:
-    """card_id -> Name der Vokabelliste, aus der die Karte stammt."""
+    """card_id -> Name der Vokabelliste, aus der die Karte stammt.
+
+    Bewusst ohne Stufenfilter: Die Zuordnung beschriftet nur Karten, die
+    bereits angezeigt werden — eine Alt-Auswahlliste (ohne Stufe) darf
+    Karten der anderen Stufe enthalten, und deren Herkunft soll benannt
+    bleiben statt als „Unbekannte Liste“ zu erscheinen."""
     return {c.id: vl.name for vl in store.ordered_lists() for c in vl.cards}
 
 

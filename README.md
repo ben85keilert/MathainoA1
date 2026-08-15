@@ -1,9 +1,10 @@
-# Μαθαίνω — Griechisch A1
+# Μαθαίνω — Griechisch A1/A2
 
 [![Tests](https://github.com/ben85keilert/MathainoA1/actions/workflows/tests.yml/badge.svg)](https://github.com/ben85keilert/MathainoA1/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Lern-App für Griechisch (Niveau A1) — Vokabeltraining
+Lern-App für Griechisch (Niveau A1 und A2, als Stufen strikt getrennt
+umschaltbar) — Vokabeltraining
 (Karteikarten oder Tippen) sowie Grammatiktrainer für Deklination und
 Konjugation. Gebaut mit [Flet](https://flet.dev).
 

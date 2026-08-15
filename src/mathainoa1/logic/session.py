@@ -151,9 +151,13 @@ class TrainingSession:
     settings: TrainingSettings
     progress: dict | None = None  # card_id -> CardProgress, für "Fällige zuerst"
     on_result: Callable[[VocabCard, bool], None] | None = None  # Fortschritt aufzeichnen
-    # App-Policy: strenger Akzent-/Groß-Klein-Fehler setzt die Box auf 1
-    accent_resets_box: bool = False
-    case_resets_box: bool = False
+    # App-Policy je Fehlerart: was ein strenger Akzent- bzw.
+    # Groß-Klein-Fehler mit der Box macht — "reset" (Box 1, auch in der
+    # Fehlerrunde), "keep" (unverändert, Standard), "repeat_correct"
+    # (Fehlerrunde: wie richtig), "repeat_step_back" (Fehlerrunde: eine
+    # Box zurück, mindestens Box 1)
+    accent_box_policy: str = "keep"
+    case_box_policy: str = "keep"
     # App-Policy: wohin wandert ein Wort, das in der ersten Runde falsch
     # (→ Box 1) und in der Fehlerrunde richtig beantwortet wurde?
     # "none" = bleibt Box 1, "box2" = immer Box 2, "original" = zurück in
@@ -162,6 +166,9 @@ class TrainingSession:
     repeat_box_policy: str = "step_down"
     # Callback dafür: (card, Zielbox) — z.B. ProgressStore.restore_box
     on_repeat_correct: Callable[[VocabCard, int], None] | None = None
+    # Fehlerrunden-Absenkung (Policies "reset"/"repeat_step_back"):
+    # (card, Zielbox) — z.B. ProgressStore.set_box
+    on_repeat_penalty: Callable[[VocabCard, int], None] | None = None
     # Karten, die garantiert in die Runde kommen (Fehler der Vorrunde bei
     # „Fehler in nächster Runde wiederholen“)
     must_include: list[VocabCard] = field(default_factory=list)
@@ -265,21 +272,24 @@ class TrainingSession:
         self.answers.append(Answer(card, result, given))
         self.queue.pop(0)
         # Strenge Fehler (Akzent bei strenger Prüfung, Groß-/Kleinschreibung)
-        # sind je nach App-Policy Leitner-neutral (Box unverändert, kein
-        # on_result) oder sie setzen die Box zurück (on_result mit False).
-        # In beiden Fällen zählen sie als Fehler der Runde (inkl. Fehlerrunde).
+        # folgen der App-Policy je Fehlerart: "reset" setzt die Box zurück
+        # (on_result mit False, in der Fehlerrunde per on_repeat_penalty),
+        # alle anderen sind in der Erstrunde Leitner-neutral (Box
+        # unverändert, kein on_result). In jedem Fall zählen sie als
+        # Fehler der Runde (inkl. Fehlerrunde).
         strict_accent = (result == Result.ALMOST
                          and not self.settings.accent_tolerant)
         strict_case = result == Result.CASE
-        box_neutral = ((strict_accent and not self.accent_resets_box)
-                       or (strict_case and not self.case_resets_box))
-        # "Box-neutral" gibt es nur bei Karten MIT Lernstand — eine neue
+        policy = (self.accent_box_policy if strict_accent
+                  else self.case_box_policy if strict_case else None)
+        # Die Policy greift nur bei Karten MIT Lernstand — eine neue
         # Karte hat keine Box zu schützen und würde sonst für immer als
         # "neu" (grau) gelten. Sie wird normal als falsch verbucht und
         # startet in Box 1.
         prev = (self.progress or {}).get(card.id)
-        if box_neutral and (prev is None or not prev.seen):
-            box_neutral = False
+        if policy is not None and (prev is None or not prev.seen):
+            policy = None
+        box_neutral = policy is not None and policy != "reset"
         if (not self.in_repeat_round and not box_neutral
                 and not self.counts_correct(result)
                 and prev is not None and prev.seen):
@@ -293,6 +303,21 @@ class TrainingSession:
             target = self.repeat_target_box(card)
             if target is not None:
                 self.on_repeat_correct(card, target)
+        if self.in_repeat_round and policy is not None:
+            # Strenger Fehler in der Fehlerrunde. Bei "reset"/
+            # "repeat_step_back" nur, wenn die Karte nicht schon durch
+            # einen echten Erstrunden-Fehler auf Box 1 steht (sonst würde
+            # set_box mit dem Schnappschuss-Wert die Box wieder anheben).
+            if (policy in ("reset", "repeat_step_back")
+                    and self.on_repeat_penalty
+                    and card.id not in self._prev_box):
+                target = 1 if policy == "reset" else max(1, prev.box - 1)
+                self.on_repeat_penalty(card, target)
+            elif policy == "repeat_correct" and self.on_repeat_correct:
+                # Wie eine richtige Fehlerrunden-Antwort behandeln
+                target = self.repeat_target_box(card)
+                if target is not None:
+                    self.on_repeat_correct(card, target)
         if (not self.counts_correct(result) and self.settings.repeat_errors
                 and not self.in_repeat_round):
             self._wrong_pending.append(card)
