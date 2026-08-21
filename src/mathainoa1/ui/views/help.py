@@ -596,9 +596,10 @@ def help_view(nav, store=None) -> ft.Control:
             "Textanalysen, Lexikon, Einstellungen.",
             "Heruntergeladenes Audio ist nie enthalten — es wird bei "
             "Bedarf neu geladen.",
-            "Wiederherstellen ersetzt genau die im Backup enthaltenen "
-            "Bereiche (nicht rückgängig zu machen); alles andere bleibt "
-            "unverändert. Kein Neustart nötig.",
+            "Beim Wiederherstellen wählst du, welche der enthaltenen "
+            "Bereiche ersetzt werden (nach Sicherheitsabfrage, nicht "
+            "rückgängig zu machen); alles andere bleibt unverändert. "
+            "Kein Neustart nötig.",
             "Ersetzt den früheren Statistik-Export — der Lernstand "
             "steckt in der Kategorie „Lernfortschritt“.",
         ]),

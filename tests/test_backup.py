@@ -252,3 +252,50 @@ def test_create_backup_survives_pre_1980_mtimes(env):
     store.delete_user_list(vlist.id)
     backup.restore_backup(data, store, progress)
     assert vlist.id in store.lists
+
+
+# --- Teil-Import: nur gewählte Kategorien zurückspielen ---
+
+def test_restore_subset_of_parts(env):
+    store, progress = env
+    vlist = _populate(store, progress)
+    data = backup.create_backup(progress, ALL_PARTS)
+
+    save_notes(NotesData(draft="NEU"))
+    store.delete_user_list(vlist.id)
+    (app_data_dir() / "features" / "lexikon" / "lexikon.json").unlink()
+    ta.invalidate_cache()
+
+    result = backup.restore_backup(data, store, progress, parts=["lexikon"])
+    assert result["parts"] == ["lexikon"]
+    assert ta.lexicon_store(store).entries[0].word == "γράφω"
+    # Nicht gewählte Kategorien bleiben wie sie sind
+    assert vlist.id not in store.lists
+    assert load_notes().draft == "NEU"
+
+
+def test_restore_subset_progress_requires_vocab(env):
+    store, progress = env
+    vlist = _populate(store, progress)
+    data = backup.create_backup(progress, ALL_PARTS)
+    progress.replace_all([])
+    with pytest.raises(ValueError, match="Lernfortschritt"):
+        backup.restore_backup(data, store, progress, parts=["progress"])
+    assert progress.get(vlist.cards[0].id) is None
+
+
+def test_restore_part_not_in_backup_rejected(env):
+    store, progress = env
+    vlist = _populate(store, progress)
+    data = backup.create_backup(progress, ["settings"])
+    with pytest.raises(ValueError, match="keine Kategorie"):
+        backup.restore_backup(data, store, progress, parts=["vocab"])
+    assert vlist.id in store.lists
+
+
+def test_restore_empty_selection_rejected(env):
+    store, progress = env
+    _populate(store, progress)
+    data = backup.create_backup(progress, ["notes"])
+    with pytest.raises(ValueError, match="mindestens eine"):
+        backup.restore_backup(data, store, progress, parts=[])

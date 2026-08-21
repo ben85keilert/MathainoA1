@@ -51,7 +51,15 @@ class Navigator:
             padding=ft.Padding.only(left=16, right=16, top=8, bottom=8),
         )
         page.appbar = self.appbar
-        page.add(ft.SafeArea(self.body, expand=True))
+        # maintain_bottom_view_padding: bei Edge-to-Edge mit Gestenleiste
+        # meldet Android teils nur view_padding — das soll ebenfalls zählen
+        page.add(ft.SafeArea(self.body, expand=True,
+                             maintain_bottom_view_padding=True))
+        # Zusätzlich das untere Padding dynamisch an die tatsächliche
+        # Systemleiste anpassen (greift auch, falls die SafeArea auf dem
+        # Gerät nicht wirkt; aktualisiert sich bei Drehung/Leistenwechsel)
+        page.on_media_change = self._apply_bottom_inset
+        self._apply_bottom_inset()
         # Android-Zurück-Taste an unseren Stapel koppeln: solange es eine
         # Unterseite gibt, navigiert sie zurück statt die App zu beenden
         root = page.views[0]
@@ -65,6 +73,20 @@ class Navigator:
                 await root.confirm_pop(True)  # Startseite: App verlassen
 
         root.on_confirm_pop = confirm_pop
+
+    def _apply_bottom_inset(self, e=None) -> None:
+        media = getattr(self.page, "media", None)
+        inset = 0.0
+        if media is not None:
+            for pad in (media.padding, media.view_padding):
+                if pad is not None:
+                    inset = max(inset, float(pad.bottom or 0))
+        new_bottom = 8 + inset
+        if self.body.padding.bottom != new_bottom:
+            self.body.padding = ft.Padding.only(left=16, right=16, top=8,
+                                                bottom=new_bottom)
+            if e is not None:  # beim Start übernimmt page.update() später
+                self.page.update()
 
     def go(self, title: str, content: ft.Control) -> None:
         self.stack.append((title, content))

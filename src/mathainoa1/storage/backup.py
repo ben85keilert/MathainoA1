@@ -12,8 +12,8 @@ ProgressStore.export_rows/replace_all). manifest.json liegt im
 ZIP-Wurzelverzeichnis und wird beim Restore nie nach vocab/ geschrieben —
 ContentStore.load_all würde dort jede fremde Datei als Liste parsen.
 
-Restore ersetzt genau die im Manifest genannten Kategorien und lässt
-alles andere unangetastet. Es wird erst vollständig validiert (Schema,
+Restore ersetzt die im Manifest genannten Kategorien — oder eine vom
+Nutzer gewählte Teilmenge davon — und lässt alles andere unangetastet. Es wird erst vollständig validiert (Schema,
 Kategorien, Pfad-Whitelist, Zip-Slip-Abwehr), dann gelöscht/geschrieben.
 """
 
@@ -193,13 +193,24 @@ def read_manifest(data: bytes) -> dict:
 
 
 def restore_backup(data: bytes, store: ContentStore,
-                   progress: ProgressStore) -> dict:
+                   progress: ProgressStore,
+                   parts: list[str] | None = None) -> dict:
     """Ersetzt die im Backup enthaltenen Kategorien auf diesem Gerät.
 
+    parts: Teilmenge der Manifest-Kategorien, die zurückgespielt werden
+    soll (None = alle). Lernfortschritt nur zusammen mit Vokabeln.
     Rückgabe: {"parts": [...], "counts": {kategorie: anzahl}}.
     """
     manifest = read_manifest(data)
-    parts = _validate_parts(manifest["parts"])
+    available = _validate_parts(manifest["parts"])
+    if parts is None:
+        chosen = available
+    else:
+        chosen = _validate_parts(parts)
+        missing = [p for p in chosen if p not in available]
+        if missing:
+            raise ValueError("Das Backup enthält keine Kategorie "
+                             f"„{part_label(missing[0])}“.")
     base = app_data_dir()
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         names = [n for n in zf.namelist()
@@ -209,10 +220,10 @@ def restore_backup(data: bytes, store: ContentStore,
             if _unsafe_path(name):
                 raise ValueError(f"Unzulässiger Pfad im Backup: {name}")
             part = _member_part(name)
-            if part is None or part not in parts:
+            if part is None or part not in available:
                 raise ValueError(f"Unerwartete Datei im Backup: {name}")
         rows: list = []
-        if "progress" in parts:
+        if "progress" in chosen:
             if PROGRESS_NAME not in names:
                 raise ValueError("Im Backup fehlt das progress.json.")
             try:
@@ -224,7 +235,7 @@ def restore_backup(data: bytes, store: ContentStore,
                 raise ValueError("Das progress.json im Backup hat ein "
                                  "unerwartetes Format.")
         counts: dict[str, int] = {}
-        for part in parts:
+        for part in chosen:
             if part == "progress":
                 counts[part] = progress.replace_all(
                     [r for r in rows if isinstance(r, dict)])
@@ -242,4 +253,4 @@ def restore_backup(data: bytes, store: ContentStore,
             counts[part] = n
     store.load_all()
     textanalyse.invalidate_cache()
-    return {"parts": parts, "counts": counts}
+    return {"parts": chosen, "counts": counts}

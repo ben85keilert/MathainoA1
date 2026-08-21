@@ -439,18 +439,31 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
         if picker not in page.services:
             page.services.append(picker)
 
-        def create_dialog(e):
-            boxes = {key: ft.Checkbox(label=label, value=True)
-                     for key, label in backup.PARTS}
+        def part_boxes(available: set[str] | None = None
+                       ) -> dict[str, ft.Checkbox]:
+            """Eine Checkbox je Kategorie; nicht verfügbare (beim Import:
+            nicht im Backup enthaltene) sind deaktiviert. Fortschritt
+            hängt an den Karten-IDs der Vokabeln — nur gemeinsam wählbar."""
+            boxes = {}
+            for key, label in backup.PARTS:
+                ok = available is None or key in available
+                boxes[key] = ft.Checkbox(
+                    label=label if ok else f"{label} – nicht im Backup",
+                    value=ok, disabled=not ok)
+            progress_ok = available is None or "progress" in available
 
             def sync(e=None):
-                # Fortschritt hängt an den Karten-IDs der Vokabeln
                 if not boxes["vocab"].value:
                     boxes["progress"].value = False
-                boxes["progress"].disabled = not boxes["vocab"].value
+                boxes["progress"].disabled = (not progress_ok
+                                              or not boxes["vocab"].value)
                 page.update()
 
             boxes["vocab"].on_change = sync
+            return boxes
+
+        def create_dialog(e):
+            boxes = part_boxes()
 
             async def do_export(e):
                 parts = [k for k, cb in boxes.items() if cb.value]
@@ -500,12 +513,15 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
             except ValueError as exc:
                 page.show_dialog(ft.SnackBar(ft.Text(str(exc))))
                 return
-            labels = ", ".join(backup.part_label(p)
-                               for p in manifest["parts"])
+            boxes = part_boxes(set(manifest["parts"]))
+            select_error = ft.Text("", color=ft.Colors.ERROR, size=sz(13))
+            chosen: list[str] = []
 
             def do_restore(e):
+                labels = ", ".join(backup.part_label(p) for p in chosen)
                 try:
-                    backup.restore_backup(data, store, progress)
+                    backup.restore_backup(data, store, progress,
+                                          parts=chosen)
                 except ValueError as exc:
                     page.pop_dialog()
                     page.show_dialog(ft.SnackBar(ft.Text(str(exc))))
@@ -522,16 +538,40 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
                 page.show_dialog(ft.SnackBar(ft.Text(
                     f"Backup wiederhergestellt: {labels}.")))
 
+            def confirm(e):
+                chosen[:] = [k for k, cb in boxes.items() if cb.value]
+                if not chosen:
+                    select_error.value = "Bitte mindestens eine Kategorie wählen."
+                    page.update()
+                    return
+                labels = ", ".join(backup.part_label(p) for p in chosen)
+                page.pop_dialog()
+                page.show_dialog(ft.AlertDialog(
+                    title=ft.Text("Wirklich wiederherstellen?"),
+                    content=ft.Text(
+                        f"Ersetzt auf diesem Gerät: {labels}. Das lässt "
+                        "sich nicht rückgängig machen — nicht gewählte "
+                        "Bereiche bleiben unverändert."),
+                    actions=[ft.TextButton("Abbrechen",
+                                           on_click=lambda e: page.pop_dialog()),
+                             ft.FilledButton("Wiederherstellen",
+                                             on_click=do_restore)],
+                ))
+
             page.show_dialog(ft.AlertDialog(
-                title=ft.Text("Backup wiederherstellen?"),
-                content=ft.Text(
-                    f"Ersetzt auf diesem Gerät: {labels}. Das lässt sich "
-                    "nicht rückgängig machen — nicht enthaltene Bereiche "
-                    "bleiben unverändert."),
+                title=ft.Text("Backup wiederherstellen"),
+                content=ft.Column(
+                    [ft.Text("Welche Bereiche sollen zurückgespielt werden?",
+                             size=sz(13)),
+                     *boxes.values(),
+                     ft.Text("Gewählte Bereiche werden auf diesem Gerät "
+                             "komplett ersetzt.", size=sz(13), italic=True),
+                     select_error],
+                    tight=True, spacing=6, width=420,
+                    scroll=ft.ScrollMode.AUTO),
                 actions=[ft.TextButton("Abbrechen",
                                        on_click=lambda e: page.pop_dialog()),
-                         ft.FilledButton("Wiederherstellen",
-                                         on_click=do_restore)],
+                         ft.FilledButton("Weiter", on_click=confirm)],
             ))
 
         backup_rows = [
@@ -539,8 +579,8 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
             _h("Backup"),
             ft.Text("Sichert die gewählten Bereiche als eine ZIP-Datei — "
                     "für Sicherungskopien und den Umzug auf ein neues "
-                    "Gerät. Beim Wiederherstellen werden genau die im "
-                    "Backup enthaltenen Bereiche ersetzt.",
+                    "Gerät. Beim Wiederherstellen wählst du, welche der "
+                    "enthaltenen Bereiche ersetzt werden.",
                     size=sz(13), italic=True),
             ft.Row([
                 ft.FilledButton("Backup erstellen", icon=ft.Icons.ARCHIVE,

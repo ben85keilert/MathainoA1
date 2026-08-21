@@ -410,11 +410,12 @@ Beim **Erstellen** wählst du, was in die Datei soll:
 Heruntergeladenes Audio ist nie enthalten — es wird bei Bedarf einfach
 neu geladen (bzw. über „Audio vorbereiten“ im Listenmenü).
 
-Beim **Wiederherstellen** zeigt die App vorher an, welche Bereiche die
-Datei enthält: genau diese Bereiche werden auf dem Gerät **ersetzt**
-(nicht zusammengeführt — das lässt sich nicht rückgängig machen);
-alle nicht enthaltenen Bereiche bleiben unverändert. Ein Neustart ist
-nicht nötig.
+Beim **Wiederherstellen** zeigt die App an, welche Bereiche die Datei
+enthält, und du wählst aus, welche davon zurückgespielt werden sollen
+(z. B. nur das Lexikon). Nach einer Sicherheitsabfrage werden genau die
+gewählten Bereiche auf dem Gerät **ersetzt** (nicht zusammengeführt —
+das lässt sich nicht rückgängig machen); alle anderen Bereiche bleiben
+unverändert. Ein Neustart ist nicht nötig.
 
 Das Backup ersetzt auch den früheren Statistik-Export: Der Lernstand
 steckt vollständig in der Kategorie „Lernfortschritt“.
