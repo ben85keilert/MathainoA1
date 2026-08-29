@@ -249,6 +249,12 @@ class ConjugationTask:
     expected: str  # kanonische Form, z.B. "μένετε" / "θα γράψετε"
     variants: list[str] = field(default_factory=list)
     tense: str = "present"
+    # Lösung fürs Aufdecken, alle Alternativformen mit "/" (θα nur einmal
+    # vorweg): "σηκώνεστε/σηκωνόσαστε", "θα γράψουν/γράψουνε"
+    display: str = ""
+    # Futur-Grundform: "θα" + 1. Person Singular ("θα γράψω", Varianten
+    # mit "/"); leer bei Präsens-Aufgaben oder fehlendem 1sg-Slot
+    future_base: str = ""
 
     @property
     def scored_cards(self) -> list[VocabCard]:
@@ -262,10 +268,10 @@ class ConjugationTask:
         # Die 2. Person Plural ist im Griechischen zugleich die höfliche
         # Anrede — deshalb der Zusatz (ihr / höfliches Sie).
         emoji = "👤" if self.number == "sg" else "👥"
-        base = f"{self.person}. Person {NUMBER_NAMES[self.number]} {emoji}"
+        base = f"{self.person}. Pers. - {NUMBER_NAMES[self.number]} {emoji}"
         if self.person == 2 and self.number == "pl":
             base += " (ihr / höfliches Sie)"
-        return f"Futur: {base}" if self.tense == "future" else base
+        return f"Futur - {base}" if self.tense == "future" else base
 
     def check(self, given: str) -> Result:
         best = Result.WRONG
@@ -293,6 +299,7 @@ def build_task(card: VocabCard, verb: Verb, person: int, number: str,
     """direction "de": Vorgabe ist der deutsche Infinitiv. direction "gr":
     Vorgabe ist das griechische Lemma, die deutsche Bedeutung wird dazu
     eingeblendet."""
+    future_base = ""
     if tense == "future":
         forms = conjugate_future(verb, person, number)
         if not forms:
@@ -300,18 +307,24 @@ def build_task(card: VocabCard, verb: Verb, person: int, number: str,
         # kanonisch mit "θα"; die bloße Form (ohne θα) zählt auch als richtig
         expected = f"θα {forms[0]}"
         variants = [f"θα {f}" for f in forms[1:]] + forms
+        display = "θα " + "/".join(forms)
+        base = conjugate_future(verb, 1, "sg")
+        if base:
+            future_base = "θα " + "/".join(base)
     else:
         forms = conjugate(verb, person, number)
         if not forms:
             return None
         expected, variants = forms[0], forms[1:]
+        display = "/".join(forms)
     if direction == "gr":
         prompt, meaning = card.front, card.back
     else:
         prompt, meaning = card.back, ""
     return ConjugationTask(card=card, person=person, number=number,
                            prompt=prompt, meaning=meaning,
-                           expected=expected, variants=variants, tense=tense)
+                           expected=expected, variants=variants, tense=tense,
+                           display=display, future_base=future_base)
 
 
 def generate_tasks(cards: list[VocabCard], settings: ConjugationSettings,

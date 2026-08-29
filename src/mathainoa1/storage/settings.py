@@ -19,6 +19,9 @@ TTS_GOOGLE = "google"  # gTTS-MP3 von Google-Servern, lokal gecacht
 # Gültige Werte für accent_box_policy/case_box_policy (siehe AppSettings)
 STRICT_BOX_POLICIES = ("reset", "keep", "repeat_correct", "repeat_step_back")
 
+# Gültige Werte für verb_base_form (siehe AppSettings)
+VERB_BASE_FORM_MODES = ("present", "stem2", "both")
+
 
 @dataclass
 class AppSettings:
@@ -80,6 +83,14 @@ class AppSettings:
     # Feature-Keys); leer = Standardreihenfolge. Unbekannte Keys werden
     # ignoriert, fehlende hängen sich hinten an.
     menu_order: list[str] = field(default_factory=list)
+    # Verbtraining: welche Grundform nach dem Aufdecken unter der Lösung
+    # steht (nur bei Vorgabe Deutsch). Wirkt bei Futur-Aufgaben; bei
+    # Präsens-Aufgaben erscheint immer die Präsensform. Werte:
+    # "present" = nur Präsensform (γράφω)
+    # "stem2"   = nur die Futur-Grundform (θα γράψω)
+    # "both"    = Futur-Grundform mit Präsensform in Klammern:
+    #             θα γράψω (γράφω) (Standard)
+    verb_base_form: str = "both"
     # Adjektivtraining: "whitelist" = nur explizit festgelegte
     # Adjektiv↔Nomen-Verbindungen werden abgefragt (Standard);
     # "blacklist" = alle Kombinationen außer festgelegten Ausnahmen

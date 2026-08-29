@@ -281,6 +281,21 @@ def test_verb_preview_sample_no_crash(store_with_edge_cases):
         assert isinstance(grammar._verb_sample(v), str)
 
 
+def test_base_form_text_modes():
+    """Grundform nach der Lösung: bei Futur-Aufgaben steuert die
+    Einstellung, ob Präsensform, Futur-Grundform oder beides erscheint."""
+    from mathainoa1.logic import conjugation as conj
+    card = VocabCard(front="γράφω", back="schreiben", word_type="Verb",
+                     stem2="γράψ-")
+    v = conj.parse_verb(card)
+    present = conj.build_task(card, v, 2, "pl")
+    fut = conj.build_task(card, v, 2, "pl", tense="future")
+    assert grammar._base_form_text(present, "both") == "γράφω"
+    assert grammar._base_form_text(fut, "present") == "γράφω"
+    assert grammar._base_form_text(fut, "stem2") == "θα γράψω"
+    assert grammar._base_form_text(fut, "both") == "θα γράψω (γράφω)"
+
+
 def test_search_view_builds_and_lists_hits(store_with_edge_cases):
     """Wortsuche baut fehlerfrei und rendert bei einem Query Ergebniszeilen."""
     store, _vlist = store_with_edge_cases

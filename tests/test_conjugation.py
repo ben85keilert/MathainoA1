@@ -130,8 +130,16 @@ def test_build_task():
     v = verb("μένω", "wohnen")
     task = build_task(v, parse_verb(v), 2, "pl")
     assert task.prompt == "wohnen"
-    assert task.label == "2. Person Plural 👥 (ihr / höfliches Sie)"
+    assert task.label == "2. Pers. - Plural 👥 (ihr / höfliches Sie)"
     assert task.expected == "μένετε"
+
+
+def test_task_display_joins_variants():
+    # Aufdeck-Anzeige nennt alle Alternativformen mit "/"
+    v = verb("σηκώνομαι", "aufstehen")
+    task = build_task(v, parse_verb(v), 2, "pl")
+    assert task.display == "σηκώνεστε/σηκωνόσαστε"
+    assert task.future_base == ""
 
 
 def test_task_check_variants_and_accents():
@@ -271,11 +279,23 @@ def test_build_task_future():
     c = fut_verb("γράφω", "γράψ-", "schreiben")
     task = build_task(c, parse_verb(c), 2, "pl", tense="future")
     assert task.expected == "θα γράψετε"
-    assert task.label == "Futur: 2. Person Plural 👥 (ihr / höfliches Sie)"
+    assert task.label == "Futur - 2. Pers. - Plural 👥 (ihr / höfliches Sie)"
+    assert task.display == "θα γράψετε"
+    assert task.future_base == "θα γράψω"
     # mit und ohne "θα" richtig
     assert task.check("θα γράψετε") == Result.CORRECT
     assert task.check("γράψετε") == Result.CORRECT
     assert task.check("θα γράφετε") == Result.WRONG
+
+
+def test_future_display_and_base_with_variants():
+    # "θα" steht in der Anzeige nur einmal vorweg; die Futur-Grundform
+    # ist die 1. Person Singular mit "θα"
+    c = fut_verb("πίνω", "πιω, πιεις, πιει, πιούμε, πιείτε, πιουν/πιούνε",
+                 "trinken")
+    task = build_task(c, parse_verb(c), 3, "pl", tense="future")
+    assert task.display == "θα πιουν/πιούνε"
+    assert task.future_base == "θα πιω"
 
 
 def test_generate_tasks_tenses():

@@ -246,6 +246,13 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
 - Im Verbtraining ist die **2. Person Plural 👥** zugleich die höfliche
   Anrede („ihr“ und „Sie“); Singular-/Plural-Fragen sind zusätzlich mit
   👤 (einer) bzw. 👥 (viele) markiert.
+- Nach dem Aufdecken zeigt das Beugungstraining bei Vorgabe Deutsch die
+  **Grundform** mit an; gibt es mehrere richtige Formen, stehen alle in
+  der Lösung („σηκώνεστε/σηκωνόσαστε“). Bei Futur-Aufgaben lässt sich
+  unter **Einstellungen → Verbtraining** wählen, welche Grundform
+  erscheint: nur die Präsensform („γράφω“), nur der 2. Stamm
+  („θα γράψω“) oder beides — dann steht die Präsensform in Klammern
+  dahinter („θα γράψω (γράφω)“, Standard).
 
 ## Wortlisten bearbeiten
 

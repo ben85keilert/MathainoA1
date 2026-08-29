@@ -1289,6 +1289,26 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
     return root
 
 
+def _base_form_text(task, verb_base_form: str) -> str:
+    """Grundform fürs Aufdecken bzw. die Ergebnisliste.
+
+    Bei Futur-Aufgaben bestimmt die Einstellung verb_base_form
+    (AppSettings), was erscheint: nur die Präsensform, nur die
+    Futur-Grundform (θα + 1. Person Singular) oder beides — dann steht
+    die Präsensform in Klammern dahinter: "θα γράψω (γράφω)". Alle
+    übrigen Aufgaben (Präsens, Deklination) zeigen wie bisher die
+    Vorderseite der Karte."""
+    present = task.card.with_plural(task.card.front)
+    future_base = getattr(task, "future_base", "")
+    if getattr(task, "tense", "") != "future" or not future_base:
+        return present
+    if verb_base_form == "present":
+        return present
+    if verb_base_form == "stem2":
+        return future_base
+    return f"{future_base} ({task.card.front})"
+
+
 def run_view(nav, store: ContentStore, session: DeclensionSession,
              title: str, make_tasks,
              progress: ProgressStore | None = None) -> ft.Control:
@@ -1495,14 +1515,16 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         if session.settings.direction == "de":
             # Grundform mit anzeigen — bei deutscher Vorgabe stünde sie
             # sonst nirgends (z.B. "μένω" zu "μένετε")
-            base_form.value = f"Grundform: {task.card.with_plural(task.card.front)}"
+            base_form.value = "Grundform: " + _base_form_text(
+                task, load_app_settings().verb_base_form)
         hide_empty_texts(meaning, answer, base_form, feedback)
         refresh_notes(revealed=True)
         maybe_autoplay(nav.page, task.expected)
 
     def reveal(e):
         task = session.current
-        answer.value = task.expected
+        # Alle Alternativformen mit aufdecken ("σηκώνεστε/σηκωνόσαστε")
+        answer.value = getattr(task, "display", "") or task.expected
         solution_shown(task)
         if session.in_repeat_round and (
                 session.on_repeat_correct is None
@@ -1533,7 +1555,8 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
 
     def check(e):
         task = session.current
-        display = task.expected
+        # Alle Alternativformen mit aufdecken ("σηκώνεστε/σηκωνόσαστε")
+        display = getattr(task, "display", "") or task.expected
         given = tf_answer.value or ""
         result = session.check_typed(given)
         weiter = ft.FilledButton("Weiter", icon=ft.Icons.ARROW_FORWARD,
@@ -1606,11 +1629,12 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
     # Bei deutscher Vorgabe die Grundform mit auflisten — sie steht sonst
     # nirgends in der Zeile
     de_direction = session.settings.direction == "de"
+    app_s = load_app_settings()
     # Boxen vorher/nachher als zweigeteilter Punkt (Einstellungen) — nur
     # bei Vorgabe Deutsch und eingeschalteter Statistik, sonst bewegt die
     # Runde keine Boxen und die Punkte wären Rauschen; im
     # Adjektivtraining ein Punkt je mitwandernder Karte (Nomen + Adjektiv)
-    show_dots = (load_app_settings().result_box_dots and de_direction
+    show_dots = (app_s.result_box_dots and de_direction
                  and progress is not None and session.progress is not None
                  and session.on_result is not None)
 
@@ -1646,8 +1670,9 @@ def result_view(nav, store: ContentStore, session: DeclensionSession,
     wrong_items = [
         task_tile(t, " · ".join(
             x for x in (t.label, t.meaning,
-                        f"Grundform: {t.card.front}" if de_direction
-                        else "") if x))
+                        ("Grundform: "
+                         + _base_form_text(t, app_s.verb_base_form))
+                        if de_direction else "") if x))
         for t in stats["wrong_tasks"]
     ]
     # Darunter auch die richtig gelösten Aufgaben der Runde zeigen —

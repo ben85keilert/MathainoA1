@@ -16,6 +16,7 @@ from mathainoa1.storage.settings import (
     STRICT_BOX_POLICIES,
     TTS_GOOGLE,
     TTS_SYSTEM,
+    VERB_BASE_FORM_MODES,
     AppSettings,
     load_app_settings,
     save_app_settings,
@@ -345,6 +346,21 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
                           "festgelegten Ausnahmen"),
         ],
         on_select=save_adjective, page=page)
+
+    # --- Verbtraining: Grundform nach der Lösung ---
+    def save_verb_base(v):
+        s.verb_base_form = v or "both"
+        save_app_settings(s)
+
+    rg_verb_base = _wrapping_radio_group(
+        value=(s.verb_base_form
+               if s.verb_base_form in VERB_BASE_FORM_MODES else "both"),
+        options=[
+            ("present", "Nur Präsensform — z. B. „γράφω“"),
+            ("stem2", "Nur 2. Stamm — z. B. „θα γράψω“"),
+            ("both", "Beides — z. B. „θα γράψω (γράφω)“ (Standard)"),
+        ],
+        on_select=save_verb_base, page=page)
 
     # --- Sprachausgabe: Doppeltipp-Zeit für langsames Abspielen ---
     dd_tap = ft.Dropdown(
@@ -701,6 +717,16 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
                     "Nomen, werden alle Nomen der App verwendet.",
                     size=sz(13), italic=True),
             rg_adjective,
+            ft.Divider(),
+            _h("Verbtraining"),
+            ft.Text("Grundform nach der Lösung", size=sz(13)),
+            ft.Text("Bestimmt, welche Grundform nach dem Aufdecken unter "
+                    "der Lösung steht — nur bei Vorgabe „Deutsch“ (bei "
+                    "griechischer Vorgabe ist die Präsensform schon die "
+                    "Aufgabe). Die Auswahl wirkt bei Futur-Aufgaben; bei "
+                    "Präsens-Aufgaben erscheint immer die Präsensform.",
+                    size=sz(13), italic=True),
+            rg_verb_base,
             ft.Divider(),
             _h("Sprachausgabe"),
             rg_tts,
