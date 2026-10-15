@@ -95,10 +95,16 @@ jobs:
             echo "FLET_ANDROID_SIGNING_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}"
           } >> "$GITHUB_ENV"
 
+      # --arch beschränkt nur das Python-Laufzeitpaket auf arm64-v8a; die
+      # Flutter-Engine und der Dart-Code (lib/<abi>/libflutter.so,
+      # libapp.so) lägen sonst weiter für alle drei ABIs bei (~30 MB) —
+      # dafür braucht Flutter zusätzlich --target-platform android-arm64.
       - name: APK bauen (Sideload/GitHub-Release, nur arm64-v8a)
         run: >
           flet build apk --verbose
           --arch arm64-v8a
+          --flutter-build-args=--target-platform
+          --flutter-build-args=android-arm64
           --build-version "${{ steps.ver.outputs.version }}"
           --build-number "${{ steps.ver.outputs.build_number }}"
 
