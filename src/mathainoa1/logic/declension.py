@@ -13,7 +13,10 @@ Unterstützte Muster:
 - unveränderliche Fremdwörter (Pluralangabe "-"): nur der Artikel wird
   dekliniert (το μετρό → του μετρό)
 - reine Pluralwörter (Artikel οι/τα): nur Pluralformen
-- Adjektive auf -ος (alle Adjektive der Buchlisten)
+- Plural mit anderem Genus (ο βράχος – τα βράχια, Pluralangabe mit
+  Artikel): der Plural gilt als nicht ableitbar (nur Singular)
+- Adjektive auf -ος (A1), dazu ab A2 -ύς, -ιά, -ύ (βαρύς), πολύς und
+  δεξιός (-ιά, -ί)
 """
 
 from __future__ import annotations
@@ -60,6 +63,34 @@ FEM_GEN_PL_EXCEPTIONS = {
 ADJ_FEM_EXCEPTIONS = {
     "γλυκος": "γλυκιά",
     "φρεσκος": "φρέσκια",
+    "ογδοος": "όγδοη",  # Vokal-Stamm, trotzdem -η (Ordnungszahl, A2)
+}
+# Abweichendes Neutrum Nominativ/Akkusativ Singular (Pame A2: δεξιός, -ιά, -ί)
+ADJ_NEUT_EXCEPTIONS = {
+    "δεξιος": "δεξί",
+}
+
+# Adjektive auf -ύς, -ιά, -ύ (βαρύς, βαθύς, φαρδύς, μακρύς): Endungen am
+# unbetonten Stamm (βαρ-)
+_ADJ_YS_ENDINGS = {
+    "m": {("nom", "sg"): "ύς", ("acc", "sg"): "ύ", ("gen", "sg"): "ιού",
+          ("nom", "pl"): "ιοί", ("acc", "pl"): "ιούς", ("gen", "pl"): "ιών"},
+    "f": {("nom", "sg"): "ιά", ("acc", "sg"): "ιά", ("gen", "sg"): "ιάς",
+          ("nom", "pl"): "ιές", ("acc", "pl"): "ιές", ("gen", "pl"): "ιών"},
+    "n": {("nom", "sg"): "ύ", ("acc", "sg"): "ύ", ("gen", "sg"): "ιού",
+          ("nom", "pl"): "ιά", ("acc", "pl"): "ιά", ("gen", "pl"): "ιών"},
+}
+# πολύς, πολλή, πολύ — unregelmäßig (Stamm πολ- bzw. πολλ-)
+_POLYS_FORMS = {
+    "m": {("nom", "sg"): "πολύς", ("acc", "sg"): "πολύ", ("gen", "sg"): "πολλού",
+          ("nom", "pl"): "πολλοί", ("acc", "pl"): "πολλούς",
+          ("gen", "pl"): "πολλών"},
+    "f": {("nom", "sg"): "πολλή", ("acc", "sg"): "πολλή", ("gen", "sg"): "πολλής",
+          ("nom", "pl"): "πολλές", ("acc", "pl"): "πολλές",
+          ("gen", "pl"): "πολλών"},
+    "n": {("nom", "sg"): "πολύ", ("acc", "sg"): "πολύ", ("gen", "sg"): "πολλού",
+          ("nom", "pl"): "πολλά", ("acc", "pl"): "πολλά",
+          ("gen", "pl"): "πολλών"},
 }
 
 
@@ -229,7 +260,9 @@ def parse_noun(card: VocabCard) -> Noun | None:
         elif art == "η":
             if s.endswith("ος"):
                 cls = "f2"
-            elif s.endswith(("ση", "ξη", "ψη")):
+            elif (s.endswith(("ση", "ξη", "ψη"))
+                    and not _stripped(plural_field).endswith("ες")):
+                # Pluralangabe "-ες" (η βρύση, η μέση) = 1. Deklination
                 cls = "f3"
             elif s.endswith("η") and _stripped(plural_field).endswith("εις"):
                 cls = "f3"  # πόλη (-εις): 3. Deklination trotz anderer Endung
@@ -279,7 +312,17 @@ def _parse_plural_only(word: str, art: str) -> Noun | None:
 
 
 def _nominative_plural(noun: Noun, plural_field: str) -> str | None:
-    """Nominativ Plural: Pluralangabe der Karte nutzen, sonst Regelform."""
+    """Nominativ Plural: Pluralangabe der Karte nutzen, sonst Regelform.
+
+    Eine Pluralangabe MIT Artikel ("οι άνθρωποι") gilt als komplette
+    Form. Passt ihr Artikel nicht zum Genus des Singulars (ο βράχος –
+    τα βράχια), ist der Plural nicht ableitbar: None statt einer falschen
+    Regelform (βράχοι)."""
+    art, sep, form = plural_field.partition(" ")
+    if sep and art in ("οι", "τα"):
+        if art != ("τα" if noun.gender == "n" else "οι"):
+            return None
+        return form.strip() or None
     # Einfache Angaben wie "-ες", "-οί", "-άδες" direkt anwenden.
     # Ausnahme -μα-Neutra: dort beschreibt die Angabe (z.B. "-ματα") keinen
     # Anhang an den Stamm, und die Regelform ist ohnehin eindeutig.
@@ -426,7 +469,7 @@ def _decline_plural_only(noun: Noun, case: str, number: str) -> str | None:
     return None  # οι γονείς u.ä.: Genitiv nicht sicher ableitbar
 
 
-# --- Adjektive (Typ -ος) ---
+# --- Adjektive (Typ -ος; ab A2 auch -ύς und πολύς) ---
 
 @dataclass
 class Adjective:
@@ -434,31 +477,51 @@ class Adjective:
     stem: str
     fem: str  # Femininum Nominativ Singular
     meaning: str = ""  # deutsche Bedeutung (für Aufgaben mit deutscher Vorgabe)
+    cls: str = "os"  # "os" (μικρός) | "ys" (βαρύς) | "polys" (πολύς)
+    neut: str = ""  # abweichendes Neutrum Nom./Akk. Sg. (δεξιός → δεξί)
 
 
 def parse_adjective(card: VocabCard) -> Adjective | None:
     if card.word_type != "Adjektiv":
         return None
-    word = _clean_front(card.front).strip()
-    if " " in word or not _stripped(word).endswith("ος"):
+    word = unicodedata.normalize("NFC", _clean_front(card.front).strip())
+    if " " in word:
+        return None
+    s_word = _stripped(word)
+    if s_word == "πολυς":
+        return Adjective(word=word, stem="πολ", fem="πολλή",
+                         meaning=card.back, cls="polys")
+    if s_word.endswith("υς") and accent_pos(word) == 0:
+        # βαρύς, -ιά, -ύ: endbetont; der Stamm bleibt unbetont (βαρ-)
+        stem = word[:-2]
+        return Adjective(word=word, stem=stem, fem=stem + "ιά",
+                         meaning=card.back, cls="ys")
+    if not s_word.endswith("ος"):
         return None
     stem = word[:-2]
     fem = ((card.forms or {}).get("fem")
-           or ADJ_FEM_EXCEPTIONS.get(_stripped(word)))
+           or ADJ_FEM_EXCEPTIONS.get(s_word))
     if fem is None:
         # Stamm endet auf Vokal → -α (νέα, ωραία), sonst -η (καλή)
         s = _stripped(stem)
         fem = _ensure_accent(stem + ("α" if s and s[-1] in _VOWELS else "η"))
-    return Adjective(word=word, stem=stem, fem=fem, meaning=card.back)
+    return Adjective(word=word, stem=stem, fem=fem, meaning=card.back,
+                     neut=ADJ_NEUT_EXCEPTIONS.get(s_word, ""))
 
 
 def decline_adjective(adj: Adjective, gender: str, case: str, number: str) -> str:
     st = adj.stem
+    if adj.cls == "polys":
+        return _POLYS_FORMS[gender][(case, number)]
+    if adj.cls == "ys":
+        return st + _ADJ_YS_ENDINGS[gender][(case, number)]
     if gender == "m":
         endings = {("nom", "sg"): "ος", ("acc", "sg"): "ο", ("gen", "sg"): "ου",
                    ("nom", "pl"): "οι", ("acc", "pl"): "ους", ("gen", "pl"): "ων"}
         return _ensure_accent(st + endings[(case, number)])
     if gender == "n":
+        if adj.neut and number == "sg" and case in ("nom", "acc"):
+            return adj.neut
         endings = {("nom", "sg"): "ο", ("acc", "sg"): "ο", ("gen", "sg"): "ου",
                    ("nom", "pl"): "α", ("acc", "pl"): "α", ("gen", "pl"): "ων"}
         return _ensure_accent(st + endings[(case, number)])

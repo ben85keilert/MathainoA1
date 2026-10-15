@@ -241,3 +241,14 @@ def test_delete_analysis(env):
     astore.delete_analysis(analysis2.id, delete_lists=True)
     assert all(i not in store.lists
                for i in (analysis2.vocab_list_id, analysis2.etym_list_id))
+
+
+def test_card_from_entry_aorist_and_imperative():
+    card = ta.card_from_entry({
+        "front": "γράφω", "back": "schreiben", "word_type": "Verb",
+        "stem2": "γράψ-", "aorist": "έγραψα", "imperative": " Γράψε! "})
+    assert card.aorist == "έγραψα" and card.imperative == "Γράψε!"
+    # Reimport übernimmt die neuen Felder
+    old = VocabCard(front="γράφω", back="schreiben", word_type="Verb")
+    assert ta._copy_card_fields(card, old)
+    assert (old.aorist, old.imperative) == ("έγραψα", "Γράψε!")

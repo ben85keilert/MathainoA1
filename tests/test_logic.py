@@ -733,3 +733,35 @@ def test_training_settings_carry_default_true():
     assert s.carry_errors_next_round is True
     s2 = TrainingSettings.from_dict({"carry_errors_next_round": False})
     assert s2.carry_errors_next_round is False
+
+
+# --- Wertung: Auslassungspunkte, Apostrophe, Bindestrich am Rand (A2) ------
+
+def test_check_ignores_ellipsis_anywhere():
+    from mathainoa1.logic.answer_check import Result, check_german, check_greek
+    assert check_greek("δεν ... άλλο", "δεν άλλο") == Result.CORRECT
+    assert check_greek("κάτω των ... (χρονών)", "κάτω των χρονών") == Result.CORRECT
+    assert check_greek("Μήπως έχετε...;", "μήπως έχετε") == Result.CORRECT
+    assert check_german("[kein/keine] ... mehr", "kein mehr") == Result.CORRECT
+    assert check_german("Lass mal ...", "lass mal") == Result.CORRECT
+    # mit Auslassungspunkten getippt zählt weiterhin
+    assert check_greek("δεν ... άλλο", "δεν … άλλο") == Result.CORRECT
+
+
+def test_check_ignores_apostrophes_and_typographic_variants():
+    from mathainoa1.logic.answer_check import Result, check_german, check_greek
+    assert check_greek("Από 'δω [ο/η]...", "Από δω ο") == Result.CORRECT
+    assert check_greek("Από 'δω [ο/η]...", "Από ’δω η") == Result.CORRECT
+    assert check_german("Wie geht's weiter?", "wie gehts weiter") == Result.CORRECT
+    assert check_german("Wie geht's weiter?", "Wie geht’s weiter?") == Result.CORRECT
+
+
+def test_check_ignores_hyphen_at_word_edge():
+    from mathainoa1.logic.answer_check import Result, check_german, check_greek
+    assert check_greek("ξανα-", "ξανα") == Result.CORRECT
+    assert check_german("Lieblings-", "Lieblings") == Result.CORRECT
+    assert check_german("Kinder-", "kinder-") == Result.CORRECT
+    # Bindestrich mitten im Wort bleibt Pflicht
+    assert check_german("Ein-Zimmer-Appartement", "Ein Zimmer Appartement") == Result.WRONG
+    # Akzentfehler bleiben „Fast“, auch mit überflüssigem Bindestrich
+    assert check_greek("μένω", "μενω-") == Result.ALMOST

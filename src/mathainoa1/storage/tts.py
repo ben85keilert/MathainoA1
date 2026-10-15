@@ -36,13 +36,23 @@ class TtsFetchError(Exception):
 def speakable(text: str) -> str:
     """Sprechbare Form eines Kartentexts.
 
+    - [a/b]-Pflichtwahl: erste Variante ("[Έχει/Είχε] πλάκα!" ->
+      "Έχει πλάκα!", "[ο/η] γιατρός" -> "ο γιατρός")
     - Ein-Wort-Alternativen am Anfang: erste Variante plus Rest
       ("ο / η συνταξιούχος" -> "ο συνταξιούχος", "και / κι" -> "και")
     - sonst erste "/"-Alternative ("τα λέμε / γεια" -> "τα λέμε")
     - Klammern im Wort auffüllen ("αγαπ(ά)ω" -> "αγαπάω")
     - freistehende Klammerzusätze streichen ("η Ένωση (ΕΕ)" -> "η Ένωση")
+    - Auslassungspunkte entfallen ("δεν ... άλλο" -> "δεν άλλο")
     """
-    t = text.strip()
+    t = re.sub(r"\[([^\]/]*)/[^\]]*\]", r"\1", text.strip())
+    t = re.sub(r"\[([^\]]*)\]", r"\1", t)
+    # vor Satzzeichen/am Ende ersatzlos ("Μήπως έχετε...;"), sonst als
+    # Lücke ("δεν ... άλλο" -> "δεν άλλο"); "(?!\.)" verhindert, dass
+    # von "..." nur zwei Punkte genommen werden
+    t = re.sub(r"\s*(?:…|\.{2,})(?!\.)\s*(?=[;!?,]|$)", "", t)
+    t = re.sub(r"\s*(?:…|\.{2,})(?!\.)\s*", " ", t)
+    t = re.sub(r"^[\s,;·]+", "", t)
     # "ο / η συνταξιούχος": die "/"-Gruppe besteht aus einzelnen Wörtern,
     # der gemeinsame Rest gehört zu jeder Variante — erste Variante nehmen,
     # Rest behalten (der alte split("/") ließe nur "ο" übrig)

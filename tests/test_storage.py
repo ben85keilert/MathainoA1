@@ -614,3 +614,67 @@ def test_export_csv_columns_can_include_id():
     text = export_csv_columns([card], ["id", "front", "back"])
     assert text.splitlines()[0] == "id,front,back"
     assert text.splitlines()[1] == "v1,γράφω,schreiben"
+
+
+# --- A2: Aorist/Imperativ, Felder je Stufe --------------------------------
+
+def test_verb_and_csv_fields_per_level():
+    assert content.verb_fields_for("A1") == ["stem2"]
+    assert content.verb_fields_for("A2") == ["stem2", "aorist", "imperative"]
+    # unbekannte (spätere) Stufe: alle Felder
+    assert content.verb_fields_for("A2+") == content.VERB_FIELDS
+    a1, a2 = content.csv_fields_for("A1"), content.csv_fields_for("A2")
+    assert "aorist" not in a1 and "imperative" not in a1
+    assert a2[-3:] == ["stem2", "aorist", "imperative"]
+    for fields in (a1, a2):
+        assert "aorist_passive" not in fields and "participle" not in fields
+    assert content.csv_fields_for("A2+") == content.CSV_FIELDS
+
+
+def test_csv_import_aorist_and_imperative():
+    text = (HEADER + "\n"
+            + '"γράφω","schreiben",,,"Verb",,,,,,"γράψ-","έγραψα",'
+              '" Γράψε! ",,\n'
+            + '"είμαι","sein",,,"Verb",,,,,,,'
+              '"ήμουν,ήσουν,ήταν,ήμασταν,ήσασταν,ήταν",,,\n')
+    grafo, ime = content.import_csv("Import", text).cards
+    assert grafo.aorist == "έγραψα" and grafo.imperative == "Γράψε!"
+    # 6er-Liste wird wie beim 2. Stamm normalisiert
+    assert ime.aorist == "ήμουν, ήσουν, ήταν, ήμασταν, ήσασταν, ήταν"
+    # Export → Import bleibt verlustfrei
+    vlist = content.import_csv("Import", text)
+    again = content.import_csv("X", content.export_csv(vlist))
+    assert [(c.aorist, c.imperative) for c in again.cards] == [
+        (c.aorist, c.imperative) for c in vlist.cards]
+
+
+def test_csv_import_old_13_column_header_still_works():
+    old_header = ("front,back,plural,article,word_type,hints_gr,hints_de,"
+                  "notes_gr,notes_de,forms,stem2,aorist_passive,participle")
+    text = (old_header + "\n"
+            + '"γράφω","schreiben",,,"Verb",,,,,,"γράψ-","γραφτ-",'
+              '"γραμμένος"\n')
+    c = content.import_csv("Alt", text).cards[0]
+    assert c.stem2 == "γράψ-" and c.aorist_passive == "γραφτ-"
+    assert c.participle == "γραμμένος" and c.aorist == ""
+
+
+def test_update_list_sets_aorist_by_id():
+    vlist = VocabList(name="Verben", cards=[
+        VocabCard(front="γράφω", back="schreiben", word_type="Verb")])
+    card_id = vlist.cards[0].id
+    rows, fields = content.parse_import_rows(
+        f'id,aorist,imperative\n{card_id},έγραψα,Γράψε!\n')
+    assert fields == ["aorist", "imperative"]
+    result = content.update_cards(vlist, rows, fields)
+    assert result["updated"] == 1
+    assert (vlist.cards[0].aorist, vlist.cards[0].imperative) == (
+        "έγραψα", "Γράψε!")
+
+
+def test_example_list_has_aorist_and_imperative():
+    vlist = content.example_vocab_list()
+    grafo = next(c for c in vlist.cards if c.front == "γράφω")
+    assert grafo.aorist == "έγραψα" and grafo.imperative == "Γράψε!"
+    # A2+-Stoff steckt nicht mehr im Beispiel
+    assert all(not c.aorist_passive and not c.participle for c in vlist.cards)

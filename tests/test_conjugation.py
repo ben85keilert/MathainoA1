@@ -139,7 +139,7 @@ def test_task_display_joins_variants():
     v = verb("σηκώνομαι", "aufstehen")
     task = build_task(v, parse_verb(v), 2, "pl")
     assert task.display == "σηκώνεστε/σηκωνόσαστε"
-    assert task.future_base == ""
+    assert task.tense_base == ""
 
 
 def test_task_check_variants_and_accents():
@@ -281,7 +281,7 @@ def test_build_task_future():
     assert task.expected == "θα γράψετε"
     assert task.label == "Futur - 2. Pers. - Plural 👥 (ihr / höfliches Sie)"
     assert task.display == "θα γράψετε"
-    assert task.future_base == "θα γράψω"
+    assert task.tense_base == "θα γράψω"
     # mit und ohne "θα" richtig
     assert task.check("θα γράψετε") == Result.CORRECT
     assert task.check("γράψετε") == Result.CORRECT
@@ -295,7 +295,7 @@ def test_future_display_and_base_with_variants():
                  "trinken")
     task = build_task(c, parse_verb(c), 3, "pl", tense="future")
     assert task.display == "θα πιουν/πιούνε"
-    assert task.future_base == "θα πιω"
+    assert task.tense_base == "θα πιω"
 
 
 def test_generate_tasks_tenses():
@@ -349,3 +349,186 @@ def test_conjugation_settings_carry_default_true():
     assert s.carry_errors_next_round is True
     assert ConjugationSettings.from_dict(
         {"carry_errors_next_round": False}).carry_errors_next_round is False
+
+
+# --- Aorist (A2): aus der 1. Person Singular -------------------------------
+
+def aor_verb(front, aorist, back="x", **kw):
+    return VocabCard(front=front, back=back, word_type="Verb",
+                     aorist=aorist, **kw)
+
+
+def aorist_forms(front, aorist):
+    v = parse_verb(aor_verb(front, aorist))
+    assert v is not None and conj.has_aorist(v), f"kein Aorist: {front}"
+    return ["/".join(conj.conjugate_aorist(v, p, n))
+            for n in ("sg", "pl") for p in (1, 2, 3)]
+
+
+def test_aorist_augment_drops_in_plural():
+    assert aorist_forms("γράφω", "έγραψα") == [
+        "έγραψα", "έγραψες", "έγραψε", "γράψαμε", "γράψατε",
+        "έγραψαν/γράψανε"]
+    assert aorist_forms("τρώω", "έφαγα")[3:5] == ["φάγαμε", "φάγατε"]
+    assert aorist_forms("γίνομαι", "έγινα")[3] == "γίναμε"
+
+
+def test_aorist_stress_moves_to_antepenult():
+    assert aorist_forms("αγοράζω", "αγόρασα") == [
+        "αγόρασα", "αγόρασες", "αγόρασε", "αγοράσαμε", "αγοράσατε",
+        "αγόρασαν/αγοράσανε"]
+    assert aorist_forms("καταλαβαίνω", "κατάλαβα")[3] == "καταλάβαμε"
+    assert aorist_forms("περιμένω", "περίμενα")[4] == "περιμένατε"
+
+
+def test_aorist_stem_epsilon_is_no_augment():
+    # ελπίζω beginnt selbst mit ε — das ε von έλπισα bleibt im Plural
+    assert aorist_forms("ελπίζω", "έλπισα")[3] == "ελπίσαμε"
+
+
+def test_aorist_eta_and_ei_forms_keep_their_vowel():
+    assert aorist_forms("έρχομαι", "ήρθα")[3:] == [
+        "ήρθαμε", "ήρθατε", "ήρθαν/ήρθανε"]
+    assert aorist_forms("λέω", "είπα")[3] == "είπαμε"
+    assert aorist_forms("έχω", "είχα")[4] == "είχατε"
+    assert aorist_forms("βγαίνω", "βγήκα")[3] == "βγήκαμε"
+
+
+def test_aorist_passive_type_omai_verbs():
+    assert aorist_forms("κοιμάμαι", "κοιμήθηκα") == [
+        "κοιμήθηκα", "κοιμήθηκες", "κοιμήθηκε", "κοιμηθήκαμε",
+        "κοιμηθήκατε", "κοιμήθηκαν/κοιμηθήκανε"]
+    assert aorist_forms("ανεβαίνω", "ανέβηκα")[3] == "ανεβήκαμε"
+    assert aorist_forms("χαίρομαι", "χάρηκα")[4] == "χαρήκατε"
+
+
+def test_aorist_irregular_table():
+    assert aorist_forms("είμαι", "ήμουν") == [
+        "ήμουν/ήμουνα", "ήσουν/ήσουνα", "ήταν/ήτανε",
+        "ήμασταν/ήμαστε", "ήσασταν/ήσαστε", "ήταν/ήτανε"]
+    assert aorist_forms("θέλω", "ήθελα")[3:] == [
+        "θέλαμε", "θέλατε", "ήθελαν/θέλανε"]
+    assert aorist_forms("ξέρω", "ήξερα")[3] == "ξέραμε"
+    # Synizese: ήπια bleibt auf dem ή betont
+    assert aorist_forms("πίνω", "ήπια")[3] == "ήπιαμε"
+
+
+def test_aorist_sample_from_verb_list():
+    """Stichprobe der Pame-A2-Verbliste: 1. Pers. Pl. aus der 1. Pers. Sg."""
+    cases = {
+        ("ακούω", "άκουσα"): "ακούσαμε", ("βάζω", "έβαλα"): "βάλαμε",
+        ("βλέπω", "είδα"): "είδαμε", ("δίνω", "έδωσα"): "δώσαμε",
+        ("κάθομαι", "έκατσα"): "κάτσαμε", ("μένω", "έμεινα"): "μείναμε",
+        ("νιώθω", "ένιωσα"): "νιώσαμε", ("παίρνω", "πήρα"): "πήραμε",
+        ("πάω", "πήγα"): "πήγαμε", ("στέλνω", "έστειλα"): "στείλαμε",
+        ("τελειώνω", "τελείωσα"): "τελειώσαμε",
+        ("κρυώνω", "κρύωσα"): "κρυώσαμε",
+        ("σκέφτομαι", "σκέφτηκα"): "σκεφτήκαμε",
+        ("ευχαριστώ", "ευχαρίστησα"): "ευχαριστήσαμε",
+    }
+    for (front, aorist), first_pl in cases.items():
+        assert aorist_forms(front, aorist)[3] == first_pl, front
+
+
+def test_aorist_variants_phrase_and_unaccented_input():
+    # zwei Aoriste nacheinander, kanonisch der erste
+    v = parse_verb(aor_verb("κάθομαι", "έκατσα/κάθισα"))
+    assert conj.conjugate_aorist(v, 1, "pl") == ["κάτσαμε", "καθίσαμε"]
+    # Phrase: der Rest kommt aus der Vorderseite
+    v = parse_verb(aor_verb("κάνω μπάνιο", "έκανα"))
+    assert conj.conjugate_aorist(v, 1, "pl") == ["κάναμε μπάνιο"]
+    # unbetont eingegeben → Ton auf der drittletzten Silbe
+    v = parse_verb(aor_verb("γράφω", "εγραψα"))
+    assert conj.conjugate_aorist(v, 1, "sg") == ["έγραψα"]
+
+
+def test_aorist_six_forms_and_unusable_input():
+    v = parse_verb(aor_verb(
+        "επιστρέφω", "επέστρεψα, επέστρεψες, επέστρεψε, επιστρέψαμε, "
+                     "επιστρέψατε, επέστρεψαν/επιστρέψανε"))
+    assert conj.conjugate_aorist(v, 1, "pl") == ["επιστρέψαμε"]
+    assert conj.conjugate_aorist(v, 3, "pl") == ["επέστρεψαν", "επιστρέψανε"]
+    # ein Stamm statt der 1. Person ist kein verwertbarer Aorist
+    assert not conj.has_aorist(parse_verb(aor_verb("γράφω", "γράψ-")))
+    assert not conj.has_aorist(parse_verb(verb("γράφω")))
+
+
+def test_build_task_aorist():
+    c = aor_verb("γράφω", "έγραψα", "schreiben")
+    task = build_task(c, parse_verb(c), 3, "pl", tense="aorist")
+    assert task.label == "Aorist - 3. Pers. - Plural 👥"
+    assert task.expected == "έγραψαν"
+    assert task.display == "έγραψαν/γράψανε"
+    assert task.tense_base == "έγραψα"
+    assert task.check("γράψανε") == Result.CORRECT
+    assert task.check("εγραψαν") == Result.ALMOST
+    assert task.check("γράφουν") == Result.WRONG
+    # ohne Aorist keine Aufgabe
+    c2 = verb("μένω")
+    assert build_task(c2, parse_verb(c2), 1, "sg", tense="aorist") is None
+
+
+def test_build_task_imperative():
+    c = VocabCard(front="κάθομαι", back="sitzen", word_type="Verb",
+                  imperative="Κάτσε!/Κάθισε!")
+    v = parse_verb(c)
+    task = build_task(c, v, 2, "sg", tense="imperative")
+    assert task.label == "Imperativ - 2. Pers. - Singular 👤"
+    assert task.display == "Κάτσε!/Κάθισε!" and task.tense_base == ""
+    assert task.check("κάθισε") == Result.CORRECT
+    assert task.check("Κάτσε!") == Result.CORRECT
+    assert task.check("κάτσετε") == Result.WRONG
+    # nur 2. Person Singular
+    assert build_task(c, v, 2, "pl", tense="imperative") is None
+    # optionaler Teil in Klammern
+    c2 = VocabCard(front="ακούω", back="hören", word_type="Verb",
+                   imperative="Άκου(σε)!")
+    t2 = build_task(c2, parse_verb(c2), 2, "sg", tense="imperative")
+    assert t2.check("άκου") == Result.CORRECT
+    assert t2.check("άκουσε") == Result.CORRECT
+
+
+def test_generate_tasks_aorist_and_imperative():
+    cards = [VocabCard(front="γράφω", back="schreiben", word_type="Verb",
+                       aorist="έγραψα", imperative="Γράψε!"),
+             verb("μένω", "wohnen")]  # ohne Aorist/Imperativ
+    settings = ConjugationSettings(persons=[1], numbers=["pl"],
+                                   tenses=["aorist", "imperative"])
+    tasks = generate_tasks(cards, settings, rng=random.Random(1))
+    # Imperativ unabhängig von der Personen-/Zahl-Auswahl (immer 2. Sg.)
+    assert sorted((t.tense, t.expected) for t in tasks) == [
+        ("aorist", "γράψαμε"), ("imperative", "Γράψε!")]
+    # griechische Vorgabe: die 1. Sg. Aorist bleibt (sie ist nicht das Lemma)
+    settings = ConjugationSettings(persons=[1], numbers=["sg"],
+                                   tenses=["aorist"], direction="gr")
+    assert [t.expected for t in generate_tasks(cards, settings)] == ["έγραψα"]
+
+
+def test_tenses_for_level():
+    assert conj.tenses_for_level("A1") == ["present", "future"]
+    assert conj.tenses_for_level("A2") == [
+        "present", "future", "aorist", "imperative"]
+    assert conj.tenses_for_level("A2+") == conj.TENSES  # unbekannt: alle
+
+
+def test_base_form_text_aorist_and_imperative():
+    from mathainoa1.ui.views.grammar import _base_form_text
+    c = VocabCard(front="γράφω", back="schreiben", word_type="Verb",
+                  aorist="έγραψα", imperative="Γράψε!")
+    v = parse_verb(c)
+    aor = build_task(c, v, 2, "pl", tense="aorist")
+    assert _base_form_text(aor, "both") == "έγραψα (γράφω)"
+    assert _base_form_text(aor, "stem2") == "έγραψα"
+    assert _base_form_text(aor, "present") == "γράφω"
+    imp = build_task(c, v, 2, "sg", tense="imperative")
+    assert _base_form_text(imp, "both") == "γράφω"
+
+
+def test_verb_sample_shows_aorist_only_on_level():
+    from mathainoa1.ui.views.grammar import _verb_sample
+    v = parse_verb(VocabCard(front="γράφω", back="schreiben", word_type="Verb",
+                             aorist="έγραψα", imperative="Γράψε!"))
+    a1 = _verb_sample(v, conj.tenses_for_level("A1"))
+    a2 = _verb_sample(v, conj.tenses_for_level("A2"))
+    assert "Aorist" not in a1 and "Imperativ" not in a1
+    assert "Aorist: γράψατε" in a2 and "Imperativ: Γράψε!" in a2

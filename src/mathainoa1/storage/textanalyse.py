@@ -2,7 +2,7 @@
 
 Eine Analyse ist ein JSON im app-definierten Schema (erzeugt vom Chatbot
 nach der mitgelieferten Arbeitsanweisung III, siehe
-ui/views/textanalyse.ARBEITSANWEISUNG_III). Ablage: eine Datei pro Analyse
+ui/views/textanalyse.arbeitsanweisung_iii). Ablage: eine Datei pro Analyse
 unter app_data_dir()/features/textanalyse/<id>.json.
 
 Reimport = Korrekturmechanismus: dieselbe id (oder derselbe Titel) ersetzt
@@ -268,7 +268,8 @@ def card_from_entry(entry: dict) -> VocabCard | None:
     card.notes_gr = str(entry.get("notes_gr", "") or "").strip()
     card.notes_de = str(entry.get("notes_de", "") or "").strip()
     card.participle = str(entry.get("participle", "") or "").strip()
-    for stem_field in ("stem2", "aorist_passive"):
+    card.imperative = str(entry.get("imperative", "") or "").strip()
+    for stem_field in ("stem2", "aorist", "aorist_passive"):
         try:
             setattr(card, stem_field,
                     parse_stem2_text(str(entry.get(stem_field, "") or "")))
@@ -299,7 +300,7 @@ def _copy_card_fields(src: VocabCard, dst: VocabCard) -> bool:
     """Inhaltsfelder von src auf dst übertragen (id/book/chapter/source
     bleiben). True, wenn sich dabei etwas geändert hat."""
     fields = ("front", "back", "article", "plural", "word_type", "forms",
-              "stem2", "aorist_passive", "participle",
+              "stem2", "aorist", "imperative", "aorist_passive", "participle",
               "hints_gr", "hints_de", "notes_gr", "notes_de")
     changed = False
     for name in fields:

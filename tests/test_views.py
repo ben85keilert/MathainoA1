@@ -836,15 +836,35 @@ def test_list_view_word_info_icon(store_with_edge_cases, tmp_path,
 
 def test_prompts_two_step_split():
     """AW III liefert keine Etymologie mehr; AW IV übernimmt sie."""
-    from mathainoa1.ui.views.lexikon import ARBEITSANWEISUNG_IV
-    from mathainoa1.ui.views.textanalyse import ARBEITSANWEISUNG_III
+    from mathainoa1.ui.views.lexikon import arbeitsanweisung_iv
+    from mathainoa1.ui.views.textanalyse import arbeitsanweisung_iii
 
-    assert '"etymology"' not in ARBEITSANWEISUNG_III
-    assert "extra_vocab" not in ARBEITSANWEISUNG_III
-    assert "Arbeitsanweisung IV" in ARBEITSANWEISUNG_III
-    assert '"etymology"' in ARBEITSANWEISUNG_IV
-    assert '"extra_vocab"' in ARBEITSANWEISUNG_IV
-    assert "NICHT alphabetisch" in ARBEITSANWEISUNG_IV
+    for level in ("A1", "A2"):
+        aw3, aw4 = arbeitsanweisung_iii(level), arbeitsanweisung_iv(level)
+        assert '"etymology"' not in aw3
+        assert "extra_vocab" not in aw3
+        assert "Arbeitsanweisung IV" in aw3
+        assert '"etymology"' in aw4
+        assert '"extra_vocab"' in aw4
+        assert "NICHT alphabetisch" in aw4
+        assert "@" not in aw3 and "@" not in aw4  # Platzhalter ersetzt
+
+
+def test_arbeitsanweisungen_verb_fields_follow_level():
+    """AW III/IV fragen nur die Verbfelder der Stufe ab: A1 den 2. Stamm,
+    A2 zusätzlich Aorist und Imperativ — Aorist Passiv/Partizip nie."""
+    from mathainoa1.ui.views.lexikon import arbeitsanweisung_iv
+    from mathainoa1.ui.views.textanalyse import arbeitsanweisung_iii
+
+    a1, a2 = arbeitsanweisung_iii("A1"), arbeitsanweisung_iii("A2")
+    assert '"stem2": ""' in a1 and '"aorist"' not in a1
+    assert '"aorist": ""' in a2 and '"imperative": ""' in a2
+    assert "έγραψα" in a2
+    for text in (a1, a2, arbeitsanweisung_iv("A1"), arbeitsanweisung_iv("A2")):
+        assert "aorist_passive" not in text and "participle" not in text
+    assert "stem2, aorist, imperative" in arbeitsanweisung_iv("A2")
+    # unbekannte (spätere) Stufe: alle Felder
+    assert "aorist_passive" in arbeitsanweisung_iii("A2+")
 
 
 # --- Backup (v0.7.0) ---------------------------------------------------------
@@ -952,22 +972,34 @@ def test_list_view_title_row_with_tab_toggles(store_with_edge_cases,
 # --- Prompt-Konsistenz (v0.7.1) ---------------------------------------------
 
 def test_prompt_examples_have_all_columns():
-    """Beispielzeilen in Prompt und Beispielliste: volle 13 Spalten —
-    sonst lernt der Chatbot ein verkürztes Format (aorist_passive und
-    participle fehlten positionsrichtig)."""
+    """Beispielzeilen im Prompt haben genau die Spalten der Kopfzeile der
+    Stufe — sonst lernt der Chatbot ein verkürztes Format. Die
+    Beispielliste hat alle CSV-Spalten."""
     import csv
     import io
 
-    from mathainoa1.storage.content import _EXAMPLE_CSV, CSV_FIELDS
-    from mathainoa1.ui.views.help import _CSV_FORMAT_RULES
+    from mathainoa1.storage.content import (
+        _EXAMPLE_CSV,
+        CSV_FIELDS,
+        csv_fields_for,
+    )
+    from mathainoa1.ui.views.help import csv_format_rules
 
-    block = _CSV_FORMAT_RULES.split("BEISPIELZEILEN")[1]
-    rows = [r for r in csv.reader(io.StringIO(block)) if len(r) > 1]
-    assert rows
-    assert all(len(r) == len(CSV_FIELDS) for r in rows)
-    # γράφω zeigt jetzt auch aorist_passive und participle
-    grafo = next(r for r in rows if r[0] == "γράφω")
-    assert grafo[11] == "γραφτ-" and grafo[12] == "γραμμένος"
+    for level in ("A1", "A2"):
+        fields = csv_fields_for(level)
+        rules = csv_format_rules(level)
+        assert ",".join(fields) + "\n" in rules
+        block = rules.split("BEISPIELZEILEN")[1]
+        rows = [r for r in csv.reader(io.StringIO(block)) if len(r) > 1]
+        assert rows
+        assert all(len(r) == len(fields) for r in rows)
+        grafo = dict(zip(fields, next(r for r in rows if r[0] == "γράφω")))
+        assert grafo["stem2"] == "γράψ-"
+        if level == "A2":
+            assert grafo["aorist"] == "έγραψα"
+            assert grafo["imperative"] == "Γράψε!"
+        # A2-Beispiele (Aoristeintrag, -ύς-Adjektiv) nur auf A2
+        assert any(r[0] == "ήρθα" for r in rows) == (level == "A2")
 
     example_rows = [r for r in csv.reader(io.StringIO(_EXAMPLE_CSV)) if r]
     assert all(len(r) == len(CSV_FIELDS) for r in example_rows)
@@ -976,33 +1008,51 @@ def test_prompt_examples_have_all_columns():
 def test_prompt_forms_without_article_and_keys():
     """forms-Werte ohne Artikel (sonst „του του άντρα") und nom_pl in
     der Schlüsselliste; aorist_passive nicht mehr als Pflicht."""
-    from mathainoa1.ui.views.help import _CSV_FORMAT_RULES
-    from mathainoa1.ui.views.lexikon import ARBEITSANWEISUNG_IV
-    from mathainoa1.ui.views.textanalyse import ARBEITSANWEISUNG_III
+    from mathainoa1.ui.views.help import csv_format_rules
+    from mathainoa1.ui.views.lexikon import arbeitsanweisung_iv
+    from mathainoa1.ui.views.textanalyse import arbeitsanweisung_iii
 
-    assert "του άντρα" not in ARBEITSANWEISUNG_III
-    assert "του άντρα" not in ARBEITSANWEISUNG_IV
-    assert "nom_pl" in _CSV_FORMAT_RULES
-    assert "immer angeben" not in ARBEITSANWEISUNG_III
-    assert "notes_gr" in ARBEITSANWEISUNG_III  # Schema nennt alle Felder
+    for level in ("A1", "A2"):
+        assert "του άντρα" not in arbeitsanweisung_iii(level)
+        assert "του άντρα" not in arbeitsanweisung_iv(level)
+        assert "nom_pl" in csv_format_rules(level)
+        assert "immer angeben" not in arbeitsanweisung_iii(level)
+        # Schema nennt alle Felder
+        assert "notes_gr" in arbeitsanweisung_iii(level)
 
 
 def test_prompt_level_interpolation(tmp_path, monkeypatch):
-    """CHATBOT_/TEXT_PROMPT tragen die aktive Stufe statt fest „A1"."""
+    """Wortlisten-/Lesetext-Prompt tragen die aktive Stufe statt fest „A1"."""
     monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
     from mathainoa1.storage.settings import (
         AppSettings,
         load_app_settings,
         save_app_settings,
     )
-    from mathainoa1.ui.views.help import CHATBOT_PROMPT, TEXT_PROMPT
+    from mathainoa1.ui.views.help import chatbot_prompt, text_prompt
 
     s = AppSettings()
     s.level = "A2"
     save_app_settings(s)
-    for tpl in (CHATBOT_PROMPT, TEXT_PROMPT):
-        text = tpl.format(level=load_app_settings().level)
+    for build in (chatbot_prompt, text_prompt):
+        text = build(load_app_settings().level)
         assert "Niveau A2" in text and "{level}" not in text
+
+
+def test_prompt_rules_follow_level():
+    """Nur der Stoff der Stufe: A1 ohne Aorist/Imperativ, A2 mit beiden und
+    mit der Pame-A2-Buchschreibweise; Aorist Passiv/Partizip auf keiner."""
+    from mathainoa1.ui.views.help import chatbot_prompt
+
+    a1, a2 = chatbot_prompt("A1"), chatbot_prompt("A2")
+    assert "stem2:" in a1 and "aorist:" not in a1
+    assert "imperative:" not in a1
+    assert "aorist:" in a2 and "imperative:" in a2
+    assert "πιστεύω, -έψω" in a2 and "Aorist von έρχομαι" in a2
+    for text in (a1, a2):
+        assert "aorist_passive" not in text and "participle" not in text
+    # unbekannte (spätere) Stufe bekommt wieder alle Felder
+    assert "aorist_passive" in chatbot_prompt("A2+")
 
 
 def test_options_summary_saves_immediately_and_refreshes():
@@ -1323,3 +1373,120 @@ def test_box_filter_row_toggles(tmp_path, monkeypatch):
     # gespeicherte Auswahl wird übernommen
     _row2, boxes2 = box_filter_row(nav.page, [0, 1])
     assert boxes2() == [0, 1]
+
+
+# --- Stufe A2: Aorist/Imperativ nur, wo sie Stoff sind ----------------------
+
+def _set_level(tmp_path, monkeypatch, level):
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.storage.settings import AppSettings, save_app_settings
+    save_app_settings(AppSettings(level=level))
+
+
+def _find_all(ctrl, cls, out=None):
+    """Alle Controls eines Typs (rekursiv über controls/content)."""
+    import flet as ft
+    out = [] if out is None else out
+    if isinstance(ctrl, cls):
+        out.append(ctrl)
+    for attr in ("controls", "content"):
+        sub = getattr(ctrl, attr, None)
+        for s in (sub if isinstance(sub, list) else [sub]):
+            if isinstance(s, ft.Control):
+                _find_all(s, cls, out)
+    return out
+
+
+_STEM2 = "2. Stamm (Futur/να-Form)"
+_AORIST = "Aorist (Vergangenheit)"
+_IMPERATIVE = "Imperativ (2. Person Singular)"
+_AORIST_PASSIVE = "Aorist Passiv (3. Stamm)"
+_PARTICIPLE = "Perfekt-Partizip (unregelmäßig)"
+
+
+@pytest.mark.parametrize("level, visible, hidden", [
+    ("A1", {_STEM2}, {_AORIST, _IMPERATIVE, _AORIST_PASSIVE, _PARTICIPLE}),
+    ("A2", {_STEM2, _AORIST, _IMPERATIVE}, {_AORIST_PASSIVE, _PARTICIPLE}),
+])
+def test_card_editor_verb_fields_follow_level(store_with_edge_cases, tmp_path,
+                                              monkeypatch, level, visible,
+                                              hidden):
+    import flet as ft
+    _set_level(tmp_path, monkeypatch, level)
+    store, vlist = store_with_edge_cases
+    nav = _fake_nav()
+    dialogs = []
+    nav.page.show_dialog = dialogs.append
+    grafo = next(c for c in vlist.cards if c.front == "γράφω")
+    manager.card_editor_dialog(nav.page, store, vlist, grafo)
+    fields = {tf.label: tf for tf in _find_all(dialogs[-1].content,
+                                                ft.TextField)}
+    assert all(fields[label].visible for label in visible)
+    assert not any(fields[label].visible for label in hidden)
+
+
+def test_card_editor_saves_aorist_and_keeps_hidden_values(
+        store_with_edge_cases, tmp_path, monkeypatch):
+    import flet as ft
+    _set_level(tmp_path, monkeypatch, "A2")
+    store, vlist = store_with_edge_cases
+    grafo = next(c for c in vlist.cards if c.front == "γράφω")
+    grafo.aorist_passive = "γραφτ-"  # kein A2-Stoff: ausgeblendet, bleibt
+    nav = _fake_nav()
+    dialogs = []
+    nav.page.show_dialog = dialogs.append
+    manager.card_editor_dialog(nav.page, store, vlist, grafo)
+    dlg = dialogs[-1]
+    fields = {tf.label: tf for tf in _find_all(dlg.content, ft.TextField)}
+    fields[_AORIST].value = "έγραψα"
+    fields[_IMPERATIVE].value = "Γράψε!"
+    dlg.actions[1].on_click(None)  # Speichern
+    assert (grafo.aorist, grafo.imperative) == ("έγραψα", "Γράψε!")
+    assert grafo.aorist_passive == "γραφτ-"
+    # ein Stamm statt der 1. Person ergibt keinen Aorist → abgelehnt
+    fields[_AORIST].value = "γράψ-"
+    dlg.actions[1].on_click(None)
+    assert grafo.aorist == "έγραψα"
+
+
+@pytest.mark.parametrize("level, tenses", [
+    ("A1", ["present", "future"]),
+    ("A2", ["present", "future", "aorist", "imperative"]),
+])
+def test_conjugation_setup_tenses_follow_level(store_with_edge_cases, tmp_path,
+                                               monkeypatch, level, tenses):
+    import flet as ft
+    _set_level(tmp_path, monkeypatch, level)
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    nav.store = store
+    progress = ProgressStore(tmp_path / "p.db")
+    try:
+        view = grammar.conjugation_setup_view(nav, store, progress)
+    finally:
+        progress.close()
+    seg = next(s for s in _find_all(view, ft.SegmentedButton)
+               if any(x.value == "present" for x in s.segments))
+    assert [x.value for x in seg.segments] == tenses
+
+
+def test_reference_shows_a2_material_only_on_a2():
+    def texts(ctrl):
+        found: list[str] = []
+        _collect_texts_and_tooltips(ctrl, found)
+        return found
+
+    for view, heading in (
+            (reference.verbs_view, "Aorist (Vergangenheit)"),
+            (reference.verbs_view, "Imperativ (einmalig, 2. Person Singular)"),
+            (reference.adjectives_view, "A2: Adjektive auf -ύς, -ιά, -ύ"),
+            (reference.numbers_view, "A2: Ordnungszahlen")):
+        assert heading in texts(view("A2"))
+        assert heading not in texts(view("A1"))
+    card = VocabCard(front="γράφω", back="schreiben", word_type="Verb",
+                     stem2="γράψ-", aorist="έγραψα", imperative="Γράψε!")
+    a1 = texts(reference._verb_forms_tables(card, "A1"))
+    a2 = texts(reference._verb_forms_tables(card, "A2"))
+    assert "Aorist (Vergangenheit)" in a2
+    assert "Imperativ (2. Person Singular)" in a2
+    assert "Aorist (Vergangenheit)" not in a1 and "Futur (θα + 2. Stamm)" in a1

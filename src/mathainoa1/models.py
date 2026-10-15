@@ -83,10 +83,12 @@ def parse_verb_forms_text(text: str) -> dict[str, str]:
 
 
 def parse_stem2_text(text: str) -> str:
-    """Normalisiert die '2. Stamm'-Eingabe.
+    """Normalisiert die '2. Stamm'-Eingabe (gleiches Format: Aorist und
+    Aorist Passiv).
 
-    Ein Wort = regelmäßiger Stamm; sonst bis zu 6 Personenformen
-    kommagetrennt (1sg..3pl). ValueError bei mehr als 6 Slots.
+    Ein Wort = regelmäßiger Stamm bzw. 1. Person Singular; sonst bis zu
+    6 Personenformen kommagetrennt (1sg..3pl). ValueError bei mehr als
+    6 Slots.
     """
     text = text.strip()
     if not text:
@@ -117,15 +119,22 @@ class VocabCard:
     # Unregelmäßige Formen für Deklination/Konjugation, z.B.
     # {"gen_pl": "γυναικών"} oder {"2sg": "πας"}; siehe FORM_KEYS.
     forms: dict[str, str] = field(default_factory=dict)
-    # 2. Stamm (Futur/να-Form, Aorist Aktiv) bei Verben: einzelner Stamm
-    # (z.B. "γράψ-") ODER 6 Personenformen kommagetrennt (1sg..3pl),
-    # Varianten mit "/". Vorerst nur Speicherung — Trainingslogik folgt später.
+    # 2. Stamm (Futur/να-Form) bei Verben: einzelner Stamm (z.B. "γράψ-")
+    # ODER 6 Personenformen kommagetrennt (1sg..3pl), Varianten mit "/".
     stem2: str = ""
-    # Aorist Passiv (3. Stamm) bei Verben, gleiches Format wie stem2
-    # (z.B. "γραφτ-"). Vorerst nur Speicherung/Anzeige (A2-Vorbereitung).
+    # Aorist (Vergangenheit, ab Stufe A2): 1. Person Singular wie in der
+    # Pame-Verbliste (z.B. "έγραψα", "ήρθα", "κοιμήθηκα") — die übrigen
+    # Personen bildet logic/conjugation.py — ODER 6 Personenformen
+    # kommagetrennt (1sg..3pl); Varianten mit "/".
+    aorist: str = ""
+    # Imperativ (einmalig, 2. Person Singular, ab Stufe A2) wie in der
+    # Verbliste, z.B. "Γράψε!", "Άκου(σε)!" oder "Κάτσε!/Κάθισε!".
+    imperative: str = ""
+    # Aorist Passiv (3. Stamm) und unregelmäßiges Perfekt-Partizip (z.B.
+    # "γραφτ-", "γραμμένος"): kein Stoff von A1/A2 — dort ausgeblendet,
+    # gespeicherte Werte bleiben aber erhalten (siehe
+    # content.verb_fields_for; vorgesehen für eine spätere Stufe).
     aorist_passive: str = ""
-    # Unregelmäßiges Perfekt-Partizip (z.B. "γραμμένος"), nur wenn es vom
-    # regelmäßigen Muster abweicht. Nur Speicherung/Anzeige.
     participle: str = ""
 
     def greek(self, with_article: bool) -> str:

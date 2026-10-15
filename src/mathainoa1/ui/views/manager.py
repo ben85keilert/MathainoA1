@@ -11,6 +11,7 @@ from pathlib import Path
 
 import flet as ft
 
+from mathainoa1.logic import conjugation as conj
 from mathainoa1.models import (
     NOUN_EDITOR_KEYS,
     WORD_TYPES,
@@ -71,6 +72,7 @@ EXPORT_COLUMNS = [
     ("front", "Griechisch"), ("back", "Deutsch"), ("plural", "Plural"),
     ("article", "Artikel"), ("word_type", "Worttyp"),
     ("forms", "Formen"), ("stem2", "2. Stamm"),
+    ("aorist", "Aorist"), ("imperative", "Imperativ"),
     ("aorist_passive", "Aorist Passiv"), ("participle", "Partizip Perfekt"),
     ("hints_gr", "Hinweis GR"), ("hints_de", "Hinweis DE"),
     ("notes_gr", "Notiz GR"), ("notes_de", "Notiz DE"),
@@ -617,8 +619,12 @@ def manager_view(nav, store: ContentStore,
         CSV/JSON gibt es als Plaintext (Zwischenablage) oder Datei,
         PDF nur als Datei. Funktioniert für Vokabellisten und
         Auswahllisten gleichermaßen: cards sind die aufgelösten Karten."""
+        # Verbfelder, die auf der aktiven Stufe kein Stoff sind, stehen
+        # nicht zur Wahl (die Werte bleiben in der Liste erhalten)
+        hidden = (set(content.VERB_FIELDS)
+                  - set(content.verb_fields_for(load_app_settings().level)))
         checks = {key: ft.Checkbox(label=label, value=True)
-                  for key, label in EXPORT_COLUMNS}
+                  for key, label in EXPORT_COLUMNS if key not in hidden}
         error = ft.Text("", color=ft.Colors.ERROR, size=sz(13))
         seg_format = ft.SegmentedButton(
             selected=["csv"],
@@ -1255,20 +1261,38 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
         helper="Stamm mit Akzent → θα γράψω; ohne Akzent → endbetont "
                "(κοιμηθ- → θα κοιμηθώ). Unregelmäßig: 6 Formen wie oben.",
     )
+    tf_aorist = ft.TextField(
+        label="Aorist (Vergangenheit)",
+        hint_text="z.B. έγραψα — oder 6 Formen mit Komma",
+        helper="1. Person Singular wie in der Verbliste; die übrigen "
+               "Personen bildet die App (έγραψα → γράψαμε). Zwei "
+               "Aoriste mit „/“, unregelmäßig: 6 Formen wie oben.",
+    )
+    tf_imperative = ft.TextField(
+        label="Imperativ (2. Person Singular)",
+        hint_text="z.B. Γράψε! — Varianten mit „/“",
+        helper="Wie in der Verbliste; optionale Teile in Klammern "
+               "(Άκου(σε)!). Leer = nicht gebräuchlich.",
+    )
     tf_aorist_passive = ft.TextField(
         label="Aorist Passiv (3. Stamm)",
         hint_text="z.B. γραφτ- — oder 6 Formen mit Komma",
-        helper="Gleiches Format wie der 2. Stamm. Vorerst nur Anzeige "
-               "(A2-Vorbereitung).",
+        helper="Gleiches Format wie der 2. Stamm. Wird nicht abgefragt.",
     )
     tf_participle = ft.TextField(
         label="Perfekt-Partizip (unregelmäßig)",
         hint_text="z.B. γραμμένος",
         helper="Nur ausfüllen, wenn es vom regelmäßigen Muster abweicht.",
     )
+    # Verbfelder je Stufe ein-/ausblenden (content.verb_fields_for)
+    verb_level_fields = {
+        "stem2": tf_stem2, "aorist": tf_aorist, "imperative": tf_imperative,
+        "aorist_passive": tf_aorist_passive, "participle": tf_participle,
+    }
     verb_section = ft.Column(
         [ft.Text("Konjugation", size=sz(13), weight=ft.FontWeight.BOLD),
-         tf_present, tf_stem2, tf_aorist_passive, tf_participle],
+         tf_present, tf_stem2, tf_aorist, tf_imperative, tf_aorist_passive,
+         tf_participle],
         spacing=10, visible=False,
     )
     tf_fem = ft.TextField(label="Femininum (unregelmäßig)",
@@ -1292,14 +1316,12 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
         noun_section.visible = wt == "Nomen" or other
         verb_section.visible = wt == "Verb" or other
         adj_section.visible = wt == "Adjektiv" or other
-        # Reine A2-Felder auf Stufe A1 ausblenden — außer sie sind schon
-        # gefüllt (vorhandene Daten sollen sichtbar/editierbar bleiben).
-        # Beim Speichern bleiben ausgeblendete Werte erhalten.
-        a2 = load_app_settings().level == "A2"
-        tf_aorist_passive.visible = a2 or bool(
-            (tf_aorist_passive.value or "").strip())
-        tf_participle.visible = a2 or bool(
-            (tf_participle.value or "").strip())
+        # Nur die Verbfelder, die auf der Stufe Stoff sind (A1: 2. Stamm,
+        # A2: dazu Aorist und Imperativ). Ausgeblendete Werte bleiben
+        # beim Speichern erhalten.
+        level_fields = content.verb_fields_for(load_app_settings().level)
+        for key, tf in verb_level_fields.items():
+            tf.visible = key in level_fields
         page.update()
 
     def on_article_select(e=None):
@@ -1325,6 +1347,8 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
             tf.value = c.forms.get(key, "") if c else ""
         tf_present.value = verb_forms_to_text(c.forms) if c else ""
         tf_stem2.value = c.stem2 if c else ""
+        tf_aorist.value = c.aorist if c else ""
+        tf_imperative.value = c.imperative if c else ""
         tf_aorist_passive.value = c.aorist_passive if c else ""
         tf_participle.value = c.participle if c else ""
         tf_fem.value = c.forms.get("fem", "") if c else ""
@@ -1338,8 +1362,29 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
     def is_blank() -> bool:
         return not (tf_front.value or "").strip() and not (tf_back.value or "").strip()
 
-    def collect_forms() -> tuple[dict[str, str], str, str]:
-        """Formen, 2. Stamm und Aorist Passiv je Worttyp einsammeln.
+    def verb_stems() -> dict[str, str]:
+        """2. Stamm, Aorist und Aorist Passiv normalisiert (ValueError bei
+        mehr als 6 Formen oder einem Aorist, aus dem sich nichts bilden
+        lässt)."""
+        stems = {key: parse_stem2_text(verb_level_fields[key].value or "")
+                 for key in ("stem2", "aorist", "aorist_passive")}
+        # ein ausgeblendetes Feld (andere Stufe) nicht bemängeln — der
+        # Wert bleibt einfach unverändert erhalten
+        if stems["aorist"] and tf_aorist.visible:
+            probe = conj.parse_verb(VocabCard(
+                front=(tf_front.value or "").strip(), back="-",
+                word_type="Verb", aorist=stems["aorist"]))
+            # nur prüfen, wenn das Präsens konjugierbar ist (sonst wird
+            # ohnehin nicht trainiert, z.B. bei "ήρθα")
+            if probe is not None and not conj.has_aorist(probe):
+                raise ValueError(
+                    "Aorist: bitte die 1. Person Singular eintragen "
+                    "(z.B. „έγραψα“) — oder 6 Formen mit Komma.")
+        return stems
+
+    def collect_forms() -> tuple[dict[str, str], dict[str, str]]:
+        """Formen und Verbstämme (2. Stamm, Aorist, Aorist Passiv) je
+        Worttyp einsammeln.
 
         Worttyp-Wechsel räumt fremde Schlüssel auf (analog zum
         Artikel-Nulling). ValueError bei ungültiger Eingabe.
@@ -1352,14 +1397,12 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
             old = state["card"].forms if state["card"] else {}
             if old.get("nom_pl"):
                 forms["nom_pl"] = old["nom_pl"]
-            return forms, "", ""
+            return forms, {}
         if wt == "Verb":
-            return (parse_verb_forms_text(tf_present.value or ""),
-                    parse_stem2_text(tf_stem2.value or ""),
-                    parse_stem2_text(tf_aorist_passive.value or ""))
+            return parse_verb_forms_text(tf_present.value or ""), verb_stems()
         if wt == "Adjektiv":
             fem = (tf_fem.value or "").strip()
-            return ({"fem": fem} if fem else {}), "", ""
+            return ({"fem": fem} if fem else {}), {}
         if wt == "Sonstiges":
             # alle Felder sichtbar -> auch alle Eingaben übernehmen
             forms = {k: v for k in NOUN_EDITOR_KEYS
@@ -1367,9 +1410,8 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
             if (fem := (tf_fem.value or "").strip()):
                 forms["fem"] = fem
             forms.update(parse_verb_forms_text(tf_present.value or ""))
-            return (forms, parse_stem2_text(tf_stem2.value or ""),
-                    parse_stem2_text(tf_aorist_passive.value or ""))
-        return {}, "", ""
+            return forms, verb_stems()
+        return {}, {}
 
     def apply_to(c: VocabCard) -> bool:
         front = (tf_front.value or "").strip()
@@ -1379,7 +1421,7 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
             page.update()
             return False
         try:
-            forms, stem2, aorist_passive = collect_forms()
+            forms, stems = collect_forms()
         except ValueError as exc:
             error.value = str(exc)
             page.update()
@@ -1396,9 +1438,12 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
         c.hints_gr = (tf_hints_gr.value or "").strip()
         c.hints_de = (tf_hints_de.value or "").strip()
         c.forms = forms
-        c.stem2 = stem2
-        c.aorist_passive = aorist_passive
+        c.stem2 = stems.get("stem2", "")
+        c.aorist = stems.get("aorist", "")
+        c.aorist_passive = stems.get("aorist_passive", "")
         verb_like = dd_type.value in ("Verb", "Sonstiges")
+        c.imperative = ((tf_imperative.value or "").strip()
+                        if verb_like else "")
         c.participle = ((tf_participle.value or "").strip()
                         if verb_like else "")
         c.chapter = vlist.chapter
@@ -1526,12 +1571,16 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         """
         w = getattr(page, "width", None) or 420
         first_w = max(120, 0.30 * w)
-        # Reine A2-Spalten nur auf Stufe A2 zeigen (values() unten
-        # muss dieselbe Reihenfolge liefern)
-        a2 = load_app_settings().level == "A2"
+        # Verbspalten nur, soweit sie auf der Stufe Stoff sind (values()
+        # unten muss dieselbe Reihenfolge liefern)
+        level_fields = content.verb_fields_for(load_app_settings().level)
+        verb_cols = [(key, name) for key, name in (
+            ("stem2", "2. Stamm"), ("aorist", "Aorist"),
+            ("imperative", "Imperativ"), ("aorist_passive", "Aorist Passiv"),
+            ("participle", "Partizip")) if key in level_fields]
         cols = ([("Deutsch", 150), ("Plural", 90), ("Artikel", 70),
-                 ("Typ", 100), ("Formen", 170), ("2. Stamm", 110)]
-                + ([("Aorist Passiv", 110), ("Partizip", 110)] if a2 else [])
+                 ("Typ", 100), ("Formen", 170)]
+                + [(name, 110) for _key, name in verb_cols]
                 + [("Hinweis GR", 130), ("Hinweis DE", 130),
                    ("Notiz GR", 130), ("Notiz DE", 130)])
         max_k = len(cols) - 1
@@ -1593,8 +1642,8 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
 
         def values(c: VocabCard) -> tuple:
             return ((c.back, c.plural, c.article or "", c.word_type,
-                     forms_to_text(c.forms), c.stem2)
-                    + ((c.aorist_passive, c.participle) if a2 else ())
+                     forms_to_text(c.forms))
+                    + tuple(getattr(c, key) for key, _name in verb_cols)
                     + (c.hints_gr, c.hints_de, c.notes_gr, c.notes_de))
 
         rows = []

@@ -1,10 +1,10 @@
-"""Konjugation von Verben im Präsens und Futur (Neugriechisch, A1-Niveau).
+"""Konjugation von Verben: Präsens und Futur (A1), Aorist und Imperativ (A2).
 
 Wie bei der Deklination entstehen die Formen regelbasiert aus den
 Vokabelkarten: die griechische Vorderseite ist das Lemma (1. Person
 Singular), mehr braucht es nicht. Karten, die kein konjugierbares
-Lemma sind (Fixformen wie "κοστίζει", Futur-Phrasen wie "θα δούμε"),
-werden übersprungen.
+Lemma sind (Fixformen wie "κοστίζει", Futur-Phrasen wie "θα δούμε",
+Aoristformen wie "ήρθα"), werden übersprungen.
 
 Unterstützte Muster (Präsens):
 - Typ A:  -ω unbetont (μένω, διαβάζω)
@@ -19,11 +19,26 @@ Futur (θα + 2. Stamm) aus dem Karten-Feld stem2:
   ohne Akzent (κοιμηθ-) → endbetonte Endungen (θα κοιμηθώ)
 - oder 6 Personenformen kommagetrennt (Varianten mit "/")
 Verben ohne stem2 werden im Futur-Training übersprungen.
+
+Aorist (Vergangenheit) aus dem Karten-Feld aorist — die 1. Person
+Singular wie in der Pame-Verbliste genügt (έγραψα, ήρθα, κοιμήθηκα):
+- Singular und 3. Pl. behalten die Betonung der 1. Person (έγραψες,
+  έγραψαν); 1./2. Pl. und die 3. Pl. auf -ανε betonen die drittletzte
+  Silbe (γράψαμε, γράψατε, γράψανε)
+- das Augment έ- zweisilbiger Formen fällt dort weg (έγραψα → γράψαμε),
+  nicht aber ein ε des Stamms (ελπίζω: έλπισα → ελπίσαμε)
+- -ηκα-Aoriste der -ομαι-Verben laufen über dieselbe Regel
+  (κοιμήθηκα → κοιμηθήκαμε); ήμουν, ήθελα, ήξερα, ήπια per Tabelle
+- oder 6 Personenformen kommagetrennt (Varianten mit "/")
+
+Imperativ (2. Person Singular, einmalig) aus dem Feld imperative,
+genau wie in der Verbliste notiert ("Γράψε!", "Άκου(σε)!").
 """
 
 from __future__ import annotations
 
 import random
+import unicodedata
 from dataclasses import dataclass, field, asdict
 
 from mathainoa1.logic import answer_check
@@ -34,6 +49,7 @@ from mathainoa1.logic.declension import (
     _ensure_accent,
     _stripped,
     accent_pos,
+    set_accent,
     strip_acute,
     syllable_count,
 )
@@ -41,8 +57,21 @@ from mathainoa1.logic.session import ALL_BOXES
 from mathainoa1.models import VERB_FORM_KEYS, VocabCard, parse_verb_forms_text
 
 PERSONS = [1, 2, 3]
-TENSES = ["present", "future"]
-TENSE_NAMES = {"present": "Präsens", "future": "Futur"}
+TENSES = ["present", "future", "aorist", "imperative"]
+TENSE_NAMES = {"present": "Präsens", "future": "Futur", "aorist": "Aorist",
+               "imperative": "Imperativ"}
+# Zeitformen je Stufe = Stoff des Buchs: A1 Präsens und Futur, A2
+# zusätzlich Aorist und Imperativ (Pame-A2-Verbliste). Unbekannte Stufe:
+# alle. Gegenstück zu content.LEVEL_VERB_FIELDS (Kartenfelder).
+LEVEL_TENSES: dict[str, list[str]] = {
+    "A1": ["present", "future"],
+    "A2": ["present", "future", "aorist", "imperative"],
+}
+
+
+def tenses_for_level(level: str) -> list[str]:
+    """Die Zeitformen, die auf der Stufe Stoff sind (Reihenfolge wie TENSES)."""
+    return list(LEVEL_TENSES.get(level, TENSES))
 
 # Reihenfolge der Formen-Slots; entspricht den Karten-Schlüsseln (forms)
 _SLOT_KEYS = ["1sg", "2sg", "3sg", "1pl", "2pl", "3pl"]
@@ -59,6 +88,25 @@ IRREGULAR = {
               ["ακούμε"], ["ακούτε"], ["ακούν", "ακούνε"]],
 }
 
+# Aoriste, die nicht der Regel folgen (Schlüssel: 1. Person Singular ohne
+# Akzente) — aus der Pame-A2-Verbliste sind es nur diese; alle übrigen
+# bildet aorist_paradigm. Erste Form je Slot = kanonisch.
+_EIMAI_PAST = [["ήμουν", "ήμουνα"], ["ήσουν", "ήσουνα"], ["ήταν", "ήτανε"],
+               ["ήμασταν", "ήμαστε"], ["ήσασταν", "ήσαστε"],
+               ["ήταν", "ήτανε"]]
+IRREGULAR_AORIST = {
+    "ημουν": _EIMAI_PAST,
+    "ημουνα": _EIMAI_PAST,
+    # Augment ή- fällt in 1./2. Pl. weg
+    "ηθελα": [["ήθελα"], ["ήθελες"], ["ήθελε"],
+              ["θέλαμε"], ["θέλατε"], ["ήθελαν", "θέλανε"]],
+    "ηξερα": [["ήξερα"], ["ήξερες"], ["ήξερε"],
+              ["ξέραμε"], ["ξέρατε"], ["ήξεραν", "ξέρανε"]],
+    # ια ist eine Silbe (Synizese) — die Silbenregel würde ηπίαμε bilden
+    "ηπια": [["ήπια"], ["ήπιες"], ["ήπιε"],
+             ["ήπιαμε"], ["ήπιατε"], ["ήπιαν", "ήπιανε"]],
+}
+
 
 @dataclass
 class Verb:
@@ -69,6 +117,11 @@ class Verb:
     overrides: dict[str, str] = field(default_factory=dict)  # "2sg" -> "πας"
     fut_stem: str = ""  # 2. Stamm (ohne "-"), leer = kein Futur
     fut_forms: dict[str, str] = field(default_factory=dict)  # "2sg" -> "πιεις"
+    # Aorist: 1. Person Singular (Varianten einzeln, z.B. ["έκατσα",
+    # "κάθισα"]) ODER 6er-Liste wie fut_forms; beides leer = kein Aorist
+    aor_first: list[str] = field(default_factory=list)
+    aor_forms: dict[str, str] = field(default_factory=dict)
+    imperative: str = ""  # 2. Sg. wie notiert ("Γράψε!"), leer = keiner
 
 
 def _parse_stem2(text: str) -> tuple[str, dict[str, str]]:
@@ -84,11 +137,39 @@ def _parse_stem2(text: str) -> tuple[str, dict[str, str]]:
     return text.rstrip("-"), {}
 
 
+def _parse_aorist(text: str) -> tuple[list[str], dict[str, str]]:
+    """Zerlegt das aorist-Feld: 1. Person Singular (Varianten mit "/")
+    ODER 6-Formen-Kommaliste."""
+    text = unicodedata.normalize("NFC", (text or "").strip())
+    if not text:
+        return [], {}
+    if "," in text:
+        try:
+            return [], parse_verb_forms_text(text)
+        except ValueError:
+            return [], {}  # kaputte Angabe lieber ignorieren als abbrechen
+    firsts: list[str] = []
+    for alt in text.split("/"):
+        # nur das erste Wort: "έκανα μπάνιο" → "έκανα" — der Phrasenrest
+        # kommt wie beim Präsens aus der Vorderseite
+        words = alt.split()
+        word = words[0].lower() if words else ""
+        if word and accent_pos(word) is None:
+            # unbetont eingegeben: der Aorist trägt den Ton auf der
+            # drittletzten Silbe (bei zwei Silben auf der ersten)
+            word = set_accent(word, 2)
+        if word and word not in firsts:
+            firsts.append(word)
+    return firsts, {}
+
+
 def parse_verb(card: VocabCard) -> Verb | None:
     """Erkennt das Konjugationsmuster einer Verb-Karte; None = unbekannt."""
     verb = _parse_present(card)
     if verb is not None:
         verb.fut_stem, verb.fut_forms = _parse_stem2(card.stem2)
+        verb.aor_first, verb.aor_forms = _parse_aorist(card.aorist)
+        verb.imperative = (card.imperative or "").strip()
     return verb
 
 
@@ -207,6 +288,71 @@ def conjugate_future(verb: Verb, person: int, number: str) -> list[str]:
     return forms
 
 
+def aorist_paradigm(lemma: str, first: str) -> list[list[str]] | None:
+    """Alle 6 Aoristformen aus der 1. Person Singular — je Slot eine
+    Liste (erste Form kanonisch); None, wenn first kein Aorist auf -α ist.
+
+    lemma (Präsens, 1. Sg.) entscheidet, ob ein anlautendes έ- Augment
+    ist (γράφω → έγραψα → γράψαμε) oder zum Stamm gehört (ελπίζω →
+    έλπισα → ελπίσαμε)."""
+    first = unicodedata.normalize("NFC", first)
+    key = _stripped(first)
+    if key in IRREGULAR_AORIST:
+        return [list(slot) for slot in IRREGULAR_AORIST[key]]
+    if not key.endswith("α") or syllable_count(first) < 2:
+        return None
+    stem = first[:-1]
+    base = stem
+    if first.startswith("έ") and not _stripped(lemma).startswith("ε"):
+        base = stem[1:]  # Augment fällt in 1./2. Pl. weg
+    if not base:
+        return None
+
+    def long(ending: str) -> str:
+        # eine Silbe mehr als im Singular: Ton auf die drittletzte
+        return set_accent(strip_acute(base) + ending, 2)
+
+    return [[first], [stem + "ες"], [stem + "ε"],
+            [long("αμε")], [long("ατε")], [stem + "αν", long("ανε")]]
+
+
+def has_aorist(verb: Verb) -> bool:
+    """True, wenn die Karte einen verwertbaren Aorist mitbringt."""
+    return bool(verb.aor_forms) or any(
+        aorist_paradigm(verb.word, f) is not None for f in verb.aor_first)
+
+
+def conjugate_aorist(verb: Verb, person: int, number: str) -> list[str]:
+    """Aoristformen (erste = kanonisch), inkl. Phrasenrest.
+
+    Die 6er-Liste in aor_forms hat Vorrang; sonst entstehen die Formen
+    aus der 1. Person Singular (Varianten wie έκατσα/κάθισα nacheinander).
+    Leer = kein Aorist für diesen Slot."""
+    idx = (person - 1) + (3 if number == "pl" else 0)
+    if verb.aor_forms:
+        raw = verb.aor_forms.get(_SLOT_KEYS[idx])
+        if not raw:
+            return []
+        forms = [f.strip() for f in raw.split("/") if f.strip()]
+    else:
+        forms = []
+        for first in verb.aor_first:
+            paradigm = aorist_paradigm(verb.word, first)
+            for f in (paradigm[idx] if paradigm else []):
+                if f not in forms:
+                    forms.append(f)
+        if not forms:
+            return []
+    if verb.rest:
+        forms = [f"{f} {verb.rest}" for f in forms]
+    return forms
+
+
+def has_imperative(verb: Verb) -> bool:
+    """True, wenn die Karte einen Imperativ (2. Sg.) mitbringt."""
+    return bool(verb.imperative)
+
+
 # --- Aufgaben ---
 
 @dataclass
@@ -252,9 +398,10 @@ class ConjugationTask:
     # Lösung fürs Aufdecken, alle Alternativformen mit "/" (θα nur einmal
     # vorweg): "σηκώνεστε/σηκωνόσαστε", "θα γράψουν/γράψουνε"
     display: str = ""
-    # Futur-Grundform: "θα" + 1. Person Singular ("θα γράψω", Varianten
-    # mit "/"); leer bei Präsens-Aufgaben oder fehlendem 1sg-Slot
-    future_base: str = ""
+    # Grundform der Zeitform: 1. Person Singular, beim Futur mit "θα"
+    # ("θα γράψω", "έγραψα"; Varianten mit "/"); leer bei Präsens und
+    # Imperativ oder fehlendem 1sg-Slot
+    tense_base: str = ""
 
     @property
     def scored_cards(self) -> list[VocabCard]:
@@ -271,7 +418,9 @@ class ConjugationTask:
         base = f"{self.person}. Pers. - {NUMBER_NAMES[self.number]} {emoji}"
         if self.person == 2 and self.number == "pl":
             base += " (ihr / höfliches Sie)"
-        return f"Futur - {base}" if self.tense == "future" else base
+        if self.tense in TENSE_NAMES and self.tense != "present":
+            return f"{TENSE_NAMES[self.tense]} - {base}"
+        return base
 
     def check(self, given: str) -> Result:
         best = Result.WRONG
@@ -298,8 +447,9 @@ def build_task(card: VocabCard, verb: Verb, person: int, number: str,
                direction: str = "de") -> ConjugationTask | None:
     """direction "de": Vorgabe ist der deutsche Infinitiv. direction "gr":
     Vorgabe ist das griechische Lemma, die deutsche Bedeutung wird dazu
-    eingeblendet."""
-    future_base = ""
+    eingeblendet. Imperativ-Aufgaben gibt es nur für die 2. Person
+    Singular."""
+    tense_base = ""
     if tense == "future":
         forms = conjugate_future(verb, person, number)
         if not forms:
@@ -310,7 +460,23 @@ def build_task(card: VocabCard, verb: Verb, person: int, number: str,
         display = "θα " + "/".join(forms)
         base = conjugate_future(verb, 1, "sg")
         if base:
-            future_base = "θα " + "/".join(base)
+            tense_base = "θα " + "/".join(base)
+    elif tense == "aorist":
+        forms = conjugate_aorist(verb, person, number)
+        if not forms:
+            return None
+        expected, variants = forms[0], forms[1:]
+        display = "/".join(forms)
+        base = conjugate_aorist(verb, 1, "sg")
+        if base:
+            tense_base = "/".join(base)
+    elif tense == "imperative":
+        if not verb.imperative or (person, number) != (2, "sg"):
+            return None
+        # so wie notiert: "Κάτσε!/Κάθισε!" und "Άκου(σε)!" wertet die
+        # Antwortprüfung als Alternativen bzw. optionalen Wortteil
+        expected, variants = verb.imperative, []
+        display = verb.imperative
     else:
         forms = conjugate(verb, person, number)
         if not forms:
@@ -324,21 +490,31 @@ def build_task(card: VocabCard, verb: Verb, person: int, number: str,
     return ConjugationTask(card=card, person=person, number=number,
                            prompt=prompt, meaning=meaning,
                            expected=expected, variants=variants, tense=tense,
-                           display=display, future_base=future_base)
+                           display=display, tense_base=tense_base)
 
 
 def generate_tasks(cards: list[VocabCard], settings: ConjugationSettings,
                    rng: random.Random | None = None) -> list[ConjugationTask]:
     """Alle Aufgaben für die Auswahl: je Verb × Zeit × Person × Zahl
-    (mischt selbst). Verben ohne 2. Stamm liefern keine Futur-Aufgaben.
-    Bei griechischer Vorgabe entfällt die 1. Person Singular Präsens —
-    sie stünde als Lemma schon in der Frage."""
+    (mischt selbst). Verben ohne 2. Stamm liefern keine Futur-, ohne
+    Aorist keine Aorist-Aufgaben. Der Imperativ ist genau eine Aufgabe
+    je Verb (2. Person Singular, wie im Buch) — unabhängig von der
+    Personen-/Zahl-Auswahl. Bei griechischer Vorgabe entfällt die
+    1. Person Singular Präsens — sie stünde als Lemma schon in der Frage."""
     rng = rng or random.Random()
     tenses = [t for t in settings.tenses if t in TENSES] or ["present"]
     tasks = []
     for card, verb in conjugatable_verbs(cards):
         for tense in tenses:
             if tense == "future" and not has_future(verb):
+                continue
+            if tense == "aorist" and not has_aorist(verb):
+                continue
+            if tense == "imperative":
+                task = build_task(card, verb, 2, "sg", tense,
+                                  direction=settings.direction)
+                if task is not None:
+                    tasks.append(task)
                 continue
             for person in settings.persons:
                 for number in settings.numbers:

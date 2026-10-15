@@ -16,8 +16,9 @@ from pathlib import Path
 
 import flet as ft
 
-from mathainoa1.storage.content import ContentStore
+from mathainoa1.storage.content import ContentStore, verb_fields_for
 from mathainoa1.storage.progress import ProgressStore
+from mathainoa1.storage.settings import load_app_settings
 from mathainoa1.storage.textanalyse import (
     COGNATE_GROUPS,
     AnalysisStore,
@@ -32,8 +33,9 @@ from mathainoa1.ui.scale import sz
 # Arbeitsanweisung III: erweitert die Analyse-Prompts des Nutzers
 # (Arbeitsanweisung I/II) um den JSON-Export für diese App. Das Schema
 # muss mit storage/textanalyse.py übereinstimmen — Änderungen dort bitte
-# hier nachziehen.
-ARBEITSANWEISUNG_III = """\
+# hier nachziehen. Die Verbfelder richten sich nach der aktiven Stufe
+# (arbeitsanweisung_iii setzt @VERB_SCHEMA@ und @VERB_RULE@ ein).
+_ARBEITSANWEISUNG_III = """\
 ARBEITSANWEISUNG III: JSON-EXPORT FÜR DIE LERN-APP
 
 AUFGABE
@@ -59,7 +61,7 @@ SCHEMA (Beispiel mit allen Feldern)
   "vocab": [
     {"front": "ο σεισμός", "back": "Erdbeben", "article": "ο",
      "plural": "-οί", "word_type": "Nomen", "forms": "",
-     "stem2": "", "aorist_passive": "", "participle": "",
+     @VERB_SCHEMA@
      "hints_gr": "", "hints_de": "", "notes_gr": "", "notes_de": ""}
   ],
   "phrases": [
@@ -88,12 +90,7 @@ REGELN
    "hints_gr"/"hints_de" (Gebrauchshinweis, z.B. "mit Akk.") und
    "notes_gr"/"notes_de" (Zusatznotiz, z.B. "per du") — gr erscheint
    bei der griechischen Abfrageseite, de bei der deutschen.
-5. Verb-Stammformen: "stem2" = Aorist Aktiv / 2. Stamm (Stamm mit
-   Bindestrich, z.B. "γράψ-", oder 6 Personenformen kommagetrennt),
-   "aorist_passive" = Aorist Passiv im gleichen Format (angeben, wenn
-   bekannt — er ist nicht aus dem Aktiv berechenbar und wird ab Stufe
-   A2 trainiert), "participle" = Perfekt-Partizip nur bei
-   Unregelmäßigkeit (z.B. "γραμμένος").
+@VERB_RULE@
 6. Komplette Alternativantworten mit " / " trennen ("και / κι");
    optionale Wortteile in runde Klammern ("αγαπ(ά)ω", "(Visiten-)Karte").
    Muss innerhalb eines Satzes genau EINE von mehreren Varianten genannt
@@ -111,6 +108,40 @@ REGELN
    und "title" unverändert aus der alten Datei. Die App ersetzt die
    Analyse dann und erhält den Lernstand der Vokabeln.
 """
+
+
+def _verb_schema(level: str) -> str:
+    fields = verb_fields_for(level)
+    return " ".join(f'"{f}": "",' for f in fields)
+
+
+def _verb_rule(level: str) -> str:
+    """Regel 5 (Verb-Stammformen) mit den Feldern der Stufe."""
+    fields = verb_fields_for(level)
+    parts = ['"stem2" = 2. Stamm für θα/να (Stamm mit Bindestrich, z.B.\n'
+             '   "γράψ-", oder 6 Personenformen kommagetrennt)']
+    if "aorist" in fields:
+        parts.append('"aorist" = Aorist (Vergangenheit) — die 1. Person\n'
+                     '   Singular genügt ("έγραψα", "ήρθα", "κοιμήθηκα"), die App\n'
+                     '   bildet die übrigen Personen; nur bei Abweichung 6 Formen\n'
+                     '   kommagetrennt')
+    if "imperative" in fields:
+        parts.append('"imperative" = Imperativ 2. Person Singular wie\n'
+                     '   "Γράψε!" (leer, wenn nicht gebräuchlich)')
+    if "aorist_passive" in fields:
+        parts.append('"aorist_passive" = Aorist Passiv im Format von stem2\n'
+                     '   (angeben, wenn bekannt — nicht aus dem Aktiv berechenbar)')
+    if "participle" in fields:
+        parts.append('"participle" = Perfekt-Partizip nur bei\n'
+                     '   Unregelmäßigkeit (z.B. "γραμμένος")')
+    return "5. Verb-Stammformen: " + ",\n   ".join(parts) + "."
+
+
+def arbeitsanweisung_iii(level: str) -> str:
+    """Arbeitsanweisung III mit den Verbfeldern der Stufe (AppSettings.level)."""
+    return (_ARBEITSANWEISUNG_III
+            .replace("@VERB_SCHEMA@", _verb_schema(level))
+            .replace("@VERB_RULE@", _verb_rule(level)))
 
 
 def _analysis_store(store: ContentStore) -> AnalysisStore:
@@ -203,9 +234,12 @@ def overview_view(nav, store: ContentStore,
             f"„{analysis.title}“ {_stats_text(stats)}.")))
 
     def copy_prompt(e):
+        # Verbfelder passend zur aktiven Stufe (siehe features.py)
+        prompt_text = arbeitsanweisung_iii(load_app_settings().level)
+
         def copy(e):
             async def do():
-                await clipboard.set(ARBEITSANWEISUNG_III)
+                await clipboard.set(prompt_text)
             page.run_task(do)
             page.pop_dialog()
             page.show_dialog(ft.SnackBar(ft.Text("Prompt kopiert.")))
@@ -213,7 +247,7 @@ def overview_view(nav, store: ContentStore,
         page.show_dialog(ft.AlertDialog(
             title=ft.Text("Arbeitsanweisung III (Prompt)", size=sz(16)),
             content=ft.Column(
-                [ft.Text(ARBEITSANWEISUNG_III, size=sz(12), selectable=True)],
+                [ft.Text(prompt_text, size=sz(12), selectable=True)],
                 scroll=ft.ScrollMode.AUTO, width=420, height=440,
             ),
             actions=[

@@ -11,8 +11,9 @@ Ein neues Feature braucht nur einen Eintrag in FEATURES:
   gleiche Signatur wie die bestehenden Views (nav.page für Dialoge nutzbar)
 - Eigene Daten legt ein Feature unter app_data_dir()/features/<key>/ ab.
 - Bringt ein Feature eigene Chatbot-Prompts mit (z.B. für Wortlisten-Import),
-  müssen deren Spaltenangaben zur aktiven Stufe passen (AppSettings.level:
-  A1 nutzt stem2, A2 zusätzlich aorist_passive/participle).
+  müssen deren Spaltenangaben zur aktiven Stufe passen (AppSettings.level,
+  Felder je Stufe: storage.content.verb_fields_for — A1 nutzt stem2, A2
+  zusätzlich aorist/imperative).
 
 Schwere Importe gehören in die build-Funktion (Lazy-Import), damit die
 Registry selbst billig bleibt.

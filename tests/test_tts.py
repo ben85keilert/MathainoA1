@@ -321,3 +321,23 @@ def test_speaker_button_taps_and_toggles(monkeypatch, engine_setter,
     assert holder.content.value == audio.TURTLE
 
     assert [c[2] for c in calls] == [False, True, True, False, True]
+
+
+# --- speakable: Pflichtwahl-Gruppen und Auslassungspunkte (A2-Listen) ----
+
+def test_speakable_bracket_groups_take_first_variant():
+    from mathainoa1.storage.tts import speakable
+    assert speakable("[Έχει/Είχε] πλάκα!") == "Έχει πλάκα!"
+    assert speakable("[ο/η] μουσικός") == "ο μουσικός"
+    assert speakable("Πώς [είσαι/είστε];") == "Πώς είσαι;"
+    assert speakable("Κρίμα [τον καημένο/το καημένο/την καημένη]!") == \
+        "Κρίμα τον καημένο!"
+    assert speakable("[αυτός / αυτή] εδώ") == "αυτός εδώ"
+
+
+def test_speakable_drops_ellipsis():
+    from mathainoa1.storage.tts import speakable
+    assert speakable("δεν ... άλλο") == "δεν άλλο"
+    assert speakable("Μήπως έχετε...;") == "Μήπως έχετε;"
+    assert speakable("Άσε καλύτερα...") == "Άσε καλύτερα"
+    assert speakable("Από 'δω [ο/η]...") == "Από 'δω ο"

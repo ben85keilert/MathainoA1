@@ -413,7 +413,7 @@ def test_custom_noun_missing_form_skips_task():
 
 
 def test_adjective_fem_override_via_forms():
-    c = adj("ελαφρύς")  # kein -ος-Typ: bleibt unerkannt
+    c = adj("μικρούλης")  # kein -ος-/-ύς-Typ: bleibt unerkannt
     assert parse_adjective(c) is None
     c2 = adj("κακός")
     c2.forms = {"fem": "κακιά"}
@@ -993,3 +993,66 @@ def test_session_selects_by_progress():
     session = DeclensionSession(tasks, settings, progress=_progress_map(now))
     assert len(session.queue) == 2
     assert "c2" not in {t.card.id for t in session.queue}
+
+
+# --- A2: Adjektive auf -ύς, πολύς, δεξιός; Plural mit anderem Genus ---------
+
+def all_adj_forms(a):
+    return {g: [decline_adjective(a, g, c, n)
+                for n in ("sg", "pl") for c in ("nom", "acc", "gen")]
+            for g in "mfn"}
+
+
+def test_adjective_ys_pattern():
+    a = parse_adjective(adj("βαρύς"))
+    assert a.cls == "ys" and a.fem == "βαριά"
+    assert all_adj_forms(a) == {
+        "m": ["βαρύς", "βαρύ", "βαριού", "βαριοί", "βαριούς", "βαριών"],
+        "f": ["βαριά", "βαριά", "βαριάς", "βαριές", "βαριές", "βαριών"],
+        "n": ["βαρύ", "βαρύ", "βαριού", "βαριά", "βαριά", "βαριών"],
+    }
+    assert decline_adjective(parse_adjective(adj("μακρύς")),
+                             "f", "nom", "pl") == "μακριές"
+
+
+def test_adjective_polys():
+    a = parse_adjective(adj("πολύς"))
+    assert all_adj_forms(a) == {
+        "m": ["πολύς", "πολύ", "πολλού", "πολλοί", "πολλούς", "πολλών"],
+        "f": ["πολλή", "πολλή", "πολλής", "πολλές", "πολλές", "πολλών"],
+        "n": ["πολύ", "πολύ", "πολλού", "πολλά", "πολλά", "πολλών"],
+    }
+
+
+def test_adjective_neuter_exception_and_ordinal():
+    a = parse_adjective(adj("δεξιός"))
+    assert a.fem == "δεξιά"
+    assert decline_adjective(a, "n", "nom", "sg") == "δεξί"
+    assert decline_adjective(a, "n", "gen", "sg") == "δεξιού"
+    assert decline_adjective(a, "n", "nom", "pl") == "δεξιά"
+    assert parse_adjective(adj("όγδοος")).fem == "όγδοη"
+    assert parse_adjective(adj("πέμπτος")).fem == "πέμπτη"
+
+
+def test_plural_with_other_gender_not_derived():
+    # ο βράχος – τα βράχια: lieber kein Plural als das falsche "βράχοι"
+    n = parse_noun(noun("ο βράχος", "ο", "τα βράχια"))
+    assert decline(n, "gen", "sg") == "βράχου"
+    assert decline(n, "nom", "pl") is None
+    assert decline(n, "acc", "pl") is None
+    # Pluralangabe mit passendem Artikel = komplette Form
+    n = parse_noun(noun("ο άνθρωπος", "ο", "οι άνθρωποι"))
+    assert decline(n, "nom", "pl") == "άνθρωποι"
+    assert decline(n, "acc", "pl") == "ανθρώπους"
+
+
+def test_feminine_si_noun_with_es_plural_is_first_declension():
+    # η βρύση, -ες: kein πόλη-Typ — Genitiv Plural βρυσών statt βρύσεων
+    f = forms(noun("η βρύση", "η", "-ες"))
+    assert [f[(c, n)] for n in ("sg", "pl") for c in ("nom", "acc", "gen")] == [
+        "βρύση", "βρύση", "βρύσης", "βρύσες", "βρύσες", "βρυσών"]
+    assert decline(parse_noun(noun("η μέση", "η", "-ες")), "nom", "pl") == "μέσες"
+    # ohne Angabe bzw. mit -εις bleibt es beim πόλη-Typ
+    assert decline(parse_noun(noun("η άσκηση", "η", "-(κήσ)εις")),
+                   "gen", "pl") == "ασκήσεων"
+    assert decline(parse_noun(noun("η λύση", "η", "")), "nom", "pl") == "λύσεις"

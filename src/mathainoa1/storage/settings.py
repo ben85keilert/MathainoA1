@@ -84,12 +84,13 @@ class AppSettings:
     # ignoriert, fehlende hängen sich hinten an.
     menu_order: list[str] = field(default_factory=list)
     # Verbtraining: welche Grundform nach dem Aufdecken unter der Lösung
-    # steht (nur bei Vorgabe Deutsch). Wirkt bei Futur-Aufgaben; bei
-    # Präsens-Aufgaben erscheint immer die Präsensform. Werte:
+    # steht (nur bei Vorgabe Deutsch). Wirkt bei Futur- und Aorist-
+    # Aufgaben; bei Präsens- und Imperativ-Aufgaben erscheint immer die
+    # Präsensform. Werte:
     # "present" = nur Präsensform (γράφω)
-    # "stem2"   = nur die Futur-Grundform (θα γράψω)
-    # "both"    = Futur-Grundform mit Präsensform in Klammern:
-    #             θα γράψω (γράφω) (Standard)
+    # "stem2"   = nur die Grundform der Zeitform (θα γράψω, έγραψα)
+    # "both"    = diese Grundform mit Präsensform in Klammern:
+    #             θα γράψω (γράφω), έγραψα (γράφω) (Standard)
     verb_base_form: str = "both"
     # Adjektivtraining: "whitelist" = nur explizit festgelegte
     # Adjektiv↔Nomen-Verbindungen werden abgefragt (Standard);

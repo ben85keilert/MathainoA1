@@ -31,6 +31,22 @@ LEVELS = ["A1", "A2"]
 # zu A2, weiter strikt gegenüber A1).
 LEVEL_VISIBILITY: dict[str, set[str]] = {"A1": {"A1"}, "A2": {"A2"}}
 
+# Verb-Zusatzfelder je Stufe = Stoff des Buchs (Pame): A1 kennt den
+# 2. Stamm (Futur/να), A2 zusätzlich Aorist und Imperativ (A2-Verbliste).
+# Aorist Passiv und Perfekt-Partizip sind auf keiner dieser Stufen Stoff:
+# Editor, Tabelle, Export und Prompts blenden sie aus — gespeicherte Werte
+# bleiben erhalten (Platz für eine spätere Stufe). Unbekannte Stufe: alles.
+VERB_FIELDS = ["stem2", "aorist", "imperative", "aorist_passive", "participle"]
+LEVEL_VERB_FIELDS: dict[str, list[str]] = {
+    "A1": ["stem2"],
+    "A2": ["stem2", "aorist", "imperative"],
+}
+
+
+def verb_fields_for(level: str) -> list[str]:
+    """Die Verb-Zusatzfelder, die auf der Stufe Stoff sind."""
+    return list(LEVEL_VERB_FIELDS.get(level, VERB_FIELDS))
+
 
 def filter_level(items, level: str) -> list:
     """Strikter Stufenfilter für Vokabel- UND Auswahllisten (Duck-Typing
@@ -372,10 +388,17 @@ class ContentStore:
 
 CSV_FIELDS = ["front", "back", "plural", "article", "word_type",
               "hints_gr", "hints_de", "notes_gr", "notes_de", "forms", "stem2",
-              "aorist_passive", "participle"]
+              "aorist", "imperative", "aorist_passive", "participle"]
 # Die Karten-ID ist keine inhaltliche Spalte, aber exportierbar: nur mit
 # ihr findet der Update-Import (update_list_from_text) die Karte wieder
 EXPORT_FIELDS = ["id"] + CSV_FIELDS
+
+
+def csv_fields_for(level: str) -> list[str]:
+    """CSV_FIELDS ohne die Verbfelder, die auf der Stufe kein Stoff sind
+    (Prompts, Exportauswahl). Der Import liest weiterhin alle Spalten."""
+    hidden = set(VERB_FIELDS) - set(verb_fields_for(level))
+    return [f for f in CSV_FIELDS if f not in hidden]
 
 
 def export_csv(vlist: VocabList) -> str:
@@ -456,12 +479,14 @@ def _normalize_row(row: dict, word_type_fallback: str | None = None) -> dict:
             row["forms"] = parse_forms_text(row["forms"] or "")
         except ValueError:
             del row["forms"]  # kaputte Angabe lieber ignorieren als abbrechen
-    for stem_field in ("stem2", "aorist_passive"):
+    for stem_field in ("stem2", "aorist", "aorist_passive"):
         if stem_field in row:
             try:
                 row[stem_field] = parse_stem2_text(row[stem_field] or "")
             except ValueError:
                 del row[stem_field]
+    if "imperative" in row:
+        row["imperative"] = (row["imperative"] or "").strip()
     return row
 
 
@@ -595,25 +620,26 @@ EXAMPLE_LIST_NAME = "Beispiel (alle Worttypen)"
 # Minimalistisch, aber vollständig: je Worttyp ein Beispiel, dazu regelmäßige
 # und unregelmäßige Nomen/Verben/Adjektive. Bewusst als CSV-Text, damit die
 # Liste exakt das Import-/Export-Format zeigt und sich exportieren lässt.
+# Aorist und Imperativ sind A2-Stoff — auf Stufe A1 blendet die App sie aus.
 _EXAMPLE_CSV = (
     ",".join(CSV_FIELDS) + "\n"
-    '"ο δρόμος","Straße","-οι","ο","Nomen",,,,,,,,\n'
-    '"η γυναίκα","Frau","-ες","η","Nomen",,,,,"gen_pl=γυναικών",,,\n'
-    '"το πρόβλημα","Problem","-ματα","το","Nomen",,,,,,,,\n'
-    '"το παιδί","Kind","-ιά","το","Nomen",,,,,,,,\n'
-    '"γράφω","schreiben",,,"Verb",,,,,,"γράψ-","γραφτ-","γραμμένος"\n'
+    '"ο δρόμος","Straße","-οι","ο","Nomen",,,,,,,,,,\n'
+    '"η γυναίκα","Frau","-ες","η","Nomen",,,,,"gen_pl=γυναικών",,,,,\n'
+    '"το πρόβλημα","Problem","-ματα","το","Nomen",,,,,,,,,,\n'
+    '"το παιδί","Kind","-ιά","το","Nomen",,,,,,,,,,\n'
+    '"γράφω","schreiben",,,"Verb",,,,,,"γράψ-","έγραψα","Γράψε!",,\n'
     '"βλέπω","sehen",,,"Verb",,,,,,'
-    '"δω, δεις, δει, δούμε, δείτε, δουν/δούνε",,\n'
+    '"δω, δεις, δει, δούμε, δείτε, δουν/δούνε","είδα","Δες!",,\n'
     '"πάω","gehen",,,"Verb",,,,,'
     '"1sg=πάω; 2sg=πας; 3sg=πάει; 1pl=πάμε; 2pl=πάτε; 3pl=πάνε",'
-    '"πάω, πας, πάει, πάμε, πάτε, πάνε",,\n'
-    '"μικρός","klein",,,"Adjektiv",,,,,,,,\n'
-    '"γλυκός","süß",,,"Adjektiv",,,,,"fem=γλυκιά",,,\n'
-    '"εδώ","hier",,,"Adverb",,,,,,,,\n'
-    '"από","von, aus",,,"Präposition",,"mit Akkusativ",,,,,,\n'
-    '"Τι κάνεις;","Wie geht\'s?",,,"Phrase",,,,"per du",,,,\n'
-    '"πέντε","fünf",,,"Zahl",,,,,,,,\n'
-    '"και","und, auch",,,"Sonstiges",,,,,,,,\n'
+    '"πάω, πας, πάει, πάμε, πάτε, πάνε","πήγα","Πήγαινε!",,\n'
+    '"μικρός","klein",,,"Adjektiv",,,,,,,,,,\n'
+    '"γλυκός","süß",,,"Adjektiv",,,,,"fem=γλυκιά",,,,,\n'
+    '"εδώ","hier",,,"Adverb",,,,,,,,,,\n'
+    '"από","von, aus",,,"Präposition",,"mit Akkusativ",,,,,,,,\n'
+    '"Τι κάνεις;","Wie geht\'s?",,,"Phrase",,,,"per du",,,,,,\n'
+    '"πέντε","fünf",,,"Zahl",,,,,,,,,,\n'
+    '"και","und, auch",,,"Sonstiges",,,,,,,,,,\n'
 )
 
 

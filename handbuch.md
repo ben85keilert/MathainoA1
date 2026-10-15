@@ -1,8 +1,8 @@
 # Μαθαίνω — Griechisch · Handbuch
 
-Μαθαίνω („ich lerne“) ist eine Lern-App für Griechisch (Niveau A1, mit
-Vorbereitung auf A2): Vokabeltraining mit Karteikarten oder Tippen, dazu
-Grammatiktrainer für Deklination und Konjugation. Dieses Handbuch wird
+Μαθαίνω („ich lerne“) ist eine Lern-App für Griechisch (Niveau A1 und
+A2): Vokabeltraining mit Karteikarten oder Tippen, dazu Grammatiktrainer
+für Deklination und Konjugation. Dieses Handbuch wird
 nach und nach ergänzt — die wichtigsten Punkte stehen auch in der App
 unter dem ?-Symbol oben rechts. Grammatik-Übersichtstabellen (Alphabet,
 Artikel, Deklinationen, Verben, Adjektive, Zahlen, Pronomen, Fragewörter
@@ -53,9 +53,21 @@ Reihenfolge vollständig bleibt), und die **Inhalte** einer geöffneten
 Auswahlliste werden nie gefiltert — eine alte Auswahlliste ohne Stufe
 darf Karten beider Stufen enthalten. Der Lernfortschritt ist
 stufenübergreifend (er hängt an der Karte, nicht an der Stufe).
-Hinweis: A1-Listen können für A2 unvollständig sein (z.B. fehlen
-Vokativ oder Aoristformen) — solche Karten lassen sich später über den
-Reimport einer korrigierten Textanalyse anreichern.
+
+**Jede Stufe zeigt nur ihren Stoff** (Pame A1 bzw. A2):
+
+| | A1 | A2 |
+|---|---|---|
+| Verbtraining | Präsens, Futur | dazu **Aorist** und **Imperativ** |
+| Karten-Editor, Tabelle, Export, Prompts | 2. Stamm | dazu Aorist, Imperativ |
+| Adjektive | -ος (μικρός, ωραίος, γλυκός) | dazu -ύς, -ιά, -ύ (βαρύς), πολύς, δεξιός |
+| Grammatik-Übersicht | A1-Tabellen | dazu Aorist, Imperativ, -ύς-Adjektive, Ordnungszahlen |
+
+Die Felder **Aorist Passiv** und **Perfekt-Partizip** sind auf keiner
+der beiden Stufen Stoff: Editor, Tabelle, Export und Prompts blenden sie
+aus, gespeicherte Werte (z.B. aus Lexikon-Paketen) bleiben aber erhalten
+— sie sind für eine spätere Stufe vorgesehen. A1-Listen brauchen keine
+Aoristformen; geübt wird der Aorist mit den A2-Listen.
 
 ## Erweiterte Funktionen
 
@@ -149,7 +161,11 @@ gesammelten Worthintergrund der ganzen Liste öffnet.
 ## Adjektivtraining
 
 Das Adjektivtraining (eigener Hauptmenüpunkt) dekliniert **Adjektiv +
-Nomen zusammen** („ο μικρός δρόμος“ → „τους μικρούς δρόμους“). Welche
+Nomen zusammen** („ο μικρός δρόμος“ → „τους μικρούς δρόμους“).
+Erkannt werden Adjektive auf -ος (μικρός, ωραίος, γλυκός) und — der
+A2-Stoff — auf -ύς, -ιά, -ύ (βαρύς, βαθύς, φαρδύς, μακρύς), dazu πολύς
+und δεξιός (Neutrum δεξί); andere (z.B. unveränderliche wie μπλε)
+überspringt das Training. Welche
 Kombinationen abgefragt werden, steuert die Einstellung
 **„Adjektivtraining“** im Zahnrad-Menü:
 
@@ -196,6 +212,9 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
 - **Kommas zählen nie als Fehler** — auch mitten im Satz: „Γεια σου, τι
   κάνεις;“ und „Γεια σου τι κάνεις“ sind gleichwertig (auf der
   deutschen Seite trennen Kommas weiterhin Alternativen, siehe unten).
+  Genauso egal sind **Auslassungspunkte** („δεν ... άλλο“ = „δεν άλλο“),
+  **Apostrophe** („geht's“ = „gehts“, auch typografisch getippt) und ein
+  **Bindestrich am Wortrand** („Kinder-“ = „Kinder“, „ξανα-“ = „ξανα“).
 - **Wortteile in Klammern sind optional**: bei „αγαπ(ά)ω“ zählen αγαπάω
   und αγαπώ als richtig, bei „(Visiten-)Karte“ Visitenkarte und Karte
   (ein Bindestrich am Klammerrand verbindet die Teile). Klammern mit
@@ -248,11 +267,40 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
   👤 (einer) bzw. 👥 (viele) markiert.
 - Nach dem Aufdecken zeigt das Beugungstraining bei Vorgabe Deutsch die
   **Grundform** mit an; gibt es mehrere richtige Formen, stehen alle in
-  der Lösung („σηκώνεστε/σηκωνόσαστε“). Bei Futur-Aufgaben lässt sich
-  unter **Einstellungen → Verbtraining** wählen, welche Grundform
-  erscheint: nur die Präsensform („γράφω“), nur der 2. Stamm
-  („θα γράψω“) oder beides — dann steht die Präsensform in Klammern
-  dahinter („θα γράψω (γράφω)“, Standard).
+  der Lösung („σηκώνεστε/σηκωνόσαστε“). Bei Futur- und (ab A2)
+  Aorist-Aufgaben lässt sich unter **Einstellungen → Verbtraining**
+  wählen, welche Grundform erscheint: nur die Präsensform („γράφω“), nur
+  die Grundform der Zeitform („θα γράψω“, „έγραψα“) oder beides — dann
+  steht die Präsensform in Klammern dahinter („θα γράψω (γράφω)“,
+  „έγραψα (γράφω)“, Standard).
+
+## Aorist und Imperativ (Stufe A2)
+
+Auf Stufe A2 bietet das Verbtraining zusätzlich die Zeitformen
+**Aorist** (Vergangenheit) und **Imperativ** an.
+
+- **Aorist:** Im Feld „Aorist“ genügt die 1. Person Singular, so wie sie
+  in der Verbliste steht („έγραψα“, „ήρθα“, „κοιμήθηκα“). Die übrigen
+  Personen bildet die App: Endungen -α, -ες, -ε, -αμε, -ατε, -αν/-ανε,
+  der Ton höchstens auf der drittletzten Silbe; das Augment έ-
+  zweisilbiger Formen fällt in der 1./2. Person Plural weg (έγραψα →
+  γράψαμε, aber ελπίζω: έλπισα → ελπίσαμε). Auch die -ηκα-Aoriste der
+  -ομαι-Verben (κοιμήθηκα → κοιμηθήκαμε) laufen so; ήμουν, ήθελα, ήξερα
+  und ήπια kennt die App als Ausnahmen. Zwei Aoriste werden mit „/“
+  getrennt („έκατσα/κάθισα“), echte Abweichler als 6 Formen mit Komma.
+  In der 3. Person Plural zählen beide Formen (έγραψαν und γράψανε).
+- **Imperativ:** 2. Person Singular, geschrieben wie in der Verbliste
+  („Γράψε!“, „Έλα!“) — runde Klammern markieren optionale Teile
+  („Άκου(σε)!“ akzeptiert άκου und άκουσε), „/“ trennt zwei Formen
+  („Κάτσε!/Κάθισε!“). Der Imperativ ist **eine** Aufgabe je Verb und
+  hängt nicht von der Personen-/Zahl-Auswahl ab.
+- Verben ohne Eintrag im jeweiligen Feld fallen in dieser Zeitform weg;
+  die Startseite zählt, wie viele Verben der Liste einen Aorist bzw.
+  Imperativ haben. Einträge wie „ήρθα (von έρχομαι)“ sind Vokabeln,
+  keine konjugierbaren Verben — das Verbtraining überspringt sie.
+- Die Beugungstabelle (ⓘ bzw. Tabellensymbol) und die
+  Grammatik-Übersicht „Verben“ zeigen auf A2 die Aorist- und
+  Imperativformen mit an.
 
 ## Wortlisten bearbeiten
 
@@ -262,11 +310,13 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
   Bedarf in die Zusatzfelder (Akkusativ/Genitiv Singular/Plural).
 - **Verben**: unregelmäßiges Präsens als 6 Formen mit Komma
   (1sg, 2sg, 3sg, 1pl, 2pl, 3pl), „-“ = regelmäßiger Slot, z.B.
-  „πάω, πας, πάει, πάμε, πάτε, πάνε“. 2. Stamm (Futur/να-Form, Aorist
-  Aktiv) als einzelner Stamm („γραψ-“) oder ebenfalls 6 Formen.
-  Zusätzlich (A2-Vorbereitung, vorerst nur Speicherung/Anzeige):
-  **Aorist Passiv** im gleichen Format und ein unregelmäßiges
-  **Perfekt-Partizip** (z.B. „γραμμένος“).
+  „πάω, πας, πάει, πάμε, πάτε, πάνε“. 2. Stamm (Futur/να-Form) als
+  einzelner Stamm („γραψ-“) oder ebenfalls 6 Formen. Ab Stufe A2
+  zusätzlich **Aorist** (1. Person Singular, z.B. „έγραψα“ — oder 6
+  Formen) und **Imperativ** (2. Person Singular, z.B. „Γράψε!“), siehe
+  „Aorist und Imperativ (Stufe A2)“. Ein Aorist, aus dem sich keine
+  Formen bilden lassen (z.B. ein Stamm wie „γράψ-“), wird beim
+  Speichern mit einem Hinweis abgelehnt.
 - Mehrere richtige Formen mit „/“ trennen (z.B. „2pl=είστε/είσαστε“),
   optionale Wortteile in Klammern („αγαπ(ά)ω“).
 - **Komplette Alternativantworten**: griechisch mit „ / “ trennen
@@ -290,8 +340,8 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
 | Worttyp | regelmäßig | unregelmäßig |
 |---|---|---|
 | Nomen | ο δρόμος – Straße, Plural „-οι“ | η γυναίκα – Frau, Plural „-ες“, `gen_pl=γυναικών` |
-| Verb | γράφω – schreiben, 2. Stamm „γραψ-“ | πάω – gehen, Präsens „πάω, πας, πάει, πάμε, πάτε, πάνε“ |
-| Adjektiv | μικρός – klein | γλυκός – süß, Femininum „γλυκιά“ |
+| Verb | γράφω – schreiben, 2. Stamm „γραψ-“ (A2: Aorist „έγραψα“, Imperativ „Γράψε!“) | πάω – gehen, Präsens „πάω, πας, πάει, πάμε, πάτε, πάνε“ |
+| Adjektiv | μικρός – klein (A2 auch βαρύς – schwer) | γλυκός – süß, Femininum „γλυκιά“ |
 | Adverb | εδώ – hier | — |
 | Präposition | από – von, aus | — |
 | Phrase | Τι κάνεις; – Wie geht's? (Notiz „per du“) | — |
@@ -308,13 +358,18 @@ automatisch erkannt). Die CSV braucht eine Kopfzeile mit diesen
 Spalten (nur `front` und `back` sind Pflicht):
 
 ```
-front,back,plural,article,word_type,hints_gr,hints_de,notes_gr,notes_de,forms,stem2,aorist_passive,participle
+front,back,plural,article,word_type,hints_gr,hints_de,notes_gr,notes_de,forms,stem2,aorist,imperative,aorist_passive,participle
 ```
 
 Die Spalte `forms` nimmt unregelmäßige Formen als `schlüssel=form; …`
 auf, z.B. `gen_pl=γυναικών; 2sg=πας`. In der App-Hilfe (?-Symbol) steht
 ein fertiger Chatbot-Prompt, der aus einer Liste griechischer Wörter
-(als Foto oder Text) die Import-CSV erzeugt.
+(als Foto oder Text) die Import-CSV erzeugt — mit genau den Spalten der
+aktiven Stufe (A1 ohne `aorist`/`imperative`; `aorist_passive` und
+`participle` fragt keine der beiden Stufen ab). Auf A2 kennt der Prompt
+auch die Schreibweise des Lehrbuchs („πιστεύω, -έψω“ → front „πιστεύω“,
+2. Stamm „πιστέψ-“; „ήρθα (von έρχομαι)“ als eigene Vokabel). Ältere
+CSV-Dateien mit weniger Spalten lassen sich weiterhin importieren.
 
 ## Bestehende Liste aktualisieren (Sammelbearbeitung)
 

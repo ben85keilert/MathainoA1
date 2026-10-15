@@ -17,7 +17,9 @@ aus), entscheidet die Session.
 Deutsch: Die Rückseite kann Alternativen enthalten ("Gyros, Kreis, Runde",
 "und, auch", "Hallo! Guten Tag!"); jede Alternative wird akzeptiert.
 Kommas zählen beim Vergleich nie als Fehler (beide Sprachseiten); auf der
-deutschen Rückseite trennen sie weiterhin Alternativen.
+deutschen Rückseite trennen sie weiterhin Alternativen. Ebenso egal sind
+Auslassungspunkte ("δεν ... άλλο"), Apostrophe ("geht's", "από 'δω")
+und ein Bindestrich am Wortrand ("Kinder-", "ξανα-").
 """
 
 from __future__ import annotations
@@ -35,8 +37,12 @@ class Result(Enum):
     WRONG = "wrong"
 
 
+# Typografische Apostrophe (Handy-Tastaturen) wie den ASCII-Apostroph
+_APOSTROPHES = {ord(c): "'" for c in "’‘ʼ`´"}
+
+
 def normalize(s: str) -> str:
-    s = unicodedata.normalize("NFC", s)
+    s = unicodedata.normalize("NFC", s).translate(_APOSTROPHES)
     s = re.sub(r"\s+", " ", s).strip()
     # lower() statt casefold(): casefold würde ς zu σ falten und damit
     # Schluss-Sigma-Fehler unbemerkt durchlassen
@@ -87,7 +93,12 @@ def almost_kind(expected: str, given: str) -> str:
     return "both"
 
 
-_PUNCT = ";·!?.,…"
+# Satzzeichen am Rand — inkl. Bindestrich: "Kinder-", "ξανα-" (Präfixe
+# und Wortbildungsteile) zählen auch ohne ihn
+_PUNCT = ";·!?.,…-"
+# Auslassungspunkte stehen für einen Platzhalter ("δεν ... άλλο",
+# "[kein/keine] ... mehr") — nie Teil der Antwort
+_ELLIPSIS = re.compile(r"…|\.{2,}")
 
 
 def _strip_punct(s: str) -> str:
@@ -95,9 +106,12 @@ def _strip_punct(s: str) -> str:
 
 
 def _drop_commas(s: str) -> str:
-    # Kommas ersatzlos ignorieren: durch Leerzeichen ersetzen und glätten,
-    # damit "danke,gerne" und "danke, gerne" auf dasselbe hinauslaufen
-    return re.sub(r"\s+", " ", s.replace(",", " ")).strip()
+    # Kommas und Auslassungspunkte ersatzlos ignorieren: durch Leerzeichen
+    # ersetzen und glätten, damit "danke,gerne" und "danke, gerne" auf
+    # dasselbe hinauslaufen; Apostrophe ganz entfernen ("geht's" =
+    # "gehts", "από 'δω" = "από δω")
+    s = _ELLIPSIS.sub(" ", s.replace(",", " ")).replace("'", "")
+    return re.sub(r"\s+", " ", s).strip()
 
 
 def bracket_variants(text: str) -> list[str]:

@@ -117,21 +117,30 @@ def _leitner_wiring(progress, settings, mode_of, stats_on: bool = True):
     return on_result, on_repeat_correct, on_repeat_penalty
 
 
-def _verb_sample(verb: conj.Verb) -> str:
+def _verb_sample(verb: conj.Verb,
+                 tenses: tuple[str, ...] | list[str] = ("present", "future"),
+                 ) -> str:
     """Beispielform eines Verbs für die Vorschau — nie ungeprüft [0].
 
     Bevorzugt 2. Person Plural; fehlt sie (z.B. „custom"-Verben ohne diese
-    Form), wird die erste vorhandene Präsensform genommen. Optional wird die
-    Futurform ergänzt."""
+    Form), wird die erste vorhandene Präsensform genommen. Ergänzt werden
+    die vorhandenen Formen der übrigen Zeitformen der Stufe (tenses)."""
     order = [(2, "pl"), (1, "sg"), (3, "sg"), (1, "pl"), (2, "sg"), (3, "pl")]
     for person, num in order:
         forms = conj.conjugate(verb, person, num)
         if forms:
             label = f"{person}. Person {NUMBER_NAMES[num]}"
             sample = f"{label}: {forms[0]}"
-            fut = conj.conjugate_future(verb, person, num)
+            fut = (conj.conjugate_future(verb, person, num)
+                   if "future" in tenses else [])
             if fut:
                 sample += f" · Futur: θα {fut[0]}"
+            aor = (conj.conjugate_aorist(verb, person, num)
+                   if "aorist" in tenses else [])
+            if aor:
+                sample += f" · Aorist: {aor[0]}"
+            if "imperative" in tenses and verb.imperative:
+                sample += f" · Imperativ: {verb.imperative}"
             return sample
     return "—"
 
@@ -1002,10 +1011,18 @@ def combos_view(nav, store: ContentStore, source_id: str | None = None,
     )
 
 
+# Beschriftung der Zeitformen im Verbtraining
+_TENSE_LABELS = {"present": "Präsens", "future": "Futur (θα)",
+                 "aorist": "Aorist", "imperative": "Imperativ"}
+
+
 def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                            preselect_id: str | None = None) -> ft.Control:
     s = load_conjugation_settings()
     level = load_app_settings().level
+    # Nur Zeitformen, die auf der Stufe Stoff sind (A1: Präsens/Futur,
+    # A2: dazu Aorist und Imperativ); andere gespeicherte fallen weg
+    level_tenses = conj.tenses_for_level(level)
     lists = filter_level(
         sorted(store.lists.values(),
                key=lambda l: (l.chapter is None, l.chapter or 0, l.name)),
@@ -1051,12 +1068,13 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
         allow_multiple_selection=True,
         allow_empty_selection=True,  # sonst rote Flet-Meldung beim Abwählen
         show_selected_icon=True,
-        selected=[t for t in s.tenses if t in conj.TENSES] or ["present"],
-        segments=[
-            ft.Segment(value="present", label=ft.Text("Präsens")),
-            ft.Segment(value="future", label=ft.Text("Futur (θα)")),
-        ],
+        selected=[t for t in s.tenses if t in level_tenses] or ["present"],
+        segments=[ft.Segment(value=t, label=ft.Text(_TENSE_LABELS[t]))
+                  for t in level_tenses],
     )
+    # vier Zeitformen (A2) passen auf schmalen Displays nicht immer in
+    # eine Zeile — dann seitlich wischen statt abschneiden
+    tense_row = ft.Row([seg_tenses], scroll=ft.ScrollMode.AUTO)
     seg_persons = ft.SegmentedButton(
         allow_multiple_selection=True,
         allow_empty_selection=True,
@@ -1093,8 +1111,15 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
     def refresh_info(e=None):
         verbs = conj.conjugatable_verbs(store.cards_for(dd_list.value))
         n_fut = sum(1 for _, v in verbs if conj.has_future(v))
-        info_text.value = (f"{len(verbs)} konjugierbare Verben in dieser Liste "
-                           f"· {n_fut} mit 2. Stamm (Futur)")
+        text = (f"{len(verbs)} konjugierbare Verben in dieser Liste "
+                f"· {n_fut} mit 2. Stamm (Futur)")
+        if "aorist" in level_tenses:
+            n_aor = sum(1 for _, v in verbs if conj.has_aorist(v))
+            text += f" · {n_aor} mit Aorist"
+        if "imperative" in level_tenses:
+            n_imp = sum(1 for _, v in verbs if conj.has_imperative(v))
+            text += f" · {n_imp} mit Imperativ"
+        info_text.value = text
         nav.page.update()
 
     # Flet-0.85-Dropdowns feuern on_select (on_change existiert nicht)
@@ -1120,7 +1145,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             error_text.value = "Bitte mindestens eine Person und eine Zahl wählen."
             nav.page.update()
             return None
-        tenses = [t for t in conj.TENSES if t in multi_values(seg_tenses)]
+        tenses = [t for t in level_tenses if t in multi_values(seg_tenses)]
         if not tenses:
             error_text.value = "Bitte mindestens eine Zeitform wählen."
             nav.page.update()
@@ -1168,7 +1193,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                 dense=True,
                 title=ft.Row([ft.Text(c.front, expand=1), ft.Text(c.back, expand=1)],
                              spacing=12),
-                subtitle=ft.Text(_verb_sample(v), size=sz(12)),
+                subtitle=ft.Text(_verb_sample(v, level_tenses), size=sz(12)),
                 trailing=word_details_button(c),
             )
 
@@ -1205,6 +1230,14 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                 error_text.value = (
                     "Keine Verben mit 2. Stamm in dieser Liste — Futur "
                     "braucht das Feld „2. Stamm“ in der Vokabelverwaltung.")
+            elif settings.tenses == ["aorist"]:
+                error_text.value = (
+                    "Keine Verben mit Aorist in dieser Liste — der Aorist "
+                    "braucht das Feld „Aorist“ in der Vokabelverwaltung.")
+            elif settings.tenses == ["imperative"]:
+                error_text.value = (
+                    "Keine Verben mit Imperativ in dieser Liste — er "
+                    "braucht das Feld „Imperativ“ in der Vokabelverwaltung.")
             elif (settings.direction == "gr" and settings.persons == [1]
                     and settings.numbers == ["sg"]):
                 error_text.value = (
@@ -1256,7 +1289,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             ft.Row([seg_mode, tf_count], spacing=12,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             seg_direction,
-            seg_tenses,
+            tense_row,
             seg_persons,
             seg_numbers,
             box_row,
@@ -1292,21 +1325,22 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
 def _base_form_text(task, verb_base_form: str) -> str:
     """Grundform fürs Aufdecken bzw. die Ergebnisliste.
 
-    Bei Futur-Aufgaben bestimmt die Einstellung verb_base_form
-    (AppSettings), was erscheint: nur die Präsensform, nur die
-    Futur-Grundform (θα + 1. Person Singular) oder beides — dann steht
-    die Präsensform in Klammern dahinter: "θα γράψω (γράφω)". Alle
-    übrigen Aufgaben (Präsens, Deklination) zeigen wie bisher die
+    Bei Futur- und Aorist-Aufgaben bestimmt die Einstellung
+    verb_base_form (AppSettings), was erscheint: nur die Präsensform,
+    nur die Grundform der Zeitform (1. Person Singular: "θα γράψω",
+    "έγραψα") oder beides — dann steht die Präsensform in Klammern
+    dahinter: "θα γράψω (γράφω)", "έγραψα (γράφω)". Alle übrigen
+    Aufgaben (Präsens, Imperativ, Deklination) zeigen wie bisher die
     Vorderseite der Karte."""
     present = task.card.with_plural(task.card.front)
-    future_base = getattr(task, "future_base", "")
-    if getattr(task, "tense", "") != "future" or not future_base:
+    tense_base = getattr(task, "tense_base", "")
+    if getattr(task, "tense", "") not in ("future", "aorist") or not tense_base:
         return present
     if verb_base_form == "present":
         return present
     if verb_base_form == "stem2":
-        return future_base
-    return f"{future_base} ({task.card.front})"
+        return tense_base
+    return f"{tense_base} ({task.card.front})"
 
 
 def run_view(nav, store: ContentStore, session: DeclensionSession,

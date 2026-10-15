@@ -15,8 +15,9 @@ from pathlib import Path
 import flet as ft
 
 from mathainoa1.logic.answer_check import normalize, strip_accents
-from mathainoa1.storage.content import ContentStore
+from mathainoa1.storage.content import ContentStore, verb_fields_for
 from mathainoa1.storage.progress import ProgressStore
+from mathainoa1.storage.settings import load_app_settings
 from mathainoa1.storage.textanalyse import (
     EtymologyEntry,
     LexiconStore,
@@ -29,7 +30,7 @@ from mathainoa1.ui.scale import sz
 # Arbeitsanweisung IV: eigenständige Etymologie-Pakete für das Lexikon.
 # Das Eintragsschema muss mit storage/textanalyse.EtymologyEntry
 # übereinstimmen — Änderungen dort bitte hier nachziehen.
-ARBEITSANWEISUNG_IV = """\
+_ARBEITSANWEISUNG_IV = """\
 ARBEITSANWEISUNG IV: ETYMOLOGIE-PAKET FÜR DAS LEXIKON DER LERN-APP
 
 AUFGABE
@@ -77,7 +78,7 @@ REGELN
 3. extra_vocab: NUR die zusätzlichen neugriechischen Lernwörter aus
    Kognaten und Synonymen DIESES Eingabeworts, als Vokabeleinträge
    (front mit Artikel, back, article, plural, word_type; bei Verben auch
-   stem2, aorist_passive, participle; unregelmäßige Formen ins Feld
+   @VERB_FIELDS@; unregelmäßige Formen ins Feld
    "forms" wie "gen_sg=άντρα" — Formen OHNE Artikel, die App setzt ihn
    selbst davor). NIEMALS das Eingabewort selbst,
    keine altgriechischen Wurzeln, keine deutschen oder lateinischen
@@ -150,10 +151,19 @@ def open_import_dialog(page: ft.Page, lex: LexiconStore,
     ))
 
 
+def arbeitsanweisung_iv(level: str) -> str:
+    """Arbeitsanweisung IV mit den Verbfeldern der Stufe (AppSettings.level):
+    Zusatzwörter sollen nur Felder mitbringen, die auf der Stufe Stoff sind."""
+    return _ARBEITSANWEISUNG_IV.replace(
+        "@VERB_FIELDS@", ", ".join(verb_fields_for(level)))
+
+
 def open_prompt_dialog(page: ft.Page, clipboard: ft.Clipboard) -> None:
+    prompt_text = arbeitsanweisung_iv(load_app_settings().level)
+
     def copy(e):
         async def do():
-            await clipboard.set(ARBEITSANWEISUNG_IV)
+            await clipboard.set(prompt_text)
         page.run_task(do)
         page.pop_dialog()
         page.show_dialog(ft.SnackBar(ft.Text("Prompt kopiert.")))
@@ -161,7 +171,7 @@ def open_prompt_dialog(page: ft.Page, clipboard: ft.Clipboard) -> None:
     page.show_dialog(ft.AlertDialog(
         title=ft.Text("Arbeitsanweisung IV (Prompt)", size=sz(16)),
         content=ft.Column(
-            [ft.Text(ARBEITSANWEISUNG_IV, size=sz(12), selectable=True)],
+            [ft.Text(prompt_text, size=sz(12), selectable=True)],
             scroll=ft.ScrollMode.AUTO, width=420, height=440,
         ),
         actions=[

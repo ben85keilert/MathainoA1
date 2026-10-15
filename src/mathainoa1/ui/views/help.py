@@ -15,18 +15,127 @@ import flet as ft
 from mathainoa1 import APP_NAME, __version__
 from mathainoa1.ui.updates import manual_check
 from mathainoa1.storage import content
-from mathainoa1.storage.content import CSV_FIELDS
+from mathainoa1.storage.content import csv_fields_for, verb_fields_for
 from mathainoa1.storage.settings import load_app_settings
 from mathainoa1.ui.scale import sz
 
-# Gemeinsamer Teil beider Chatbot-Prompts: Ausgabeformat, Spaltenregeln
-# und Beispielzeilen der Import-CSV
-_CSV_FORMAT_RULES = f"""\
+# Beispielzeilen der Import-CSV (je Worttyp; regelmäßige Wörter brauchen
+# keine forms). Ausgegeben werden nur die Spalten der aktiven Stufe —
+# Beispiele, die auf der Stufe kein Stoff sind (level="A2"), entfallen.
+_EXAMPLE_ROWS: list[dict] = [
+    {"front": "ο δρόμος", "back": "Straße", "plural": "-οι", "article": "ο",
+     "word_type": "Nomen"},
+    {"front": "η γυναίκα", "back": "Frau", "plural": "-ες", "article": "η",
+     "word_type": "Nomen", "forms": "gen_pl=γυναικών"},
+    {"front": "ο βράχος", "back": "Felsen", "plural": "τα βράχια",
+     "article": "ο", "word_type": "Nomen", "level": "A2"},
+    {"front": "γράφω", "back": "schreiben", "word_type": "Verb",
+     "stem2": "γράψ-", "aorist": "έγραψα", "imperative": "Γράψε!",
+     "aorist_passive": "γραφτ-", "participle": "γραμμένος"},
+    {"front": "κοιμάμαι", "back": "schlafen", "word_type": "Verb",
+     "stem2": "κοιμηθ-", "aorist": "κοιμήθηκα", "imperative": "Κοιμήσου!"},
+    {"front": "βλέπω", "back": "sehen", "word_type": "Verb",
+     "stem2": "δω, δεις, δει, δούμε, δείτε, δουν/δούνε", "aorist": "είδα",
+     "imperative": "Δες!"},
+    {"front": "πάω", "back": "gehen", "word_type": "Verb",
+     "forms": "1sg=πάω; 2sg=πας; 3sg=πάει; 1pl=πάμε; 2pl=πάτε; 3pl=πάνε",
+     "stem2": "πάω, πας, πάει, πάμε, πάτε, πάνε", "aorist": "πήγα",
+     "imperative": "Πήγαινε!"},
+    {"front": "ήρθα", "back": "ich bin gekommen", "word_type": "Verb",
+     "hints_gr": "Aorist von έρχομαι", "level": "A2"},
+    {"front": "μικρός", "back": "klein", "word_type": "Adjektiv"},
+    {"front": "γλυκός", "back": "süß", "word_type": "Adjektiv",
+     "forms": "fem=γλυκιά"},
+    {"front": "βαρύς", "back": "schwer", "word_type": "Adjektiv",
+     "level": "A2"},
+    {"front": "εδώ", "back": "hier", "word_type": "Adverb"},
+    {"front": "από", "back": "von, aus", "word_type": "Präposition",
+     "hints_de": "mit Akk."},
+    {"front": "Τι κάνεις;", "back": "Wie geht's?", "word_type": "Phrase",
+     "notes_de": "per du"},
+    {"front": "πέντε", "back": "fünf", "word_type": "Zahl"},
+    {"front": "και", "back": "und, auch", "word_type": "Sonstiges"},
+]
+
+
+def _example_lines(level: str, fields: list[str]) -> str:
+    """Beispielzeilen mit genau den Spalten der Stufe (Werte in
+    Anführungszeichen, leere Spalten leer)."""
+    lines = []
+    for row in _EXAMPLE_ROWS:
+        if row.get("level") == "A2" and level == "A1":
+            continue
+        values = [row.get(f, "") for f in fields]
+        lines.append(",".join(f'"{v}"' if v else "" for v in values))
+    return "\n".join(lines)
+
+
+def _verb_rules(level: str, first: int) -> list[str]:
+    """Spaltenregeln der Verbfelder, die auf der Stufe Stoff sind."""
+    fields = verb_fields_for(level)
+    rules = [f"""\
+{first}. stem2: der 2. Stamm (für θα/να) — bei JEDEM Verb angeben, das
+    einen hat (ohne ihn kein Futur-Training):
+    - regelmäßig ein Stamm mit Bindestrich; die Betonung entscheidet
+      über die Endungen: "γράψ-" → θα γράψω, aber unbetont
+      "κοιμηθ-" → θα κοιμηθώ (endbetont).
+    - unregelmäßig stattdessen die 6 Personenformen kommagetrennt,
+      z.B. für βλέπω: "δω, δεις, δει, δούμε, δείτε, δουν/δούνε".
+    - weglassen nur, wenn der Futurstamm dem Präsens entspricht und
+      unbekannt ist, oder bei Fixformen (κοστίζει, θα δούμε)."""]
+    n = first + 1
+    if "aorist" in fields:
+        rules.append(f"""\
+{n}. aorist: der Aorist (Vergangenheit) — bei JEDEM Verb angeben, das
+    einen hat (ohne ihn kein Aorist-Training). Die 1. Person Singular
+    genügt: "έγραψα", "ήρθα", "κοιμήθηκα" — die App bildet die übrigen
+    Personen selbst (auch bei ήμουν, ήθελα, ήξερα, ήπια). Zwei Aoriste
+    mit "/" ("έκατσα/κάθισα"). Nur wenn Formen vom Muster abweichen,
+    alle 6 Personenformen kommagetrennt (1sg, 2sg, 3sg, 1pl, 2pl, 3pl).
+    Steht eine Verbliste dabei, ihre Formen übernehmen.""")
+        n += 1
+    if "imperative" in fields:
+        rules.append(f"""\
+{n}. imperative: der Imperativ (einmalig) in der 2. Person Singular,
+    geschrieben wie in der Verbliste: "Γράψε!", "Έλα!", "Άκου(σε)!"
+    (runde Klammern = optionaler Teil), zwei Formen mit "/"
+    ("Κάτσε!/Κάθισε!"). Leer lassen, wenn er nicht gebräuchlich ist
+    (z.B. bei μπορώ, ξέρω, πρέπει).""")
+        n += 1
+    if "aorist_passive" in fields or "participle" in fields:
+        rules.append(f"""\
+{n}. aorist_passive: der Aorist Passiv (3. Stamm) im gleichen Format wie
+    stem2 — angeben, wenn bekannt (nicht aus dem Aktiv berechenbar).
+    participle: das Perfekt-Partizip nur bei unregelmäßiger Form
+    (z.B. γραμμένος). Beide Spalten sonst leer lassen.""")
+        n += 1
+    if "aorist" in fields:
+        rules.append(f"""\
+{n}. Schreibweise im Lehrbuch (Pame A2): Verben stehen dort mit dem
+    2. Stamm hinter dem Komma — "πιστεύω, -έψω", "φεύγω, φύγω",
+    "παντρεύομαι, -ευτώ". front ist nur die Präsensform; der 2. Stamm
+    gehört nach stem2 ("πιστέψ-", "φύγ-", "παντρευτ-"). Die angehängte
+    Endung ersetzt den hervorgehobenen Teil: "περνάω, -άσω" →
+    "περάσ-". Zusätze wie "(-είς)" (μπορώ (-είς)) weglassen; zweite
+    Präsensform ("πάω (πηγαίνω)") in hints_gr ("auch: πηγαίνω").
+    Vergangenheitsformen als eigene Einträge ("ήρθα (von έρχομαι)"):
+    front = nur die Form, word_type Verb, hints_gr "Aorist von
+    έρχομαι".""")
+    return rules
+
+
+def csv_format_rules(level: str) -> str:
+    """Gemeinsamer Teil beider Chatbot-Prompts: Ausgabeformat,
+    Spaltenregeln und Beispielzeilen der Import-CSV — mit den Spalten
+    und Regeln der Stufe (content.csv_fields_for)."""
+    fields = csv_fields_for(level)
+    verb_rules = "\n".join(_verb_rules(level, 11))
+    return f"""\
 AUSGABEFORMAT
 Eine CSV-Datei: UTF-8, Komma-getrennt, alle Werte in doppelten
 Anführungszeichen, mit genau dieser Kopfzeile:
 
-{",".join(CSV_FIELDS)}
+{",".join(fields)}
 
 Gib nur die CSV aus, keinen weiteren Text. Spalten ohne Angabe leer lassen.
 
@@ -37,6 +146,9 @@ REGELN FÜR DIE SPALTEN
 3. word_type: Nomen, Verb, Adjektiv, Adverb, Präposition, Phrase,
    Zahl oder Sonstiges.
 4. plural: Pluralendung oder -form, z.B. "-οι" (nur zur Anzeige).
+   Wechselt das Genus im Plural, die komplette Form MIT Artikel
+   ("ο βράχος" → "τα βράχια"). Adjektive: front nur in der männlichen
+   Form ("μικρός", nicht "μικρός, -ή, -ό").
 5. Griechische Alternativformen mit " / " trennen, z.B. "και / κι" oder
    "τρεις / τρία" — jede Form zählt bei der Abfrage als richtig.
 6. Optionale Wortteile in runde Klammern: Verben auf -άω als "αγαπ(ά)ω"
@@ -58,57 +170,36 @@ REGELN FÜR DIE SPALTEN
 10. forms nur bei Unregelmäßigkeit: "schlüssel=form; …" mit den
    Schlüsseln acc_sg, gen_sg, nom_pl, acc_pl, gen_pl, fem, 1sg…3pl
    (z.B. "gen_pl=γυναικών") — Formen ohne Artikel eintragen.
-11. stem2: der 2. Stamm (Aoriststamm, für θα/να) — bei JEDEM Verb
-    angeben, das einen hat (ohne ihn kein Futur-Training):
-    - regelmäßig ein Stamm mit Bindestrich; die Betonung entscheidet
-      über die Endungen: "γράψ-" → θα γράψω, aber unbetont
-      "κοιμηθ-" → θα κοιμηθώ (endbetont).
-    - unregelmäßig stattdessen die 6 Personenformen kommagetrennt,
-      z.B. für βλέπω: "δω, δεις, δει, δούμε, δείτε, δουν/δούνε".
-    - weglassen nur, wenn der Futurstamm dem Präsens entspricht und
-      unbekannt ist, oder bei Fixformen (κοστίζει, θα δούμε).
-12. aorist_passive: der Aorist Passiv (3. Stamm) im gleichen Format wie
-    stem2 — angeben, wenn bekannt (nicht aus dem Aktiv berechenbar);
-    wird ab Stufe A2 trainiert und schadet bei A1 nicht.
-    participle: das Perfekt-Partizip nur bei unregelmäßiger Form
-    (z.B. γραμμένος). Beide Spalten sonst leer lassen.
+{verb_rules}
 
 BEISPIELZEILEN (je Worttyp; regelmäßige Wörter brauchen keine forms —
-jede Zeile hat alle 13 Spalten)
-"ο δρόμος","Straße","-οι","ο","Nomen",,,,,,,,
-"η γυναίκα","Frau","-ες","η","Nomen",,,,,"gen_pl=γυναικών",,,
-"γράφω","schreiben",,,"Verb",,,,,,"γράψ-","γραφτ-","γραμμένος"
-"βλέπω","sehen",,,"Verb",,,,,,"δω, δεις, δει, δούμε, δείτε, δουν/δούνε",,
-"πάω","gehen",,,"Verb",,,,,"1sg=πάω; 2sg=πας; 3sg=πάει; 1pl=πάμε; 2pl=πάτε; 3pl=πάνε","πάω, πας, πάει, πάμε, πάτε, πάνε",,
-"μικρός","klein",,,"Adjektiv",,,,,,,,
-"γλυκός","süß",,,"Adjektiv",,,,,"fem=γλυκιά",,,
-"εδώ","hier",,,"Adverb",,,,,,,,
-"από","von, aus",,,"Präposition",,"mit Akk.",,,,,,
-"Τι κάνεις;","Wie geht's?",,,"Phrase",,,,"per du",,,,
-"πέντε","fünf",,,"Zahl",,,,,,,,
-"και","und, auch",,,"Sonstiges",,,,,,,,
+jede Zeile hat alle {len(fields)} Spalten)
+{_example_lines(level, fields)}
 """
 
-# Prompt 1 — Wortlisten-Prompt: fertige Vokabellisten (Grundformen).
-# {level} wird beim Öffnen des Kopier-Dialogs mit der aktiven Stufe
-# (AppSettings.level) gefüllt — siehe features.py: Prompts müssen zur
-# Stufe passen.
-CHATBOT_PROMPT = f"""\
+
+def chatbot_prompt(level: str) -> str:
+    """Prompt 1 — Wortlisten-Prompt: fertige Vokabellisten (Grundformen)
+    für die aktive Stufe (AppSettings.level) — Spalten und Regeln müssen
+    zur Stufe passen (siehe features.py)."""
+    return f"""\
 AUFGABE
 Du bekommst eine Liste griechischer Vokabeln (Grundformen) mit
 deutschen Bedeutungen — als Foto oder als Text. Erstelle daraus eine
-Import-CSV für eine Griechisch-Lern-App (Niveau {{level}}).
+Import-CSV für eine Griechisch-Lern-App (Niveau {level}).
 
-{_CSV_FORMAT_RULES}"""
+{csv_format_rules(level)}"""
 
-# Prompt 2 — Lesetext-Prompt: beliebige griechische Texte, Wörter
-# stehen dort gebeugt und müssen auf die Grundform zurückgeführt werden
-TEXT_PROMPT = f"""\
+
+def text_prompt(level: str) -> str:
+    """Prompt 2 — Lesetext-Prompt: beliebige griechische Texte, Wörter
+    stehen dort gebeugt und müssen auf die Grundform zurückgeführt werden."""
+    return f"""\
 AUFGABE
 Du bekommst einen griechischen Text — z.B. einen abfotografierten
 Zeitungsausschnitt, eine Buchseite oder ein Schild. Die Wörter stehen
 dort in gebeugten Formen. Erstelle daraus eine Vokabel-CSV für eine
-Griechisch-Lern-App (Niveau {{level}}): jedes Wort in seiner Grundform.
+Griechisch-Lern-App (Niveau {level}): jedes Wort in seiner Grundform.
 
 ZURÜCKFÜHREN AUF DIE GRUNDFORM
 - Nomen → Nominativ Singular mit Artikel (z.B. τους δρόμους →
@@ -121,7 +212,7 @@ ZURÜCKFÜHREN AUF DIE GRUNDFORM
   Artikel, Pronomen und Partikeln wie να/θα/δεν.
 - Unleserliche oder unsichere Wörter weglassen statt zu raten.
 
-{_CSV_FORMAT_RULES}"""
+{csv_format_rules(level)}"""
 
 
 def _p(text: str) -> ft.Text:
@@ -150,6 +241,8 @@ def _chapter(nav, title: str, icon: str,
 
 
 def help_view(nav, store=None) -> ft.Control:
+    # Prompts, Spalten und Stufen-Texte richten sich nach der aktiven Stufe
+    level = load_app_settings().level
     clipboard = ft.Clipboard()
     nav.page.services.append(clipboard)
 
@@ -218,7 +311,8 @@ def help_view(nav, store=None) -> ft.Control:
         ft.Text("Adjektivtraining", size=sz(14), weight=ft.FontWeight.BOLD),
         _bullets([
             "Dekliniert Adjektiv + Nomen zusammen (ο μικρός δρόμος → "
-            "τους μικρούς δρόμους).",
+            "τους μικρούς δρόμους) — Adjektive auf -ος, ab A2 auch auf "
+            "-ύς (βαρύς, βαριά, βαρύ) sowie πολύς.",
             "Whitelisting (Standard): nur selbst festgelegte Adjektiv↔"
             "Nomen-Verbindungen werden abgefragt („Verbindungen "
             "festlegen…“). Blacklisting (umschaltbar in den "
@@ -237,6 +331,12 @@ def help_view(nav, store=None) -> ft.Control:
             "und Singular/Plural wählbar.",
             "Präsens und Futur (θα + 2. Stamm) — Futur nur für Verben, "
             "bei denen der 2. Stamm eingetragen ist.",
+            "Ab Stufe A2 zusätzlich Aorist (Vergangenheit) und Imperativ: "
+            "der Aorist für Verben mit Eintrag im Feld „Aorist“ (die "
+            "1. Person genügt, z.B. „έγραψα“ — den Rest bildet die App), "
+            "der Imperativ als 2. Person Singular wie in der Verbliste "
+            "(„Γράψε!“) — er ist eine Aufgabe je Verb, unabhängig von der "
+            "Personen-/Zahl-Auswahl.",
         ]),
         _p("Alle drei Bereiche arbeiten auf denselben Vokabel- und "
            "Auswahllisten; regelmäßige Formen entstehen automatisch, "
@@ -297,7 +397,9 @@ def help_view(nav, store=None) -> ft.Control:
             "Satzzeichen am Anfang/Ende (z.B. ; · ! ? . , …) sind egal.",
             "Kommas zählen nie als Fehler — auch mitten im Satz: "
             "„Γεια σου, τι κάνεις;“ und „Γεια σου τι κάνεις“ sind "
-            "gleichwertig.",
+            "gleichwertig. Genauso egal: Auslassungspunkte („δεν ... "
+            "άλλο“), Apostrophe („geht's“ = „gehts“) und ein Bindestrich "
+            "am Wortrand („Kinder-“ = „Kinder“).",
             "Wortteile in Klammern sind optional: bei „αγαπ(ά)ω“ zählen "
             "αγαπάω und αγαπώ als richtig; bei „(Visiten-)Karte“ zählen "
             "Visitenkarte und Karte (ein Bindestrich am Klammerrand "
@@ -435,6 +537,11 @@ def help_view(nav, store=None) -> ft.Control:
             "z.B. „πάω, πας, πάει, πάμε, πάτε, πάνε“.",
             "2. Stamm (Futur/να-Form): ein Stamm wie „γράψ-“ — oder bei "
             "Unregelmäßigkeit wieder 6 Formen mit Komma.",
+            "Ab Stufe A2: Aorist als 1. Person Singular wie in der "
+            "Verbliste („έγραψα“, „ήρθα“, „κοιμήθηκα“) — die übrigen "
+            "Personen bildet die App; nur Abweichler als 6 Formen. "
+            "Imperativ als 2. Person Singular („Γράψε!“, „Άκου(σε)!“, "
+            "„Κάτσε!/Κάθισε!“).",
             "Mehrere richtige Formen mit „/“ trennen, z.B. "
             "„2pl=είστε/είσαστε“ oder „δουν/δούνε“.",
             "Komplette Alternativantworten: griechisch mit „ / “ trennen "
@@ -463,7 +570,8 @@ def help_view(nav, store=None) -> ft.Control:
             "Nomen, unregelmäßig: „η γυναίκα“ – Frau, Plural „-ες“, dazu "
             "Genitiv Plural „γυναικών“ ins Zusatzfeld.",
             "Verb, regelmäßig: „γράφω“ – schreiben, 2. Stamm „γράψ-“ — "
-            "Präsensfelder leer lassen.",
+            "Präsensfelder leer lassen; ab A2 dazu Aorist „έγραψα“ und "
+            "Imperativ „Γράψε!“.",
             "Verb, unregelmäßig: „πάω“ – gehen, Präsens als 6 Formen: "
             "„πάω, πας, πάει, πάμε, πάτε, πάνε“.",
             "Adjektiv, regelmäßig: „μικρός“ – klein — sonst nichts nötig.",
@@ -489,8 +597,8 @@ def help_view(nav, store=None) -> ft.Control:
            "JSON-Datei wählen. Die CSV braucht eine Kopfzeile mit diesen "
            "Spalten (nur front und back sind Pflicht):"),
         ft.Container(
-            ft.Text(",".join(CSV_FIELDS), size=sz(12), selectable=True,
-                    font_family="monospace"),
+            ft.Text(",".join(csv_fields_for(level)), size=sz(12),
+                    selectable=True, font_family="monospace"),
             bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             border_radius=8, padding=8,
         ),
@@ -523,13 +631,11 @@ def help_view(nav, store=None) -> ft.Control:
                 ft.OutlinedButton(
                     "Wortlisten-Prompt", icon=ft.Icons.LIST_ALT,
                     on_click=open_prompt_dialog(
-                        "Wortlisten-Prompt", CHATBOT_PROMPT.format(
-                            level=load_app_settings().level))),
+                        "Wortlisten-Prompt", chatbot_prompt(level))),
                 ft.OutlinedButton(
                     "Lesetext-Prompt", icon=ft.Icons.NEWSPAPER,
                     on_click=open_prompt_dialog(
-                        "Lesetext-Prompt", TEXT_PROMPT.format(
-                            level=load_app_settings().level))),
+                        "Lesetext-Prompt", text_prompt(level))),
             ],
             wrap=True, spacing=8,
         ),
@@ -558,6 +664,11 @@ def help_view(nav, store=None) -> ft.Control:
             "Inhalte einer geöffneten Auswahlliste werden nie gefiltert.",
             "Der Lernfortschritt hängt an der Karte und gilt "
             "stufenübergreifend.",
+            "Jede Stufe zeigt nur ihren Stoff: A1 Präsens und Futur, A2 "
+            "zusätzlich Aorist und Imperativ (Verbtraining, Karten-Editor, "
+            "Prompts) sowie die Adjektive auf -ύς (βαρύς) und πολύς. "
+            "Felder, die auf keiner Stufe Stoff sind (Aorist Passiv, "
+            "Partizip), sind ausgeblendet — ihre Werte bleiben gespeichert.",
         ]),
         ft.Text("Zoom", size=sz(14), weight=ft.FontWeight.BOLD),
         _p("In den Einstellungen (Ansicht → Zoom) lassen sich alle "
@@ -693,9 +804,9 @@ def help_view(nav, store=None) -> ft.Control:
             content=ft.Column(
                 [
                     ft.Text(f"Version {__version__}", size=sz(14)),
-                    ft.Text("Lern-App für Griechisch (Niveau A1, mit "
-                            "A2-Vorbereitung): Vokabeln, Deklination und "
-                            "Konjugation.", size=sz(14)),
+                    ft.Text("Lern-App für Griechisch (Niveau A1 und A2): "
+                            "Vokabeln, Deklination und Konjugation.",
+                            size=sz(14)),
                     ft.Divider(),
                     ft.Text("Lizenz: MIT — © 2026 Benjamin Ebert", size=sz(13)),
                     ft.Text("Quellcode:\n"

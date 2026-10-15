@@ -1,8 +1,10 @@
-"""Grammatik-Nachschlag: A1-Übersichtstabellen (Buchsymbol oben rechts).
+"""Grammatik-Nachschlag: Übersichtstabellen (Buchsymbol oben rechts).
 
 Wo möglich werden die Formen aus den Regel-Engines der Trainer erzeugt
 (logic/declension.py, logic/conjugation.py) — die Tabellen zeigen damit
-exakt die Formen, die auch abgefragt werden.
+exakt die Formen, die auch abgefragt werden. Gezeigt wird der Stoff der
+aktiven Stufe: A1, ab A2 zusätzlich Aorist, Imperativ und die
+Adjektive auf -ύς (βαρύς) bzw. πολύς.
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ import flet as ft
 from mathainoa1.logic import conjugation as conj
 from mathainoa1.logic import declension as decl
 from mathainoa1.models import VocabCard
+from mathainoa1.storage.settings import load_app_settings
 from mathainoa1.ui.scale import sz
 
 
@@ -90,6 +93,15 @@ def _view(*controls: ft.Control) -> ft.Control:
 
 def _card(front: str, **kw) -> VocabCard:
     return VocabCard(front=front, back="", **kw)
+
+
+def _level(level: str | None) -> str:
+    return level if level is not None else load_app_settings().level
+
+
+def _from_a2(level: str) -> bool:
+    """A2-Stoff zeigen? Alles außer A1 baut auf A2 auf."""
+    return level != "A1"
 
 
 # --- 0) Alphabet ---
@@ -201,7 +213,8 @@ _NOUN_EXAMPLES_BY_GENDER = [
 ]
 
 
-def declensions_view() -> ft.Control:
+def declensions_view(level: str | None = None) -> ft.Control:
+    level = _level(level)
     sections: list[ft.Control] = [
         _h("Nomen: A1-Muster mit allen Formen"),
         _p("Alle Muster, die in den Buchlisten der Kapitel 1–8 vorkommen, "
@@ -235,6 +248,16 @@ def declensions_view() -> ft.Control:
         _p("Eigennamen (η Αθήνα) haben keinen Plural."),
         _p("Sonderfälle aus den Listen ohne A1-Muster: το γάλα → τα "
            "γάλατα, το κρέας → τα κρέατα, το βράδυ → τα βράδια."),
+        *([_h("A2: weitere Nomen"),
+           _p("Maskulina mit Plural -ηδες/-άδες/-έδες bildet das Programm aus "
+              "der Pluralangabe: ο μανάβης → οι μανάβηδες, ο παπάς → οι "
+              "παπάδες, ο καναπές → οι καναπέδες (Genitiv -ων)."),
+           _p("Feminina auf -ση mit Plural -ες gehen wie η φίλη: η βρύση → "
+              "οι βρύσες, των βρυσών."),
+           _p("Wechselt das Geschlecht im Plural (ο βράχος → τα βράχια, το "
+              "φως → τα φώτα), steht die Pluralform mit Artikel in der "
+              "Pluralangabe — das Programm bildet dann keine Pluralformen.")]
+          if _from_a2(level) else []),
     )
 
 
@@ -244,17 +267,75 @@ _PERSON_LABELS = ["1. Sg. (εγώ)", "2. Sg. (εσύ)", "3. Sg. (αυτός/-ή/
                   "1. Pl. (εμείς)", "2. Pl. (εσείς)", "3. Pl. (αυτοί/-ές/-ά)"]
 
 
-def _conj_column(verb: conj.Verb, future: bool = False) -> list[str]:
+def _conj_column(verb: conj.Verb, tense: str = "present") -> list[str]:
+    conjugate = {"future": conj.conjugate_future,
+                 "aorist": conj.conjugate_aorist}.get(tense, conj.conjugate)
     out = []
     for num in ("sg", "pl"):
         for person in (1, 2, 3):
-            forms = (conj.conjugate_future(verb, person, num) if future
-                     else conj.conjugate(verb, person, num))
-            out.append(("θα " if future else "") + " / ".join(forms or ["—"]))
+            forms = conjugate(verb, person, num)
+            prefix = "θα " if tense == "future" and forms else ""
+            out.append(prefix + " / ".join(forms or ["—"]))
     return out
 
 
-def verbs_view() -> ft.Control:
+# Aorist-Beispiele der Übersicht (1. Person Singular wie in der Verbliste)
+_AORIST_EXAMPLES = [("γράφω", "έγραψα"), ("αγοράζω", "αγόρασα"),
+                    ("έρχομαι", "ήρθα"), ("κοιμάμαι", "κοιμήθηκα"),
+                    ("είμαι", "ήμουν")]
+# Imperativ-Beispiele (2. Person Singular, aus der Pame-A2-Verbliste)
+_IMPERATIVE_EXAMPLES = [
+    ("γράφω", "Γράψε!"), ("αγοράζω", "Αγόρασε!"), ("διαβάζω", "Διάβασε!"),
+    ("ακούω", "Άκου(σε)!"), ("σηκώνομαι", "Σήκω!"),
+    ("θυμάμαι", "Θυμήσου!"), ("έρχομαι", "Έλα!"), ("λέω", "Πες!"),
+    ("βλέπω", "Δες!"), ("βρίσκω", "Βρες!"), ("πίνω", "Πιες!"),
+    ("τρώω", "Φά(γ)ε!"), ("πάω", "Πήγαινε!"),
+]
+
+
+def _aorist_controls() -> list[ft.Control]:
+    verbs = [conj.parse_verb(_card(w, word_type="Verb", aorist=a))
+             for w, a in _AORIST_EXAMPLES]
+    cols = [_conj_column(v, "aorist") for v in verbs]
+    return [
+        _h("Aorist (Vergangenheit)"),
+        _frozen_table("Person", _PERSON_LABELS,
+                      [f"{w} → {a}" for w, a in _AORIST_EXAMPLES],
+                      [[c[i] for c in cols] for i in range(6)]),
+        _p("Endungen: -α, -ες, -ε, -αμε, -ατε, -αν(ε). Der Ton steht so "
+           "weit vorn wie möglich, höchstens auf der drittletzten Silbe: "
+           "αγόρασα, aber αγοράσαμε. Zweisilbige Formen bekommen dafür ein "
+           "betontes έ- (Augment): γράφω → έγραψα — in der 1./2. Person "
+           "Plural fällt es wieder weg (γράψαμε, γράψατε)."),
+        _p("Gebildet wird der Aorist meist aus dem 2. Stamm (γράψ- → "
+           "έγραψα, αγοράσ- → αγόρασα). Die -ομαι-Verben enden auf -ηκα: "
+           "κοιμάμαι → κοιμήθηκα, σηκώνομαι → σηκώθηκα, χαίρομαι → "
+           "χάρηκα."),
+        _p("Unregelmäßig (Verbliste): βλέπω → είδα, λέω → είπα, έχω → "
+           "είχα, πάω → πήγα, παίρνω → πήρα, βρίσκω → βρήκα, μπαίνω → "
+           "μπήκα, βγαίνω → βγήκα, ανεβαίνω → ανέβηκα, τρώω → έφαγα, "
+           "πίνω → ήπια, έρχομαι → ήρθα, θέλω → ήθελα, ξέρω → ήξερα, "
+           "είμαι → ήμουν. Im Programm genügt die 1. Person Singular im "
+           "Feld „Aorist“ — die übrigen Personen bildet die App."),
+    ]
+
+
+def _imperative_controls() -> list[ft.Control]:
+    return [
+        _h("Imperativ (einmalig, 2. Person Singular)"),
+        _table(["Verb", "Imperativ"],
+               [[w, imp] for w, imp in _IMPERATIVE_EXAMPLES]),
+        _p("Regelmäßig: 2. Stamm + -ε, der Ton so weit vorn wie möglich "
+           "(γράψ- → γράψε, αγοράσ- → αγόρασε); -ομαι-Verben enden auf "
+           "-σου (θυμήσου, κοιμήσου). Viele häufige Verben sind "
+           "unregelmäßig — im Programm steht der Imperativ deshalb im Feld "
+           "„Imperativ“, genau wie in der Verbliste."),
+    ]
+
+
+def verbs_view(level: str | None = None) -> ft.Control:
+    level = _level(level)
+    tenses = conj.tenses_for_level(level)
     graf = conj.parse_verb(_card("γράφω", word_type="Verb", stem2="γράψ-"))
     agap = conj.parse_verb(_card("αγαπάω", word_type="Verb"))
     boro = conj.parse_verb(_card("μπορώ", word_type="Verb"))
@@ -268,8 +349,13 @@ def verbs_view() -> ft.Control:
     irregular = [conj.parse_verb(_card(w, word_type="Verb"))
                  for w in ("πάω", "τρώω", "λέω", "ακούω")]
     irr_cols = [_conj_column(v) for v in irregular]
-    fut = _conj_column(graf, future=True)
-    fut_sik = _conj_column(sik, future=True)
+    fut = _conj_column(graf, "future")
+    fut_sik = _conj_column(sik, "future")
+    a2_controls: list[ft.Control] = []
+    if "aorist" in tenses:
+        a2_controls += _aorist_controls()
+    if "imperative" in tenses:
+        a2_controls += _imperative_controls()
     return _view(
         _h("Präsens"),
         _frozen_table("Person", _PERSON_LABELS,
@@ -300,6 +386,7 @@ def verbs_view() -> ft.Control:
            "πίνω → θα πιω, λέω → θα πω, τρώω → θα φάω, πάω → θα πάω. "
            "Im Programm stehen solche Futur-Formen als 6er-Liste im "
            "Feld „2. Stamm“."),
+        *a2_controls,
     )
 
 
@@ -309,7 +396,17 @@ _ADJ_EXAMPLES = [("μικρός", "-ος, -η, -ο"), ("ωραίος", "-ος, -
                  ("γλυκός", "-ός, -ιά, -ό")]
 
 
-def adjectives_view() -> ft.Control:
+def _adjective_table(adj: decl.Adjective) -> ft.Control:
+    """Alle Formen eines Adjektivs (Zeilen = Fälle, Spalten = Genus)."""
+    return _table(["", "maskulin", "feminin", "neutrum"], [
+        [label] + [_form_cell(decl.decline_adjective(adj, g, case, num),
+                              adj.stem)
+                   for g in ("m", "f", "n")]
+        for case, num, label in _CASE_LABELS])
+
+
+def adjectives_view(level: str | None = None) -> ft.Control:
+    level = _level(level)
     muster_rows = []
     for word, label in _ADJ_EXAMPLES:
         adj = decl.parse_adjective(_card(word, word_type="Adjektiv"))
@@ -318,22 +415,31 @@ def adjectives_view() -> ft.Control:
             decl.decline_adjective(adj, "n", "nom", "sg"),
         ])
     mikros = decl.parse_adjective(_card("μικρός", word_type="Adjektiv"))
-    full_rows = []
-    for case, num, label in _CASE_LABELS:
-        full_rows.append([label] + [
-            _form_cell(decl.decline_adjective(mikros, g, case, num),
-                       mikros.stem)
-            for g in ("m", "f", "n")
-        ])
     return _view(
         _h("Die drei A1-Muster (Nominativ)"),
         _table(["Muster", "maskulin", "feminin", "neutrum"], muster_rows),
         _p("Nach Vokal-Stamm ist das Femininum -α (ωραία), sonst -η "
            "(μικρή); wenige enden auf -ιά (γλυκιά)."),
         _h("Alle Formen am Beispiel μικρός"),
-        _table(["", "maskulin", "feminin", "neutrum"], full_rows),
+        _adjective_table(mikros),
         _p("Die Endungen entsprechen den Nomen-Mustern -ος / -η (-α) / -ο."),
+        *(_a2_adjective_controls() if _from_a2(level) else []),
     )
+
+
+def _a2_adjective_controls() -> list[ft.Control]:
+    barys = decl.parse_adjective(_card("βαρύς", word_type="Adjektiv"))
+    polys = decl.parse_adjective(_card("πολύς", word_type="Adjektiv"))
+    return [
+        _h("A2: Adjektive auf -ύς, -ιά, -ύ"),
+        _adjective_table(barys),
+        _p("Genauso: βαθύς (tief), φαρδύς (breit), μακρύς (lang). Außer "
+           "im Nominativ/Akkusativ Singular maskulin und neutrum steht "
+           "überall -ι- vor der Endung (βαριά, βαριού, βαριές)."),
+        _h("A2: πολύς, πολλή, πολύ"),
+        _adjective_table(polys),
+        _p("δεξιός, -ιά, -ί hat ein abweichendes Neutrum: το δεξί (χέρι)."),
+    ]
 
 
 # --- 5) Zahlen ---
@@ -353,7 +459,28 @@ _NUMBERS = [
 ]
 
 
-def numbers_view() -> ft.Control:
+# Ordnungszahlen (Pame A2, Lektion 7: Stockwerke)
+_ORDINALS = [("1.", "πρώτος"), ("2.", "δεύτερος"), ("3.", "τρίτος"),
+             ("4.", "τέταρτος"), ("5.", "πέμπτος"), ("6.", "έκτος"),
+             ("7.", "έβδομος"), ("8.", "όγδοος"), ("9.", "ένατος"),
+             ("10.", "δέκατος")]
+
+
+def numbers_view(level: str | None = None) -> ft.Control:
+    level = _level(level)
+    ordinals: list[ft.Control] = []
+    if _from_a2(level):
+        rows = []
+        for num, word in _ORDINALS:
+            adj = decl.parse_adjective(_card(word, word_type="Adjektiv"))
+            rows.append([num, adj.word, adj.fem,
+                         decl.decline_adjective(adj, "n", "nom", "sg")])
+        ordinals = [
+            _h("A2: Ordnungszahlen"),
+            _table(["", "maskulin", "feminin", "neutrum"], rows),
+            _p("Sie werden wie μικρός dekliniert (-ος, -η, -ο). Kurzform "
+               "mit Ziffer: 5ος, 5η, 5ο — ο 5ος όροφος (der 5. Stock)."),
+        ]
     return _view(
         _h("Zahlen"),
         _table(["Zahl", "Griechisch"], [[a, b] for a, b in _NUMBERS]),
@@ -365,6 +492,7 @@ def numbers_view() -> ft.Control:
         ]),
         _p("13 und 14 richten sich nach 3 und 4: δεκατρείς φοιτητές, "
            "δεκατέσσερις μέρες. Alle anderen Zahlen sind unveränderlich."),
+        *ordinals,
     )
 
 
@@ -470,17 +598,15 @@ def _adjective_forms_table(card: VocabCard) -> ft.Control | None:
     adj = decl.parse_adjective(card)
     if adj is None:
         return None
-    rows = [[label] + [_form_cell(decl.decline_adjective(adj, g, case, num),
-                                  adj.stem)
-                       for g in ("m", "f", "n")]
-            for case, num, label in _CASE_LABELS]
-    return _table(["", "maskulin", "feminin", "neutrum"], rows)
+    return _adjective_table(adj)
 
 
-def _verb_forms_tables(card: VocabCard) -> ft.Control | None:
+def _verb_forms_tables(card: VocabCard,
+                       level: str | None = None) -> ft.Control | None:
     verb = conj.parse_verb(card)
     if verb is None:
         return None
+    tenses = conj.tenses_for_level(_level(level))
     col = _conj_column(verb)
     controls: list[ft.Control] = [
         _h("Präsens"),
@@ -488,11 +614,25 @@ def _verb_forms_tables(card: VocabCard) -> ft.Control | None:
                [[_PERSON_LABELS[i], col[i]] for i in range(6)]),
     ]
     if conj.has_future(verb):
-        fut = _conj_column(verb, future=True)
+        fut = _conj_column(verb, "future")
         controls += [
             _h("Futur (θα + 2. Stamm)"),
             _table(["Person", "Form"],
                    [[_PERSON_LABELS[i], fut[i]] for i in range(6)]),
+        ]
+    # Aorist und Imperativ nur, wo sie Stoff sind (ab A2)
+    if "aorist" in tenses and conj.has_aorist(verb):
+        aor = _conj_column(verb, "aorist")
+        controls += [
+            _h("Aorist (Vergangenheit)"),
+            _table(["Person", "Form"],
+                   [[_PERSON_LABELS[i], aor[i]] for i in range(6)]),
+        ]
+    if "imperative" in tenses and conj.has_imperative(verb):
+        controls += [
+            _h("Imperativ (2. Person Singular)"),
+            _table(["Person", "Form"],
+                   [[_PERSON_LABELS[1], verb.imperative]]),
         ]
     return ft.Column(controls, tight=True, spacing=12)
 
