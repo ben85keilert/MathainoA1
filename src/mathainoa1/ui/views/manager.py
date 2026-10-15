@@ -73,7 +73,7 @@ EXPORT_COLUMNS = [
     ("front", "Griechisch"), ("back", "Deutsch"), ("plural", "Plural"),
     ("article", "Artikel"), ("word_type", "Worttyp"),
     ("forms", "Formen"), ("stem2", "2. Stamm"),
-    ("aorist", "Aorist"), ("imperative", "Imperativ"),
+    ("aorist", "Vergangenheit"), ("imperative", "Imperativ"),
     ("aorist_passive", "Aorist Passiv"), ("participle", "Partizip Perfekt"),
     ("hints_gr", "Hinweis GR"), ("hints_de", "Hinweis DE"),
     ("notes_gr", "Notiz GR"), ("notes_de", "Notiz DE"),
@@ -1263,11 +1263,12 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
                "(κοιμηθ- → θα κοιμηθώ). Unregelmäßig: 6 Formen wie oben.",
     )
     tf_aorist = ft.TextField(
-        label="Aorist (Vergangenheit)",
+        label="Vergangenheit (Aorist)",
         hint_text="z.B. έγραψα — oder 6 Formen mit Komma",
         helper="1. Person Singular wie in der Verbliste; die übrigen "
                "Personen bildet die App (έγραψα → γράψαμε). Zwei "
-               "Aoriste mit „/“, unregelmäßig: 6 Formen wie oben.",
+               "Formen mit „/“, unregelmäßig: 6 Formen wie oben. Bei είμαι, "
+               "έχω, θέλω, ξέρω, πρέπει das Paratatikó (ήμουν, είχα …).",
     )
     tf_imperative = ft.TextField(
         label="Imperativ (2. Person Singular)",
@@ -1379,7 +1380,7 @@ def card_editor_dialog(page, store, vlist, card: VocabCard | None, on_saved=None
             # ohnehin nicht trainiert, z.B. bei "ήρθα")
             if probe is not None and not conj.has_aorist(probe):
                 raise ValueError(
-                    "Aorist: bitte die 1. Person Singular eintragen "
+                    "Vergangenheit: bitte die 1. Person Singular eintragen "
                     "(z.B. „έγραψα“) — oder 6 Formen mit Komma.")
         return stems
 
@@ -1576,7 +1577,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         # unten muss dieselbe Reihenfolge liefern)
         level_fields = content.verb_fields_for(load_app_settings().level)
         verb_cols = [(key, name) for key, name in (
-            ("stem2", "2. Stamm"), ("aorist", "Aorist"),
+            ("stem2", "2. Stamm"), ("aorist", "Vergangenheit"),
             ("imperative", "Imperativ"), ("aorist_passive", "Aorist Passiv"),
             ("participle", "Partizip")) if key in level_fields]
         cols = ([("Deutsch", 150), ("Plural", 90), ("Artikel", 70),

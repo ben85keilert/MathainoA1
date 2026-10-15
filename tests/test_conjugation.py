@@ -456,7 +456,7 @@ def test_aorist_six_forms_and_unusable_input():
 def test_build_task_aorist():
     c = aor_verb("γράφω", "έγραψα", "schreiben")
     task = build_task(c, parse_verb(c), 3, "pl", tense="aorist")
-    assert task.label == "Aorist - 3. Pers. - Plural 👥"
+    assert task.label == "Vergangenheit - 3. Pers. - Plural 👥"
     assert task.expected == "έγραψαν"
     assert task.display == "έγραψαν/γράψανε"
     assert task.tense_base == "έγραψα"
@@ -531,4 +531,4 @@ def test_verb_sample_shows_aorist_only_on_level():
     a1 = _verb_sample(v, conj.tenses_for_level("A1"))
     a2 = _verb_sample(v, conj.tenses_for_level("A2"))
     assert "Aorist" not in a1 and "Imperativ" not in a1
-    assert "Aorist: γράψατε" in a2 and "Imperativ: Γράψε!" in a2
+    assert "Vergangenheit: γράψατε" in a2 and "Imperativ: Γράψε!" in a2

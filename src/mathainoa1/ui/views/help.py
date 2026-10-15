@@ -86,11 +86,13 @@ def _verb_rules(level: str, first: int) -> list[str]:
     n = first + 1
     if "aorist" in fields:
         rules.append(f"""\
-{n}. aorist: der Aorist (Vergangenheit) — bei JEDEM Verb angeben, das
-    einen hat (ohne ihn kein Aorist-Training). Die 1. Person Singular
-    genügt: "έγραψα", "ήρθα", "κοιμήθηκα" — die App bildet die übrigen
-    Personen selbst (auch bei ήμουν, ήθελα, ήξερα, ήπια). Zwei Aoriste
-    mit "/" ("έκατσα/κάθισα"). Nur wenn Formen vom Muster abweichen,
+{n}. aorist: die Vergangenheitsform — bei JEDEM Verb angeben (ohne
+    sie kein Vergangenheits-Training). Meist ist das der Aorist; είμαι,
+    έχω, θέλω, ξέρω, πρέπει haben nur das Paratatikó (ήμουν, είχα,
+    ήθελα, ήξερα, έπρεπε) — das hier ebenso eintragen. Die 1. Person
+    Singular genügt: "έγραψα", "ήρθα", "κοιμήθηκα" — die App bildet die
+    übrigen Personen selbst (auch bei ήμουν, ήθελα, ήξερα, ήπια). Zwei
+    Formen mit "/" ("έκατσα/κάθισα"). Nur wenn Formen vom Muster abweichen,
     alle 6 Personenformen kommagetrennt (1sg, 2sg, 3sg, 1pl, 2pl, 3pl).
     Steht eine Verbliste dabei, ihre Formen übernehmen.""")
         n += 1
@@ -331,8 +333,8 @@ def help_view(nav, store=None) -> ft.Control:
             "und Singular/Plural wählbar.",
             "Präsens und Futur (θα + 2. Stamm) — Futur nur für Verben, "
             "bei denen der 2. Stamm eingetragen ist.",
-            "Ab Stufe A2 zusätzlich Aorist (Vergangenheit) und Imperativ: "
-            "der Aorist für Verben mit Eintrag im Feld „Aorist“ (die "
+            "Ab Stufe A2 zusätzlich Vergangenheit (meist Aorist) und Imperativ: "
+            "die Vergangenheit für Verben mit Eintrag im Feld „Vergangenheit“ (die "
             "1. Person genügt, z.B. „έγραψα“ — den Rest bildet die App), "
             "der Imperativ als 2. Person Singular wie in der Verbliste "
             "(„Γράψε!“) — er ist eine Aufgabe je Verb, unabhängig von der "
@@ -537,7 +539,8 @@ def help_view(nav, store=None) -> ft.Control:
             "z.B. „πάω, πας, πάει, πάμε, πάτε, πάνε“.",
             "2. Stamm (Futur/να-Form): ein Stamm wie „γράψ-“ — oder bei "
             "Unregelmäßigkeit wieder 6 Formen mit Komma.",
-            "Ab Stufe A2: Aorist als 1. Person Singular wie in der "
+            "Ab Stufe A2: Vergangenheit (meist Aorist; bei είμαι, έχω, θέλω, "
+            "ξέρω, πρέπει das Paratatikó) als 1. Person Singular wie in der "
             "Verbliste („έγραψα“, „ήρθα“, „κοιμήθηκα“) — die übrigen "
             "Personen bildet die App; nur Abweichler als 6 Formen. "
             "Imperativ als 2. Person Singular („Γράψε!“, „Άκου(σε)!“, "
@@ -570,7 +573,7 @@ def help_view(nav, store=None) -> ft.Control:
             "Nomen, unregelmäßig: „η γυναίκα“ – Frau, Plural „-ες“, dazu "
             "Genitiv Plural „γυναικών“ ins Zusatzfeld.",
             "Verb, regelmäßig: „γράφω“ – schreiben, 2. Stamm „γράψ-“ — "
-            "Präsensfelder leer lassen; ab A2 dazu Aorist „έγραψα“ und "
+            "Präsensfelder leer lassen; ab A2 dazu Vergangenheit „έγραψα“ und "
             "Imperativ „Γράψε!“.",
             "Verb, unregelmäßig: „πάω“ – gehen, Präsens als 6 Formen: "
             "„πάω, πας, πάει, πάμε, πάτε, πάνε“.",
@@ -665,7 +668,7 @@ def help_view(nav, store=None) -> ft.Control:
             "Der Lernfortschritt hängt an der Karte und gilt "
             "stufenübergreifend.",
             "Jede Stufe zeigt nur ihren Stoff: A1 Präsens und Futur, A2 "
-            "zusätzlich Aorist und Imperativ (Verbtraining, Karten-Editor, "
+            "zusätzlich Vergangenheit (Aorist) und Imperativ (Verbtraining, Karten-Editor, "
             "Prompts) sowie die Adjektive auf -ύς (βαρύς) und πολύς. "
             "Felder, die auf keiner Stufe Stoff sind (Aorist Passiv, "
             "Partizip), sind ausgeblendet — ihre Werte bleiben gespeichert.",

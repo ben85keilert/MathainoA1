@@ -80,10 +80,10 @@ stufenübergreifend (er hängt an der Karte, nicht an der Stufe).
 
 | | A1 | A2 |
 |---|---|---|
-| Verbtraining | Präsens, Futur | dazu **Aorist** und **Imperativ** |
-| Karten-Editor, Tabelle, Export, Prompts | 2. Stamm | dazu Aorist, Imperativ |
+| Verbtraining | Präsens, Futur | dazu **Vergangenheit** (Aorist) und **Imperativ** |
+| Karten-Editor, Tabelle, Export, Prompts | 2. Stamm | dazu Vergangenheit, Imperativ |
 | Adjektive | -ος (μικρός, ωραίος, γλυκός) | dazu -ύς, -ιά, -ύ (βαρύς), πολύς, δεξιός |
-| Grammatik-Übersicht | A1-Tabellen | dazu Aorist, Imperativ, -ύς-Adjektive, Ordnungszahlen |
+| Grammatik-Übersicht | A1-Tabellen | dazu Vergangenheit, Imperativ, -ύς-Adjektive, Ordnungszahlen |
 
 Die Felder **Aorist Passiv** und **Perfekt-Partizip** sind auf keiner
 der beiden Stufen Stoff: Editor, Tabelle, Export und Prompts blenden sie
@@ -290,19 +290,25 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
 - Nach dem Aufdecken zeigt das Beugungstraining bei Vorgabe Deutsch die
   **Grundform** mit an; gibt es mehrere richtige Formen, stehen alle in
   der Lösung („σηκώνεστε/σηκωνόσαστε“). Bei Futur- und (ab A2)
-  Aorist-Aufgaben lässt sich unter **Einstellungen → Beugungstraining → Verbtraining**
+  Vergangenheits-Aufgaben lässt sich unter **Einstellungen → Beugungstraining → Verbtraining**
   wählen, welche Grundform erscheint: nur die Präsensform („γράφω“), nur
   die Grundform der Zeitform („θα γράψω“, „έγραψα“) oder beides — dann
   steht die Präsensform in Klammern dahinter („θα γράψω (γράφω)“,
   „έγραψα (γράφω)“, Standard).
 
-## Aorist und Imperativ (Stufe A2)
+## Vergangenheit und Imperativ (Stufe A2)
 
 Auf Stufe A2 bietet das Verbtraining zusätzlich die Zeitformen
-**Aorist** (Vergangenheit) und **Imperativ** an.
+**Vergangenheit** und **Imperativ** an. „Vergangenheit“ heißt — wie in
+der Verbliste des Buchs („Aorist bzw. Vergangenheit“) — meist der
+**Aorist**; fünf häufige Verben haben keinen Aorist, sondern nur das
+Paratatikó: είμαι → ήμουν, έχω → είχα, θέλω → ήθελα, ξέρω → ήξερα,
+πρέπει → έπρεπε. Sie stehen mit dieser Form im selben Feld und werden
+genauso abgefragt (die Karten tragen einen Hinweis).
 
-- **Aorist:** Im Feld „Aorist“ genügt die 1. Person Singular, so wie sie
-  in der Verbliste steht („έγραψα“, „ήρθα“, „κοιμήθηκα“). Die übrigen
+- **Vergangenheit:** Im Feld „Vergangenheit“ genügt die 1. Person
+  Singular, so wie sie in der Verbliste steht („έγραψα“, „ήρθα“,
+  „κοιμήθηκα“). Die übrigen
   Personen bildet die App: Endungen -α, -ες, -ε, -αμε, -ατε, -αν/-ανε,
   der Ton höchstens auf der drittletzten Silbe; das Augment έ-
   zweisilbiger Formen fällt in der 1./2. Person Plural weg (έγραψα →
@@ -317,11 +323,11 @@ Auf Stufe A2 bietet das Verbtraining zusätzlich die Zeitformen
   („Κάτσε!/Κάθισε!“). Der Imperativ ist **eine** Aufgabe je Verb und
   hängt nicht von der Personen-/Zahl-Auswahl ab.
 - Verben ohne Eintrag im jeweiligen Feld fallen in dieser Zeitform weg;
-  die Startseite zählt, wie viele Verben der Liste einen Aorist bzw.
-  Imperativ haben. Einträge wie „ήρθα (von έρχομαι)“ sind Vokabeln,
+  die Startseite zählt, wie viele Verben der Liste eine Vergangenheit
+  bzw. einen Imperativ haben. Einträge wie „ήρθα (von έρχομαι)“ sind Vokabeln,
   keine konjugierbaren Verben — das Verbtraining überspringt sie.
 - Die Beugungstabelle (ⓘ bzw. Tabellensymbol) und die
-  Grammatik-Übersicht „Verben“ zeigen auf A2 die Aorist- und
+  Grammatik-Übersicht „Verben“ zeigen auf A2 die Vergangenheits- und
   Imperativformen mit an.
 
 ## Wortlisten bearbeiten
@@ -334,9 +340,9 @@ Auf Stufe A2 bietet das Verbtraining zusätzlich die Zeitformen
   (1sg, 2sg, 3sg, 1pl, 2pl, 3pl), „-“ = regelmäßiger Slot, z.B.
   „πάω, πας, πάει, πάμε, πάτε, πάνε“. 2. Stamm (Futur/να-Form) als
   einzelner Stamm („γραψ-“) oder ebenfalls 6 Formen. Ab Stufe A2
-  zusätzlich **Aorist** (1. Person Singular, z.B. „έγραψα“ — oder 6
-  Formen) und **Imperativ** (2. Person Singular, z.B. „Γράψε!“), siehe
-  „Aorist und Imperativ (Stufe A2)“. Ein Aorist, aus dem sich keine
+  zusätzlich **Vergangenheit** (1. Person Singular, z.B. „έγραψα“ —
+  oder 6 Formen) und **Imperativ** (2. Person Singular, z.B. „Γράψε!“),
+  siehe „Vergangenheit und Imperativ (Stufe A2)“. Eine Form, aus der sich keine
   Formen bilden lassen (z.B. ein Stamm wie „γράψ-“), wird beim
   Speichern mit einem Hinweis abgelehnt.
 - Mehrere richtige Formen mit „/“ trennen (z.B. „2pl=είστε/είσαστε“),
@@ -362,7 +368,7 @@ Auf Stufe A2 bietet das Verbtraining zusätzlich die Zeitformen
 | Worttyp | regelmäßig | unregelmäßig |
 |---|---|---|
 | Nomen | ο δρόμος – Straße, Plural „-οι“ | η γυναίκα – Frau, Plural „-ες“, `gen_pl=γυναικών` |
-| Verb | γράφω – schreiben, 2. Stamm „γραψ-“ (A2: Aorist „έγραψα“, Imperativ „Γράψε!“) | πάω – gehen, Präsens „πάω, πας, πάει, πάμε, πάτε, πάνε“ |
+| Verb | γράφω – schreiben, 2. Stamm „γραψ-“ (A2: Vergangenheit „έγραψα“, Imperativ „Γράψε!“) | πάω – gehen, Präsens „πάω, πας, πάει, πάμε, πάτε, πάνε“ |
 | Adjektiv | μικρός – klein (A2 auch βαρύς – schwer) | γλυκός – süß, Femininum „γλυκιά“ |
 | Adverb | εδώ – hier | — |
 | Präposition | από – von, aus | — |

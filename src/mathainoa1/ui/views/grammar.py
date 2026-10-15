@@ -139,7 +139,7 @@ def _verb_sample(verb: conj.Verb,
             aor = (conj.conjugate_aorist(verb, person, num)
                    if "aorist" in tenses else [])
             if aor:
-                sample += f" · Aorist: {aor[0]}"
+                sample += f" · Vergangenheit: {aor[0]}"
             if "imperative" in tenses and verb.imperative:
                 sample += f" · Imperativ: {verb.imperative}"
             return sample
@@ -1014,7 +1014,7 @@ def combos_view(nav, store: ContentStore, source_id: str | None = None,
 
 # Beschriftung der Zeitformen im Verbtraining
 _TENSE_LABELS = {"present": "Präsens", "future": "Futur (θα)",
-                 "aorist": "Aorist", "imperative": "Imperativ"}
+                 "aorist": "Vergangenheit", "imperative": "Imperativ"}
 
 
 def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
@@ -1116,7 +1116,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                 f"· {n_fut} mit 2. Stamm (Futur)")
         if "aorist" in level_tenses:
             n_aor = sum(1 for _, v in verbs if conj.has_aorist(v))
-            text += f" · {n_aor} mit Aorist"
+            text += f" · {n_aor} mit Vergangenheit"
         if "imperative" in level_tenses:
             n_imp = sum(1 for _, v in verbs if conj.has_imperative(v))
             text += f" · {n_imp} mit Imperativ"
@@ -1233,8 +1233,9 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                     "braucht das Feld „2. Stamm“ in der Vokabelverwaltung.")
             elif settings.tenses == ["aorist"]:
                 error_text.value = (
-                    "Keine Verben mit Aorist in dieser Liste — der Aorist "
-                    "braucht das Feld „Aorist“ in der Vokabelverwaltung.")
+                    "Keine Verben mit Vergangenheitsform in dieser Liste — "
+                    "sie braucht das Feld „Vergangenheit“ in der "
+                    "Vokabelverwaltung.")
             elif settings.tenses == ["imperative"]:
                 error_text.value = (
                     "Keine Verben mit Imperativ in dieser Liste — er "
@@ -1326,7 +1327,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
 def _base_form_text(task, verb_base_form: str) -> str:
     """Grundform fürs Aufdecken bzw. die Ergebnisliste.
 
-    Bei Futur- und Aorist-Aufgaben bestimmt die Einstellung
+    Bei Futur- und Vergangenheits-Aufgaben bestimmt die Einstellung
     verb_base_form (AppSettings), was erscheint: nur die Präsensform,
     nur die Grundform der Zeitform (1. Person Singular: "θα γράψω",
     "έγραψα") oder beides — dann steht die Präsensform in Klammern

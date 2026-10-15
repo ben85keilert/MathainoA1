@@ -121,7 +121,8 @@ def _verb_rule(level: str) -> str:
     parts = ['"stem2" = 2. Stamm für θα/να (Stamm mit Bindestrich, z.B.\n'
              '   "γράψ-", oder 6 Personenformen kommagetrennt)']
     if "aorist" in fields:
-        parts.append('"aorist" = Aorist (Vergangenheit) — die 1. Person\n'
+        parts.append('"aorist" = Vergangenheit (meist Aorist; bei είμαι, έχω,\n'
+                     '   θέλω, ξέρω, πρέπει das Paratatikó) — die 1. Person\n'
                      '   Singular genügt ("έγραψα", "ήρθα", "κοιμήθηκα"), die App\n'
                      '   bildet die übrigen Personen; nur bei Abweichung 6 Formen\n'
                      '   kommagetrennt')

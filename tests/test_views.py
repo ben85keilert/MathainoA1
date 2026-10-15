@@ -1416,7 +1416,7 @@ def _find_all(ctrl, cls, out=None):
 
 
 _STEM2 = "2. Stamm (Futur/να-Form)"
-_AORIST = "Aorist (Vergangenheit)"
+_AORIST = "Vergangenheit (Aorist)"
 _IMPERATIVE = "Imperativ (2. Person Singular)"
 _AORIST_PASSIVE = "Aorist Passiv (3. Stamm)"
 _PARTICIPLE = "Perfekt-Partizip (unregelmäßig)"
@@ -1495,7 +1495,7 @@ def test_reference_shows_a2_material_only_on_a2():
         return found
 
     for view, heading in (
-            (reference.verbs_view, "Aorist (Vergangenheit)"),
+            (reference.verbs_view, "Vergangenheit (Aorist)"),
             (reference.verbs_view, "Imperativ (einmalig, 2. Person Singular)"),
             (reference.adjectives_view, "A2: Adjektive auf -ύς, -ιά, -ύ"),
             (reference.numbers_view, "A2: Ordnungszahlen")):
@@ -1505,9 +1505,9 @@ def test_reference_shows_a2_material_only_on_a2():
                      stem2="γράψ-", aorist="έγραψα", imperative="Γράψε!")
     a1 = texts(reference._verb_forms_tables(card, "A1"))
     a2 = texts(reference._verb_forms_tables(card, "A2"))
-    assert "Aorist (Vergangenheit)" in a2
+    assert "Vergangenheit (Aorist)" in a2
     assert "Imperativ (2. Person Singular)" in a2
-    assert "Aorist (Vergangenheit)" not in a1 and "Futur (θα + 2. Stamm)" in a1
+    assert "Vergangenheit (Aorist)" not in a1 and "Futur (θα + 2. Stamm)" in a1
 
 
 # --- Listen-Dropdowns: Klappmenü mit fester Höhe (scrollt bei vielen Listen)

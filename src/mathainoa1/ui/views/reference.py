@@ -298,7 +298,7 @@ def _aorist_controls() -> list[ft.Control]:
              for w, a in _AORIST_EXAMPLES]
     cols = [_conj_column(v, "aorist") for v in verbs]
     return [
-        _h("Aorist (Vergangenheit)"),
+        _h("Vergangenheit (Aorist)"),
         _frozen_table("Person", _PERSON_LABELS,
                       [f"{w} → {a}" for w, a in _AORIST_EXAMPLES],
                       [[c[i] for c in cols] for i in range(6)]),
@@ -307,6 +307,10 @@ def _aorist_controls() -> list[ft.Control]:
            "αγόρασα, aber αγοράσαμε. Zweisilbige Formen bekommen dafür ein "
            "betontes έ- (Augment): γράφω → έγραψα — in der 1./2. Person "
            "Plural fällt es wieder weg (γράψαμε, γράψατε)."),
+        _p("Vergangenheit heißt hier meist Aorist (einmalige Handlung). "
+           "Fünf häufige Verben haben keinen Aorist, sondern nur das "
+           "Paratatikó: είμαι → ήμουν, έχω → είχα, θέλω → ήθελα, ξέρω → "
+           "ήξερα, πρέπει → έπρεπε — sie werden hier genauso abgefragt."),
         _p("Gebildet wird der Aorist meist aus dem 2. Stamm (γράψ- → "
            "έγραψα, αγοράσ- → αγόρασα). Die -ομαι-Verben enden auf -ηκα: "
            "κοιμάμαι → κοιμήθηκα, σηκώνομαι → σηκώθηκα, χαίρομαι → "
@@ -316,7 +320,7 @@ def _aorist_controls() -> list[ft.Control]:
            "μπήκα, βγαίνω → βγήκα, ανεβαίνω → ανέβηκα, τρώω → έφαγα, "
            "πίνω → ήπια, έρχομαι → ήρθα, θέλω → ήθελα, ξέρω → ήξερα, "
            "είμαι → ήμουν. Im Programm genügt die 1. Person Singular im "
-           "Feld „Aorist“ — die übrigen Personen bildet die App."),
+           "Feld „Vergangenheit“ — die übrigen Personen bildet die App."),
     ]
 
 
@@ -624,7 +628,7 @@ def _verb_forms_tables(card: VocabCard,
     if "aorist" in tenses and conj.has_aorist(verb):
         aor = _conj_column(verb, "aorist")
         controls += [
-            _h("Aorist (Vergangenheit)"),
+            _h("Vergangenheit (Aorist)"),
             _table(["Person", "Form"],
                    [[_PERSON_LABELS[i], aor[i]] for i in range(6)]),
         ]

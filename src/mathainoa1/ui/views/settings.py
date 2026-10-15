@@ -323,7 +323,7 @@ def _level_controls(nav, s: AppSettings, store, progress) -> list[ft.Control]:
               "Üben von A1-Listen hierher zurückschalten. Listen und "
               "Auswahllisten ohne Stufe sind immer sichtbar; neue "
               "erhalten die gerade aktive Stufe. Jede Stufe zeigt nur "
-              "ihren Stoff (A2: dazu Aorist und Imperativ)."),
+              "ihren Stoff (A2: dazu Vergangenheit und Imperativ)."),
         seg_level,
     ]
 
@@ -564,7 +564,7 @@ def _inflection_controls(nav, s: AppSettings, store, progress) -> list[ft.Contro
               "der Lösung steht — nur bei Vorgabe „Deutsch“ (bei "
               "griechischer Vorgabe ist die Präsensform schon die "
               "Aufgabe). Die Auswahl wirkt bei Futur-Aufgaben"
-              + (" und Aorist-Aufgaben; bei Präsens- und "
+              + (" und Vergangenheits-Aufgaben; bei Präsens- und "
                  "Imperativ-Aufgaben" if aorist_level
                  else "; bei Präsens-Aufgaben")
               + " erscheint immer die Präsensform."),

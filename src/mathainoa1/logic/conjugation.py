@@ -58,7 +58,10 @@ from mathainoa1.models import VERB_FORM_KEYS, VocabCard, parse_verb_forms_text
 
 PERSONS = [1, 2, 3]
 TENSES = ["present", "future", "aorist", "imperative"]
-TENSE_NAMES = {"present": "Präsens", "future": "Futur", "aorist": "Aorist",
+# "aorist" heißt nach außen „Vergangenheit“: meist der Aorist, bei
+# είμαι/έχω/θέλω/ξέρω/πρέπει das Paratatikó (ήμουν, είχα …) — das Buch
+# nennt die Spalte „Aorist (bzw. Vergangenheit)“
+TENSE_NAMES = {"present": "Präsens", "future": "Futur", "aorist": "Vergangenheit",
                "imperative": "Imperativ"}
 # Zeitformen je Stufe = Stoff des Buchs: A1 Präsens und Futur, A2
 # zusätzlich Aorist und Imperativ (Pame-A2-Verbliste). Unbekannte Stufe:
