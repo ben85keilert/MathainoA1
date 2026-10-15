@@ -95,17 +95,37 @@ jobs:
             echo "FLET_ANDROID_SIGNING_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}"
           } >> "$GITHUB_ENV"
 
-      # --arch beschränkt nur das Python-Laufzeitpaket auf arm64-v8a; die
-      # Flutter-Engine und der Dart-Code (lib/<abi>/libflutter.so,
-      # libapp.so) lägen sonst weiter für alle drei ABIs bei (~30 MB) —
-      # dafür braucht Flutter zusätzlich --target-platform android-arm64.
+      # Nur arm64-v8a: --arch allein ließ die Python-Laufzeit
+      # (libpython*.so) der anderen ABIs in der APK, --target-platform
+      # allein die Flutter-Engine — erst der ABI-Split (Flutters
+      # splits.abi) filtert alle nativen Bibliotheken; zusammen mit
+      # --target-platform android-arm64 entsteht genau eine APK. Beim
+      # Split addiert Flutter zum versionCode 2000 (arm64-v8a) — bleibt
+      # monoton steigend, nur ein anderer Zahlenraum als bisher.
       - name: APK bauen (Sideload/GitHub-Release, nur arm64-v8a)
         run: >
           flet build apk --verbose
           --arch arm64-v8a
+          --split-per-abi
           --flutter-build-args=--target-platform
           --flutter-build-args=android-arm64
           --build-version "${{ steps.ver.outputs.version }}"
+
+      # Genau eine APK erwartet; fester Dateiname für Release und
+      # In-App-Update (storage/updates.py nimmt das erste .apk-Asset)
+      - name: APK prüfen und benennen
+        run: |
+          ls -la build/apk
+          COUNT=$(ls build/apk/*.apk | wc -l)
+          if [ "$COUNT" != "1" ]; then
+            echo "::error::Erwartet genau eine APK, gefunden: $COUNT"
+            exit 1
+          fi
+          APK=$(ls build/apk/*.apk)
+          [ "$APK" = "build/apk/mathainoa1.apk" ] || mv "$APK" build/apk/mathainoa1.apk
+          echo "Native Bibliotheken je ABI:"
+          unzip -l build/apk/mathainoa1.apk | awk '{print $4}' | grep '^lib/' \
+            | cut -d/ -f2 | sort | uniq -c
           --build-number "${{ steps.ver.outputs.build_number }}"
 
       - name: Artefakte hochladen
