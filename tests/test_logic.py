@@ -765,3 +765,16 @@ def test_check_ignores_hyphen_at_word_edge():
     assert check_german("Ein-Zimmer-Appartement", "Ein Zimmer Appartement") == Result.WRONG
     # Akzentfehler bleiben „Fast“, auch mit überflüssigem Bindestrich
     assert check_greek("μένω", "μενω-") == Result.ALMOST
+
+
+def test_check_ignores_punctuation_anywhere():
+    from mathainoa1.logic.answer_check import Result, check_german, check_greek
+    assert check_greek("Γεια σου! Τι κάνεις;", "γεια σου τι κάνεις") == Result.CORRECT
+    assert check_greek("και... και", "και και") == Result.CORRECT
+    assert check_greek("Αυτά. Ευχαριστώ.", "αυτά ευχαριστώ") == Result.CORRECT
+    # Satzzeichen mitgetippt bleibt ebenso richtig
+    assert check_greek("Γεια σου τι κάνεις", "Γεια σου! Τι κάνεις;") == Result.CORRECT
+    assert check_german("Freunde(skreis), «Gesellschaft»", "Gesellschaft") == Result.CORRECT
+    assert check_german("Freunde(skreis), «Gesellschaft»", "Freundeskreis") == Result.CORRECT
+    # Buchstaben bleiben Pflicht
+    assert check_greek("Γεια σου! Τι κάνεις;", "γεια σου κάνεις") == Result.WRONG

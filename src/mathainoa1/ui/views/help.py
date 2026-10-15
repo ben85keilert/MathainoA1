@@ -396,10 +396,10 @@ def help_view(nav, store=None) -> ft.Control:
             "Groß-/Kleinschreibung und mehrfache Leerzeichen sind egal — "
             "außer wenn „Groß-/Kleinschreibung tolerieren“ aus ist (siehe "
             "unten).",
-            "Satzzeichen am Anfang/Ende (z.B. ; · ! ? . , …) sind egal.",
-            "Kommas zählen nie als Fehler — auch mitten im Satz: "
-            "„Γεια σου, τι κάνεις;“ und „Γεια σου τι κάνεις“ sind "
-            "gleichwertig. Genauso egal: Auslassungspunkte („δεν ... "
+            "Satzzeichen (; · ! ? . , : … « ») zählen nie als Fehler — "
+            "auch mitten im Satz: „Γεια σου! Τι κάνεις;“ und „Γεια σου τι "
+            "κάνεις“ sind gleichwertig, ebenso „και... και“ und „και "
+            "και“. Genauso egal: Auslassungspunkte („δεν ... "
             "άλλο“), Apostrophe („geht's“ = „gehts“) und ein Bindestrich "
             "am Wortrand („Kinder-“ = „Kinder“).",
             "Wortteile in Klammern sind optional: bei „αγαπ(ά)ω“ zählen "

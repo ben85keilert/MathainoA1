@@ -1065,17 +1065,23 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
                        icon=ft.Icons.PSYCHOLOGY),
         ],
     )
-    seg_tenses = ft.SegmentedButton(
-        allow_multiple_selection=True,
-        allow_empty_selection=True,  # sonst rote Flet-Meldung beim Abwählen
-        show_selected_icon=True,
-        selected=[t for t in s.tenses if t in level_tenses] or ["present"],
-        segments=[ft.Segment(value=t, label=ft.Text(_TENSE_LABELS[t]))
-                  for t in level_tenses],
-    )
-    # vier Zeitformen (A2) passen auf schmalen Displays nicht immer in
-    # eine Zeile — dann seitlich wischen statt abschneiden
-    tense_row = ft.Row([seg_tenses], scroll=ft.ScrollMode.AUTO)
+    # Zeitformen als Mehrfachauswahl, je zwei pro Zeile: vier Knöpfe
+    # (A2) passen auf schmalen Displays nicht nebeneinander
+    chosen_tenses = [t for t in s.tenses if t in level_tenses] or ["present"]
+    tense_segs = [
+        ft.SegmentedButton(
+            allow_multiple_selection=True,
+            allow_empty_selection=True,  # sonst rote Flet-Meldung beim Abwählen
+            show_selected_icon=True,
+            selected=[t for t in pair if t in chosen_tenses],
+            segments=[ft.Segment(value=t, label=ft.Text(_TENSE_LABELS[t]))
+                      for t in pair],
+            expand=True,
+        )
+        for pair in (level_tenses[i:i + 2]
+                     for i in range(0, len(level_tenses), 2))
+    ]
+    tense_rows = ft.Column([ft.Row([seg]) for seg in tense_segs], spacing=6)
     seg_persons = ft.SegmentedButton(
         allow_multiple_selection=True,
         allow_empty_selection=True,
@@ -1146,7 +1152,8 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             error_text.value = "Bitte mindestens eine Person und eine Zahl wählen."
             nav.page.update()
             return None
-        tenses = [t for t in level_tenses if t in multi_values(seg_tenses)]
+        picked = {t for seg in tense_segs for t in multi_values(seg)}
+        tenses = [t for t in level_tenses if t in picked]
         if not tenses:
             error_text.value = "Bitte mindestens eine Zeitform wählen."
             nav.page.update()
@@ -1291,7 +1298,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
             ft.Row([seg_mode, tf_count], spacing=12,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             seg_direction,
-            tense_row,
+            tense_rows,
             seg_persons,
             seg_numbers,
             box_row,

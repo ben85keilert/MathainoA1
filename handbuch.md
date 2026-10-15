@@ -230,10 +230,10 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
   bei **Nomen** mit ausgeschaltetem „Groß-/Kleinschreibung tolerieren“
   zählt eine sonst richtige Antwort mit falscher Schreibung als Fehler
   der Runde (siehe unten).
-- Satzzeichen am Anfang/Ende (`; · ! ? . , …`) sind egal.
-- **Kommas zählen nie als Fehler** — auch mitten im Satz: „Γεια σου, τι
-  κάνεις;“ und „Γεια σου τι κάνεις“ sind gleichwertig (auf der
-  deutschen Seite trennen Kommas weiterhin Alternativen, siehe unten).
+- **Satzzeichen zählen nie als Fehler** (`; · ! ? . , : … « »`) — auch
+  mitten im Satz: „Γεια σου! Τι κάνεις;“ und „Γεια σου τι κάνεις“ sind
+  gleichwertig, ebenso „και... και“ und „και και“ (auf der deutschen
+  Seite trennen Kommas und Satzenden weiterhin Alternativen, siehe unten).
   Genauso egal sind **Auslassungspunkte** („δεν ... άλλο“ = „δεν άλλο“),
   **Apostrophe** („geht's“ = „gehts“, auch typografisch getippt) und ein
   **Bindestrich am Wortrand** („Kinder-“ = „Kinder“, „ξανα-“ = „ξανα“).

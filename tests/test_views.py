@@ -1483,9 +1483,13 @@ def test_conjugation_setup_tenses_follow_level(store_with_edge_cases, tmp_path,
         view = grammar.conjugation_setup_view(nav, store, progress)
     finally:
         progress.close()
-    seg = next(s for s in _find_all(view, ft.SegmentedButton)
-               if any(x.value == "present" for x in s.segments))
-    assert [x.value for x in seg.segments] == tenses
+    # Zeitformen je zwei pro Zeile (eigene SegmentedButtons), damit vier
+    # Knöpfe auf ein Display passen — zusammen genau die Stufen-Zeitformen
+    from mathainoa1.logic.conjugation import TENSES
+    segs = [s for s in _find_all(view, ft.SegmentedButton)
+            if any(x.value in TENSES for x in s.segments)]
+    assert all(len(s.segments) <= 2 for s in segs)
+    assert [x.value for s in segs for x in s.segments] == tenses
 
 
 def test_reference_shows_a2_material_only_on_a2():

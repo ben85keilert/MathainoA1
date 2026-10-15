@@ -16,10 +16,12 @@ falschem Schluss-Sigma ist immer ALMOST — ob das als richtig zählt
 aus), entscheidet die Session.
 Deutsch: Die Rückseite kann Alternativen enthalten ("Gyros, Kreis, Runde",
 "und, auch", "Hallo! Guten Tag!"); jede Alternative wird akzeptiert.
-Kommas zählen beim Vergleich nie als Fehler (beide Sprachseiten); auf der
-deutschen Rückseite trennen sie weiterhin Alternativen. Ebenso egal sind
-Auslassungspunkte ("δεν ... άλλο"), Apostrophe ("geht's", "από 'δω")
-und ein Bindestrich am Wortrand ("Kinder-", "ξανα-").
+Satzzeichen zählen beim Vergleich nie als Fehler — auch mitten im Satz
+("Γεια σου! Τι κάνεις;" = "Γεια σου τι κάνεις"); auf der deutschen
+Rückseite trennen Kommas und Satzenden weiterhin Alternativen. Ebenso
+egal sind Auslassungspunkte ("δεν ... άλλο"), Anführungszeichen,
+Apostrophe ("geht's", "από 'δω") und ein Bindestrich am Wortrand
+("Kinder-", "ξανα-").
 """
 
 from __future__ import annotations
@@ -105,12 +107,18 @@ def _strip_punct(s: str) -> str:
     return s.strip(_PUNCT + " ")
 
 
+# Satzzeichen, die beim Vergleich überall egal sind — auch mitten im Satz
+# ("Γεια σου! Τι κάνεις;", «Gesellschaft»): sie tragen keine Bedeutung,
+# die ein Lernender wissen müsste
+_IGNORED = re.compile(r"[;·!?.,…:«»„“”\"]")
+
+
 def _drop_commas(s: str) -> str:
-    # Kommas und Auslassungspunkte ersatzlos ignorieren: durch Leerzeichen
-    # ersetzen und glätten, damit "danke,gerne" und "danke, gerne" auf
-    # dasselbe hinauslaufen; Apostrophe ganz entfernen ("geht's" =
-    # "gehts", "από 'δω" = "από δω")
-    s = _ELLIPSIS.sub(" ", s.replace(",", " ")).replace("'", "")
+    # Satzzeichen und Auslassungspunkte ersatzlos ignorieren: durch
+    # Leerzeichen ersetzen und glätten, damit "danke,gerne" und "danke,
+    # gerne" auf dasselbe hinauslaufen; Apostrophe ganz entfernen
+    # ("geht's" = "gehts", "από 'δω" = "από δω")
+    s = _IGNORED.sub(" ", _ELLIPSIS.sub(" ", s)).replace("'", "")
     return re.sub(r"\s+", " ", s).strip()
 
 
