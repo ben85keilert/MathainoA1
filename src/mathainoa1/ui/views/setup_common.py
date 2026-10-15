@@ -16,6 +16,18 @@ import flet as ft
 from mathainoa1.ui.scale import sz
 
 
+def menu_height(page) -> float:
+    """Höhe für die Klappmenüs der Listen-Dropdowns.
+
+    Ohne Vorgabe wächst das Menü mit der Zahl der Listen — bei 30 und
+    mehr Listen ragt es über den Bildschirm hinaus, und die oberen
+    Einträge sind nicht mehr erreichbar. Mit fester Höhe scrollt das Menü
+    stattdessen; knapp die halbe Seitenhöhe lässt Feld und Tastatur Platz.
+    """
+    h = getattr(page, "height", None) or 700
+    return max(200, min(400, h * 0.45))
+
+
 def options_summary(page: ft.Page,
                     describe: Callable[[], list[str]],
                     controls: Sequence[ft.Control],

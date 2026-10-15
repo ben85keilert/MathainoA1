@@ -26,7 +26,12 @@ from mathainoa1.ui.audio import (
     speaker_button,
 )
 from mathainoa1.ui.views.reference import has_word_forms
-from mathainoa1.ui.views.setup_common import box_filter_row, on_off, options_summary
+from mathainoa1.ui.views.setup_common import (
+    box_filter_row,
+    menu_height,
+    on_off,
+    options_summary,
+)
 from mathainoa1.ui.views.wordlist import box_of, box_transition_dot
 from mathainoa1.ui.word_details import (  # noqa: F401 — Re-Export für grammar
     show_word_details,
@@ -207,7 +212,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
     if s.list_id not in valid_ids:
         s.list_id = lists[0].id
 
-    dd_list = ft.Dropdown(
+    dd_list = ft.Dropdown(menu_height=menu_height(nav.page),
         label="Liste",
         value=s.list_id,
         options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists]

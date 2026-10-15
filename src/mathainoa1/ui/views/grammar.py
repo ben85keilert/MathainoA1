@@ -47,6 +47,7 @@ from mathainoa1.storage.textanalyse import etymology_for
 from mathainoa1.ui.views.reference import has_word_forms
 from mathainoa1.ui.views.setup_common import (
     box_filter_row,
+    menu_height,
     on_off,
     options_summary,
 )
@@ -259,7 +260,7 @@ def setup_view(nav, store: ContentStore, progress: ProgressStore,
     if s.list_id not in valid_ids:
         s.list_id = lists[0].id
 
-    dd_list = ft.Dropdown(
+    dd_list = ft.Dropdown(menu_height=menu_height(nav.page),
         label="Liste",
         value=s.list_id,
         options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists]
@@ -535,7 +536,7 @@ def adjective_setup_view(nav, store: ContentStore, progress: ProgressStore,
     if s.list_id not in valid_ids:
         s.list_id = lists[0].id if lists else selections[0].id
 
-    dd_list = ft.Dropdown(
+    dd_list = ft.Dropdown(menu_height=menu_height(nav.page),
         label="Liste",
         value=s.list_id,
         options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists]
@@ -867,7 +868,7 @@ def combos_view(nav, store: ContentStore, source_id: str | None = None,
         save_combos(pairs, blocked)
 
     adj_sorted = sorted(by_key.items(), key=lambda kv: kv[0])
-    dd_adj = ft.Dropdown(
+    dd_adj = ft.Dropdown(menu_height=menu_height(nav.page),
         label="Adjektiv",
         value=adj_sorted[0][0],
         options=[ft.DropdownOption(
@@ -881,7 +882,7 @@ def combos_view(nav, store: ContentStore, source_id: str | None = None,
         level)
     selections = store.visible_selections(level)
     noun_list_ids = {l.id for l in lists} | {x.id for x in selections}
-    dd_list = ft.Dropdown(
+    dd_list = ft.Dropdown(menu_height=menu_height(nav.page),
         label="Nomen aus Liste",
         # die Trainingsliste vorwählen, wenn sie Nomen liefern kann
         value=(source_id if source_id in noun_list_ids
@@ -1036,7 +1037,7 @@ def conjugation_setup_view(nav, store: ContentStore, progress: ProgressStore,
     if s.list_id not in valid_ids:
         s.list_id = lists[0].id
 
-    dd_list = ft.Dropdown(
+    dd_list = ft.Dropdown(menu_height=menu_height(nav.page),
         label="Liste",
         value=s.list_id,
         options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists]

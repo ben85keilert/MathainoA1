@@ -30,6 +30,7 @@ from mathainoa1.storage.settings import TTS_GOOGLE, load_app_settings
 from mathainoa1.storage.tts import TtsFetchError, speakable
 from mathainoa1.ui.audio import speaker_button, tts_cache, tts_engine
 from mathainoa1.ui.dialogs import plaintext_dialog
+from mathainoa1.ui.views.setup_common import menu_height
 from mathainoa1.ui.views.trainer import edit_notes_dialog
 from mathainoa1.ui.views.wordlist import (
     alpha_key,
@@ -920,7 +921,7 @@ def selection_editor(nav, store: ContentStore, selection: SelectionList | None,
         # gibt es nichts auszuwählen
         return ft.Text("Keine Vokabellisten auf der aktiven Stufe — erst "
                        "eine Liste anlegen oder die Stufe wechseln.")
-    dd_list = ft.Dropdown(
+    dd_list = ft.Dropdown(menu_height=menu_height(nav.page),
         label="Liste", value=lists[0].id,
         options=[ft.DropdownOption(key=l.id, text=l.name) for l in lists],
     )
@@ -1861,7 +1862,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
 
     def pick_list_dialog(title: str, targets: list[VocabList], on_pick):
         """Zielliste wählen (für Verschieben/Kopieren)."""
-        dd = ft.Dropdown(
+        dd = ft.Dropdown(menu_height=menu_height(page),
             label="Zielliste", value=targets[0].id,
             options=[ft.DropdownOption(key=l.id, text=l.name)
                      for l in targets],
@@ -1963,7 +1964,7 @@ def list_view(nav, store: ContentStore, vlist: VocabList,
         sels = store.visible_selections(level)
         adj_sels = store.visible_selections(level, "adjektive")
         NEW = "__new__"
-        dd = ft.Dropdown(
+        dd = ft.Dropdown(menu_height=menu_height(page),
             label="Auswahlliste",
             value=(sels[0].id if sels
                    else adj_sels[0].id if adj_sels else NEW),

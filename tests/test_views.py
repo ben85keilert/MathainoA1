@@ -1490,3 +1490,38 @@ def test_reference_shows_a2_material_only_on_a2():
     assert "Aorist (Vergangenheit)" in a2
     assert "Imperativ (2. Person Singular)" in a2
     assert "Aorist (Vergangenheit)" not in a1 and "Futur (θα + 2. Stamm)" in a1
+
+
+# --- Listen-Dropdowns: Klappmenü mit fester Höhe (scrollt bei vielen Listen)
+
+def test_list_dropdowns_have_capped_menu_height(store_with_edge_cases, tmp_path,
+                                                monkeypatch):
+    """Bei 30+ Listen ragte das Klappmenü über den Bildschirm hinaus und
+    die oberen Einträge waren nicht erreichbar — alle Listen-Dropdowns
+    bekommen eine Menühöhe (knapp halbe Seitenhöhe, 200–400 px)."""
+    import flet as ft
+    from mathainoa1.ui.views.setup_common import menu_height
+
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    store, vlist = store_with_edge_cases
+    progress = ProgressStore(tmp_path / "p.db")
+    try:
+        nav = _fake_nav()
+        nav.store = store
+        views = [trainer.setup_view(nav, store, progress),
+                 grammar.setup_view(nav, store, progress),
+                 grammar.adjective_setup_view(nav, store, progress),
+                 grammar.conjugation_setup_view(nav, store, progress),
+                 grammar.combos_view(nav, store, vlist.id),
+                 manager.selection_editor(nav, store, None, lambda s: None,
+                                          progress)]
+        dropdowns = [d for v in views for d in _find_all(v, ft.Dropdown)
+                     if d.label in ("Liste", "Adjektiv", "Aus Liste")]
+        assert len(dropdowns) >= 6
+        assert all(d.menu_height == menu_height(nav.page) for d in dropdowns)
+    finally:
+        progress.close()
+    assert 200 <= menu_height(SimpleNamespace(height=800)) <= 400
+    assert menu_height(SimpleNamespace(height=None)) == menu_height(
+        SimpleNamespace(height=700))
+    assert menu_height(SimpleNamespace(height=300)) == 200
