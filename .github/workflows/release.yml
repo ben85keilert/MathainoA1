@@ -3,10 +3,13 @@ name: Release bauen (APK)
 # Baut nur bei einem Versions-Tag (z.B. "git tag v0.3.0 && git push --tags")
 # oder manuell — nicht bei jedem Push auf main.
 #
-# Gebaut wird derzeit nur die APK (Sideload über das GitHub-Release). Das
-# AAB für Google Play wird vorerst nicht gebraucht; zum Wiederbeleben
-# genügt ein zusätzlicher "flet build aab"-Schritt vor dem APK-Schritt
-# plus build/aab/*.aab in den Dateilisten unten.
+# Gebaut wird derzeit nur die APK (Sideload über das GitHub-Release) —
+# und nur für arm64-v8a (Pixel & Co.): die „fette“ APK mit allen drei
+# ABIs wäre fast doppelt so groß, die anderen Architekturen werden nicht
+# gebraucht. Für andere Geräte --arch erweitern (armeabi-v7a, x86_64)
+# oder weglassen. Das AAB für Google Play wird vorerst nicht gebraucht;
+# zum Wiederbeleben genügt ein zusätzlicher "flet build aab"-Schritt vor
+# dem APK-Schritt plus build/aab/*.aab in den Dateilisten unten.
 #
 # Der versionCode wird deterministisch aus der Version berechnet:
 # major*10000 + minor*100 + patch (v0.3.0 -> 300, v1.2.3 -> 10203) —
@@ -92,9 +95,10 @@ jobs:
             echo "FLET_ANDROID_SIGNING_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}"
           } >> "$GITHUB_ENV"
 
-      - name: APK bauen (Sideload/GitHub-Release)
+      - name: APK bauen (Sideload/GitHub-Release, nur arm64-v8a)
         run: >
           flet build apk --verbose
+          --arch arm64-v8a
           --build-version "${{ steps.ver.outputs.version }}"
           --build-number "${{ steps.ver.outputs.build_number }}"
 

@@ -6,7 +6,7 @@
 Lern-App für Griechisch (Niveau A1 und A2, als Stufen strikt getrennt
 umschaltbar) — Vokabeltraining
 (Karteikarten oder Tippen) sowie Grammatiktrainer für Deklination und
-Konjugation. Gebaut mit [Flet](https://flet.dev).
+Konjugation (ab A2 mit Aorist und Imperativ). Gebaut mit [Flet](https://flet.dev).
 
 Details zum Lern- und Statistik-System (Leitner-Boxen, was in die
 Statistik einfließt) stehen im [Handbuch](handbuch.md).
@@ -87,9 +87,10 @@ tests/        # pytest-Tests
 ## Release bauen (APK)
 
 Der Workflow [`release.yml`](.github/workflows/release.yml) baut bei
-einem Versions-Tag (`v*`) oder manuell (workflow_dispatch) die APK,
-lädt sie als Workflow-Artefakt hoch und legt beim Tag-Push ein
-GitHub-Release an. Der Tag muss zur Version in `pyproject.toml` passen.
+einem Versions-Tag (`v*`) oder manuell (workflow_dispatch) die APK
+(nur für `arm64-v8a`, also Pixel & Co. — andere Architekturen werden
+nicht gebraucht und würden die Datei fast verdoppeln), lädt sie als
+Workflow-Artefakt hoch und legt beim Tag-Push ein GitHub-Release an. Der Tag muss zur Version in `pyproject.toml` passen.
 Das AAB (App Bundle für Google Play) wird derzeit **nicht** gebaut —
 gebraucht wird nur die APK zum Sideload. Der versionCode wird trotzdem
 weiter aus der Version berechnet, damit ein späterer Play-Upload direkt
