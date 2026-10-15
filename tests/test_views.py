@@ -350,9 +350,15 @@ def test_settings_view_builds_and_applies_theme(tmp_path, monkeypatch):
     nav = _fake_nav()
     view = settings_view(nav)
     assert view is not None
-    apply_app_theme(nav.page, AppSettings(theme="dark", seed="green"))
+    # Design legt den Modus fest …
+    apply_app_theme(nav.page, AppSettings(design="nachtblau"))
     assert nav.page.theme_mode == ft.ThemeMode.DARK
     assert nav.page.theme is not None
+    apply_app_theme(nav.page, AppSettings(design="sand"))
+    assert nav.page.theme_mode == ft.ThemeMode.LIGHT
+    # … Altbestand ohne Design folgt weiter Hell/Dunkel/System + Akzent
+    apply_app_theme(nav.page, AppSettings(design="", theme="dark", seed="green"))
+    assert nav.page.theme_mode == ft.ThemeMode.DARK
 
 
 def test_settings_view_strict_error_policies(tmp_path, monkeypatch):
@@ -363,7 +369,8 @@ def test_settings_view_strict_error_policies(tmp_path, monkeypatch):
 
     nav = _fake_nav()
     found: list[str] = []
-    _collect_texts_and_tooltips(settings_mod.settings_view(nav), found)
+    _collect_texts_and_tooltips(
+        settings_mod.settings_category_view(nav, "abfrage"), found)
     assert "Akzentfehler" in found
     assert "Schreibungsfehler (Groß-/Klein, nur Nomen)" in found
     # je Fehlerart eine eigene Radio-Gruppe mit denselben vier Optionen
@@ -402,14 +409,18 @@ def test_settings_view_features_section(tmp_path, monkeypatch):
     nav = _fake_nav()
     found: list[str] = []
     _collect_texts_and_tooltips(settings_mod.settings_view(nav), found)
-    assert "Erweiterte Funktionen" in found
+    assert "Erweiterte Funktionen" in found  # Kategorie-Kachel
+    assert "Stufe" in found  # Stufen-Kachel vorhanden
+    found = []
+    _collect_texts_and_tooltips(
+        settings_mod.settings_category_view(nav, "funktionen"), found)
     assert "Textanalyse" in found  # Schalter des registrierten Features
-    assert "Stufe" in found  # Stufen-Sektion vorhanden
 
     monkeypatch.setattr(features, "FEATURES", [])
     monkeypatch.setattr(settings_mod, "FEATURES", [])
     found = []
-    _collect_texts_and_tooltips(settings_mod.settings_view(nav), found)
+    _collect_texts_and_tooltips(
+        settings_mod.settings_category_view(nav, "funktionen"), found)
     assert any("Noch keine Zusatzfunktionen" in t for t in found)
 
 
@@ -873,6 +884,7 @@ def test_settings_view_backup_section(store_with_edge_cases, tmp_path,
                                       monkeypatch):
     """Einstellungen: Backup-Abschnitt nur mit übergebenen Stores;
     ohne Stores (Alt-Signatur) baut die View weiter fehlerfrei."""
+    import flet as ft
     monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
     from mathainoa1.storage.progress import ProgressStore
     from mathainoa1.ui.views import settings as settings_mod
@@ -884,9 +896,15 @@ def test_settings_view_backup_section(store_with_edge_cases, tmp_path,
         found: list[str] = []
         _collect_texts_and_tooltips(
             settings_mod.settings_view(nav, store, progress), found)
+        assert "Backup" in found  # Kategorie-Kachel nur mit Stores
+        view = settings_mod.settings_category_view(nav, "backup", store,
+                                                   progress)
+        found = []
+        _collect_texts_and_tooltips(view, found)
         assert "Backup" in found
-        assert "Backup erstellen" in [t for t in found] or any(
-            "Backup" in t for t in found)
+        buttons = _find_all(view, (ft.FilledButton, ft.OutlinedButton))
+        assert {b.content for b in buttons} == {"Backup erstellen",
+                                                "Backup wiederherstellen"}
 
         found = []
         _collect_texts_and_tooltips(settings_mod.settings_view(nav), found)
@@ -1525,3 +1543,82 @@ def test_list_dropdowns_have_capped_menu_height(store_with_edge_cases, tmp_path,
     assert menu_height(SimpleNamespace(height=None)) == menu_height(
         SimpleNamespace(height=700))
     assert menu_height(SimpleNamespace(height=300)) == 200
+
+
+# --- Designs (v0.9.1): acht Paletten, Kategorien in den Einstellungen -------
+
+def test_designs_four_light_four_dark_and_readable():
+    from mathainoa1.ui.designs import (
+        DESIGNS,
+        contrast,
+        dark_designs,
+        light_designs,
+        luminance,
+    )
+    assert len(light_designs()) == 4 and len(dark_designs()) == 4
+    for d in DESIGNS.values():
+        tiers = d.surfaces.tiers()
+        if d.dark:
+            assert all(luminance(c) < 0.08 for c in tiers), d.key
+            assert contrast("#FFFFFF", d.surfaces.highest) >= 7, d.key
+        else:
+            assert all(luminance(c) > 0.65 for c in tiers), d.key
+            assert contrast("#000000", d.surfaces.highest) >= 7, d.key
+        if d.surfaces.gradient:
+            top, bottom = d.surfaces.gradient
+            assert (luminance(top) < 0.1) == d.dark, d.key
+
+
+def test_apply_app_theme_sets_gradient_on_root_view():
+    import flet as ft
+    from mathainoa1.storage.settings import AppSettings
+    from mathainoa1.ui.views.settings import apply_app_theme
+
+    page = SimpleNamespace(theme=None, dark_theme=None, theme_mode=None,
+                           views=[SimpleNamespace(decoration=None)])
+    apply_app_theme(page, AppSettings(design="petrol"))
+    assert page.theme_mode == ft.ThemeMode.DARK
+    assert page.views[0].decoration is not None
+    assert page.theme.scaffold_bgcolor == ft.Colors.TRANSPARENT
+    apply_app_theme(page, AppSettings(design="graphit"))  # ohne Verlauf
+    assert page.views[0].decoration is None
+    assert page.theme.scaffold_bgcolor == "#000000"
+
+
+def test_app_settings_design_migration():
+    from mathainoa1.storage.settings import AppSettings
+    assert AppSettings().design == "aegaeis"
+    assert AppSettings.from_dict({"theme": "dark", "seed": "green"}).design == "nachtblau"
+    assert AppSettings.from_dict({"theme": "system"}).design == "aegaeis"
+    assert AppSettings.from_dict({"design": "sand", "theme": "dark"}).design == "sand"
+
+
+def test_settings_categories_build(store_with_edge_cases, tmp_path, monkeypatch):
+    """Übersicht zeigt je Kategorie eine Kachel (Backup nur mit Stores);
+    jede Unterseite baut, die Design-Kacheln sind vollständig."""
+    import flet as ft
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    from mathainoa1.ui.views import settings as settings_mod
+
+    store, _vlist = store_with_edge_cases
+    nav = _fake_nav()
+    progress = ProgressStore(tmp_path / "cat.db")
+    try:
+        overview = settings_mod.settings_view(nav, store, progress)
+        assert len(overview.controls) == len(settings_mod.CATEGORIES) == 7
+        assert len(settings_mod.settings_view(nav).controls) == 6
+        for key, _t, _i, _b, _n in settings_mod.CATEGORIES:
+            view = settings_mod.settings_category_view(nav, key, store, progress)
+            assert isinstance(view, ft.Column)
+        found: list[str] = []
+        _collect_texts_and_tooltips(
+            settings_mod.settings_category_view(nav, "darstellung"), found)
+        for name in ("Ägäis", "Olive", "Sand", "Lavendel", "Petrol",
+                     "Nachtblau", "Violett", "Graphit"):
+            assert name in found
+        # Kachel-Klick öffnet die Unterseite
+        nav.go = lambda t, c: nav.stack.append((t, c))
+        overview.controls[0].content.on_click(None)
+        assert nav.stack[-1][0] == "Darstellung"
+    finally:
+        progress.close()

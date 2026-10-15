@@ -28,8 +28,12 @@ class AppSettings:
     """App-weite Einstellungen (Zahnrad-Menü), getrennt von den
     Trainings-Defaults."""
 
-    theme: str = "system"  # "light" | "dark" | "system"
-    seed: str = "blue"  # Akzentfarbe, Schlüssel aus ui/views/settings.SEED_COLORS
+    # Design (Farbpalette, hell oder dunkel): Schlüssel aus ui/designs.DESIGNS.
+    # Ein Design legt den Theme-Modus gleich mit fest. Leer/unbekannt =
+    # Altbestand: dann gelten theme + seed (Hell/Dunkel/System + Akzent).
+    design: str = "aegaeis"
+    theme: str = "system"  # alt: "light" | "dark" | "system"
+    seed: str = "blue"  # alt: Akzentfarbe, Schlüssel aus ui/views/settings.SEED_COLORS
     # Was mit der Leitner-Box passiert, wenn eine sonst richtige Antwort
     # nur an Akzent bzw. Groß-/Kleinschreibung scheitert (und die
     # jeweilige Toleranz im Training aus ist). Werte:
@@ -114,6 +118,10 @@ class AppSettings:
     def from_dict(cls, d: dict) -> "AppSettings":
         known = {f for f in cls.__dataclass_fields__}
         data = {k: v for k, v in d.items() if k in known}
+        # Migration Hell/Dunkel/System + Akzent → Design: Dunkel-Nutzer
+        # bekommen ein dunkles Design, alle anderen das helle Standard-Design
+        if "design" not in d and "theme" in d:
+            data["design"] = "nachtblau" if d["theme"] == "dark" else "aegaeis"
         # Migration der alten 3-stufigen Einstellung repeat_round_promotion
         if "repeat_round_box_policy" not in data and "repeat_round_promotion" in d:
             data["repeat_round_box_policy"] = {

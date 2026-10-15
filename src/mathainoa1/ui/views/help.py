@@ -444,7 +444,7 @@ def help_view(nav, store=None) -> ft.Control:
             "nur diesem Fehler ein „Fast“: Sie zählt als Fehler der Runde "
             "und wird in dieser und der nächsten Runde wiederholt.",
             "Was dabei mit der Leitner-Box passiert, bestimmt die "
-            "Einstellung Zahnrad → Abfrage → „Akzent- und "
+            "Einstellung Zahnrad → Abfrage & Wertung → „Akzent- und "
             "Schreibungsfehler“ — getrennt für Akzent- und "
             "Schreibungsfehler, mit vier Stufen: Box zurücksetzen "
             "(Box 1, gilt auch in der Fehlerrunde), Box bleibt "
@@ -499,7 +499,7 @@ def help_view(nav, store=None) -> ft.Control:
             "Box vor der Runde, die rechte die Box danach (grau = noch "
             "nicht trainiert; Farben wie in den Wortlisten). Das gilt "
             "für alle Trainings gleichermaßen und lässt sich in den "
-            "Einstellungen (Zahnrad → Ergebnisliste) abschalten. Über "
+            "Einstellungen (Zahnrad → Abfrage & Wertung → Ergebnisliste) abschalten. Über "
             "den Stift daneben lassen sich falsche wie richtige Wörter "
             "direkt bearbeiten. ✗ und ✓ stehen einmal in der "
             "Überschrift der Gruppe, nicht vor jedem Wort.",
@@ -517,7 +517,7 @@ def help_view(nav, store=None) -> ft.Control:
             "abwählen (Zeile „Boxen“ mit den farbigen Symbolen 1–5 und "
             "„neu“) — abgewählte Wörter kommen gar nicht erst in die "
             "Runde. Bleibt nichts übrig, sagt das die Startseite.",
-            "Statistik je Training abschaltbar (Zahnrad → Abfrage → "
+            "Statistik je Training abschaltbar (Zahnrad → Abfrage & Wertung → "
             "„Statistik einschalten für“): Ist ein Training aus, bewegt "
             "es weder Boxen noch Fehlerzähler — geübt wird trotzdem "
             "normal, die Wortauswahl folgt weiter den Boxen.",
@@ -670,8 +670,11 @@ def help_view(nav, store=None) -> ft.Control:
             "Felder, die auf keiner Stufe Stoff sind (Aorist Passiv, "
             "Partizip), sind ausgeblendet — ihre Werte bleiben gespeichert.",
         ]),
-        ft.Text("Zoom", size=sz(14), weight=ft.FontWeight.BOLD),
-        _p("In den Einstellungen (Ansicht → Zoom) lassen sich alle "
+        ft.Text("Design & Zoom", size=sz(14), weight=ft.FontWeight.BOLD),
+        _p("Einstellungen → Darstellung: acht Farbpaletten (vier helle, "
+           "vier dunkle) färben die ganze App; die Wahl legt zugleich den "
+           "hellen bzw. dunklen Modus fest."),
+        _p("In den Einstellungen (Darstellung → Zoom) lassen sich alle "
            "Schriften der App verkleinern oder vergrößern (70–150 %, "
            "Standard 100 %) — kleiner, damit auf kleine Displays mehr "
            "passt, größer für bessere Lesbarkeit. Die Änderung wirkt "

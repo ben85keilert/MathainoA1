@@ -1,7 +1,14 @@
-"""Einstellungsmenü (Zahnrad): Ansicht (Theme, Akzentfarbe) und Abfrage.
+"""Einstellungen (Zahnrad): Übersicht mit Kategorien, je Kategorie eine
+eigene Unterseite.
+
+Kategorien: Darstellung (Design, Zoom, Hauptmenü), Stufe, Abfrage &
+Wertung, Beugungstraining, Sprachausgabe, Backup, Erweiterte Funktionen.
+Die Übersicht zeigt je Kachel eine Kurzfassung des aktuellen Stands und
+frischt sich beim Zurückkehren auf (on_reappear).
 
 `apply_app_theme` wird beim App-Start und bei jeder Änderung aufgerufen und
-setzt Theme-Modus und Akzentfarbe der ganzen App.
+setzt Design (Farben, Theme-Modus, Hintergrundverlauf) und Zoomfaktor der
+ganzen App.
 """
 
 from __future__ import annotations
@@ -23,10 +30,19 @@ from mathainoa1.storage.settings import (
     save_app_settings,
 )
 from mathainoa1.ui.audio import set_slow_tap_seconds, set_tts_engine
+from mathainoa1.ui.designs import (
+    DESIGNS,
+    background,
+    build_theme,
+    dark_designs,
+    light_designs,
+    preview_gradient,
+)
 from mathainoa1.ui.features import FEATURES
 from mathainoa1.ui.scale import get_ui_scale, set_ui_scale, sz
 
-# Auswählbare Akzentfarben (Schlüssel wird in AppSettings.seed gespeichert)
+# Akzentfarben des Altbestands (AppSettings.seed) — gelten nur noch, wenn
+# kein Design gewählt ist (siehe apply_app_theme)
 SEED_COLORS: dict[str, tuple[str, str]] = {
     "blue": ("Blau", ft.Colors.BLUE),
     "green": ("Grün", ft.Colors.GREEN),
@@ -67,19 +83,40 @@ def _scaled_text_theme() -> ft.TextTheme:
 
 
 def apply_app_theme(page: ft.Page, s: AppSettings) -> None:
-    """Setzt Theme-Modus, Akzentfarbe und Zoomfaktor der ganzen App."""
+    """Setzt Design (Farben, Theme-Modus, Verlauf) und Zoomfaktor der
+    ganzen App.
+
+    Bei 100 % kein text_theme setzen — so bleibt die Darstellung exakt wie
+    ohne Zoom-Funktion. Hell und Dunkel bekommen jeweils eine EIGENE
+    TextTheme-Instanz — ein geteiltes Objekt kann beim Einhängen in den
+    Control-Baum einem der beiden Themes verloren gehen."""
     set_ui_scale(s.ui_scale)
-    page.theme_mode = _THEME_MODES.get(s.theme, ft.ThemeMode.SYSTEM)
-    seed = SEED_COLORS.get(s.seed, SEED_COLORS["blue"])[1]
-    # Bei 100 % kein text_theme setzen — so bleibt die Darstellung
-    # exakt wie ohne Zoom-Funktion. Hell und Dunkel bekommen jeweils eine
-    # EIGENE TextTheme-Instanz — ein geteiltes Objekt kann beim Einhängen
-    # in den Control-Baum einem der beiden Themes verloren gehen.
     scaled = get_ui_scale() != 1.0
-    page.theme = ft.Theme(color_scheme_seed=seed,
-                          text_theme=_scaled_text_theme() if scaled else None)
-    page.dark_theme = ft.Theme(color_scheme_seed=seed,
-                               text_theme=_scaled_text_theme() if scaled else None)
+    design = DESIGNS.get(s.design)
+    if design is None:
+        # Altbestand ohne Design: Hell/Dunkel/System + Akzentfarbe
+        page.theme_mode = _THEME_MODES.get(s.theme, ft.ThemeMode.SYSTEM)
+        seed = SEED_COLORS.get(s.seed, SEED_COLORS["blue"])[1]
+        page.theme = ft.Theme(
+            color_scheme_seed=seed,
+            text_theme=_scaled_text_theme() if scaled else None)
+        page.dark_theme = ft.Theme(
+            color_scheme_seed=seed,
+            text_theme=_scaled_text_theme() if scaled else None)
+        decoration = None
+    else:
+        page.theme_mode = (ft.ThemeMode.DARK if design.dark
+                           else ft.ThemeMode.LIGHT)
+        page.theme = build_theme(
+            design, _scaled_text_theme() if scaled else None)
+        page.dark_theme = build_theme(
+            design, _scaled_text_theme() if scaled else None)
+        decoration = background(design)
+    # Der Verlauf liegt hinter dem Inhalt der (einzigen) View; das
+    # Gerüst ist im Design-Thema durchsichtig
+    views = getattr(page, "views", None)
+    if views:
+        views[0].decoration = decoration
 
 
 def _wrapping_radio_group(value: str, options: list[tuple[str, str]],
@@ -131,49 +168,65 @@ def _switch_row(sw: ft.Switch, label: str, page: ft.Page) -> ft.Control:
         on_click=toggle, ink=True)
 
 
-def settings_view(nav, store=None, progress=None) -> ft.Control:
+def _h(text: str) -> ft.Text:
+    return ft.Text(text, size=sz(16), weight=ft.FontWeight.BOLD)
+
+
+def _sub(text: str) -> ft.Text:
+    return ft.Text(text, size=sz(13))
+
+
+def _hint(text: str) -> ft.Text:
+    return ft.Text(text, size=sz(13), italic=True)
+
+
+def _reload(nav, key: str, store, progress) -> None:
+    """Die offene Kategorieseite in place neu aufbauen (z.B. nach Zoom-
+    oder Design-Wechsel, damit die Änderung sofort sichtbar ist)."""
+    title = nav.stack[-1][0]
+    nav.stack[-1] = (title, settings_category_view(nav, key, store, progress))
+    nav._show()
+
+
+# --- Darstellung: Design, Zoom, Hauptmenü-Reihenfolge ----------------------
+
+def _display_controls(nav, s: AppSettings, store, progress) -> list[ft.Control]:
     page = nav.page
-    s = load_app_settings()
 
-    def apply_and_save():
-        apply_app_theme(page, s)
-        save_app_settings(s)
-        page.update()
+    def choose_design(key: str):
+        def handler(e):
+            s.design = key
+            apply_app_theme(page, s)
+            save_app_settings(s)
+            _reload(nav, "darstellung", store, progress)
+        return handler
 
-    # --- Ansicht: Theme ---
-    seg_theme = ft.SegmentedButton(
-        selected=[s.theme],
-        segments=[
-            ft.Segment(value="light", label=ft.Text("Hell"),
-                       icon=ft.Icons.LIGHT_MODE),
-            ft.Segment(value="dark", label=ft.Text("Dunkel"),
-                       icon=ft.Icons.DARK_MODE),
-            ft.Segment(value="system", label=ft.Text("System"),
-                       icon=ft.Icons.BRIGHTNESS_AUTO),
-        ],
-    )
+    def tile(d) -> ft.Control:
+        chosen = d.key == s.design
+        return ft.Container(
+            width=84, on_click=choose_design(d.key), ink=True,
+            border_radius=12, padding=4,
+            content=ft.Column(
+                [ft.Container(
+                    width=76, height=56, border_radius=12,
+                    gradient=preview_gradient(d),
+                    border=ft.Border.all(
+                        3 if chosen else 1,
+                        ft.Colors.PRIMARY if chosen
+                        else ft.Colors.with_opacity(0.25, ft.Colors.ON_SURFACE)),
+                    content=ft.Container(
+                        width=22, height=22, border_radius=11,
+                        bgcolor=d.seed, alignment=ft.Alignment.CENTER),
+                    alignment=ft.Alignment.CENTER,
+                 ),
+                 ft.Text(d.name, size=sz(12),
+                         weight=ft.FontWeight.BOLD if chosen else None,
+                         text_align=ft.TextAlign.CENTER)],
+                spacing=4, tight=True,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+        )
 
-    def on_theme(e):
-        sel = seg_theme.selected
-        s.theme = next(iter(sel)) if isinstance(sel, (list, set, tuple)) else sel
-        apply_and_save()
-
-    seg_theme.on_change = on_theme
-
-    # --- Ansicht: Akzentfarbe ---
-    dd_color = ft.Dropdown(
-        label="Akzentfarbe", value=s.seed,
-        options=[ft.DropdownOption(key=k, text=label)
-                 for k, (label, _c) in SEED_COLORS.items()],
-    )
-
-    def on_color(e):
-        s.seed = dd_color.value or "blue"
-        apply_and_save()
-
-    dd_color.on_select = on_color  # Flet 0.85: Dropdowns feuern on_select
-
-    # --- Ansicht: Zoomfaktor (echte Schriftgrößen-Skalierung) ---
+    # --- Zoomfaktor (echte Schriftgrößen-Skalierung) ---
     _zoom_steps = ("0.7", "0.8", "0.9", "1", "1.1", "1.25", "1.5")
     dd_zoom = ft.Dropdown(
         label="Zoom",
@@ -190,15 +243,13 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
             s.ui_scale = 1.0
         save_app_settings(s)
         apply_app_theme(page, s)
-        # Einstellungsseite in place neu aufbauen — der neue Zoom ist
-        # sofort sichtbar; andere Ansichten folgen beim Navigieren
-        title = nav.stack[-1][0]
-        nav.stack[-1] = (title, settings_view(nav, store, progress))
-        nav._show()
+        # Seite in place neu aufbauen — der neue Zoom ist sofort
+        # sichtbar; andere Ansichten folgen beim Navigieren
+        _reload(nav, "darstellung", store, progress)
 
     dd_zoom.on_select = on_zoom  # Flet 0.85: Dropdowns feuern on_select
 
-    # --- Ansicht: Reihenfolge der Hauptmenü-Kacheln (Drag & Drop) ---
+    # --- Reihenfolge der Hauptmenü-Kacheln (Drag & Drop) ---
     # Lazy-Import: app importiert dieses Modul (Importzirkel)
     from mathainoa1.ui.app import menu_tiles_meta, ordered_menu_keys
     from mathainoa1.ui.views.wordlist import drag_row
@@ -222,7 +273,65 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     menu_list.on_reorder = on_menu_reorder
     rebuild_menu_rows()
 
-    # --- Abfrage: Box-Verhalten bei strengen Akzent-/Schreibungsfehlern ---
+    return [
+        _h("Design"),
+        _hint("Vier helle und vier dunkle Farbpaletten — die Wahl setzt "
+              "zugleich den hellen bzw. dunklen Modus. Der Punkt zeigt die "
+              "Akzentfarbe."),
+        _sub("Hell"),
+        ft.Row([tile(d) for d in light_designs()], wrap=True,
+               spacing=8, run_spacing=8),
+        _sub("Dunkel"),
+        ft.Row([tile(d) for d in dark_designs()], wrap=True,
+               spacing=8, run_spacing=8),
+        ft.Divider(),
+        _h("Zoom"),
+        _hint("Skaliert alle Schriften der App — kleiner, damit auf "
+              "kleine Displays mehr passt, oder größer für bessere "
+              "Lesbarkeit. Standard: 100 %."),
+        dd_zoom,
+        ft.Divider(),
+        _h("Hauptmenü-Reihenfolge"),
+        _hint("Kacheln am ≡ ziehen — die Startseite übernimmt die neue "
+              "Reihenfolge sofort."),
+        # Zeilenhöhe ist textgetrieben und skaliert mit dem Zoom;
+        # der 480er-Deckel ist Bildschirmplatz und bleibt fix
+        ft.Container(menu_list,
+                     height=min(480, sz(60) * max(1, len(menu_keys)))),
+    ]
+
+
+# --- Stufe ------------------------------------------------------------------
+
+def _level_controls(nav, s: AppSettings, store, progress) -> list[ft.Control]:
+    seg_level = ft.SegmentedButton(
+        selected=[s.level if s.level in LEVELS else LEVELS[0]],
+        segments=[ft.Segment(value=lv, label=ft.Text(lv)) for lv in LEVELS],
+    )
+
+    def on_level(e):
+        sel = seg_level.selected
+        s.level = next(iter(sel)) if isinstance(sel, (list, set, tuple)) else sel
+        save_app_settings(s)
+
+    seg_level.on_change = on_level
+    return [
+        _h("Stufe"),
+        _hint("Filtert, welche Listen in Training, Verwaltung, Suche "
+              "und Statistik erscheinen. Die Stufen sind strikt "
+              "getrennt — jede zeigt nur ihre eigenen Listen; zum "
+              "Üben von A1-Listen hierher zurückschalten. Listen und "
+              "Auswahllisten ohne Stufe sind immer sichtbar; neue "
+              "erhalten die gerade aktive Stufe. Jede Stufe zeigt nur "
+              "ihren Stoff (A2: dazu Aorist und Imperativ)."),
+        seg_level,
+    ]
+
+
+# --- Abfrage & Wertung ------------------------------------------------------
+
+def _query_controls(nav, s: AppSettings, store, progress) -> list[ft.Control]:
+    page = nav.page
     # Lange Schalter-/Radio-Labels laufen über _switch_row bzw.
     # _wrapping_radio_group, damit sie auf schmalen Displays umbrechen
     _strict_options = [
@@ -252,7 +361,7 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
                if s.case_box_policy in STRICT_BOX_POLICIES else "keep"),
         options=_strict_options, on_select=save_case_policy, page=page)
 
-    # --- Abfrage: Beschränkungen durch die Abfragemodi ---
+    # --- Beschränkungen durch die Abfragemodi ---
     sw_high = ft.Switch(value=s.high_boxes_need_production)
     sw_top = ft.Switch(value=s.top_box_needs_typing)
     sw_infl = ft.Switch(value=s.top_box_needs_inflection)
@@ -273,7 +382,7 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     sw_top.on_change = on_top
     sw_infl.on_change = on_infl
 
-    # --- Abfrage: Statistik je Training ein-/ausschalten ---
+    # --- Statistik je Training ein-/ausschalten ---
     stat_switches = {
         "stats_vocab": (ft.Switch(value=s.stats_vocab), "Vokabeltraining"),
         "stats_nouns": (ft.Switch(value=s.stats_nouns), "Nomentraining"),
@@ -294,7 +403,7 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     stats_rows = [_switch_row(sw, label, page)
                   for sw, label in stat_switches.values()]
 
-    # --- Abfrage: Prüfbutton-Stil beim Schreiben ---
+    # --- Prüfbutton-Stil beim Schreiben ---
     sw_check = ft.Switch(value=s.check_beside_field)
 
     def on_check(e):
@@ -303,7 +412,7 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
 
     sw_check.on_change = on_check
 
-    # --- Abfrage: Boxen vorher/nachher in der Ergebnisliste ---
+    # --- Boxen vorher/nachher in der Ergebnisliste ---
     sw_result_dots = ft.Switch(value=s.result_box_dots)
 
     def on_result_dots(e):
@@ -312,7 +421,7 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
 
     sw_result_dots.on_change = on_result_dots
 
-    # --- Abfrage: Fehlerrunde und Leitner-Box ---
+    # --- Fehlerrunde und Leitner-Box ---
     def save_repeat(v):
         s.repeat_round_box_policy = v or "step_down"
         save_app_settings(s)
@@ -331,7 +440,81 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
         ],
         on_select=save_repeat, page=page)
 
-    # --- Adjektivtraining: Whitelisting oder Blacklisting ---
+    return [
+        _h("Akzent- und Schreibungsfehler (sonst richtige Antwort)"),
+        _hint("Greift nur, wenn beim Training „Akzentfehler tolerieren“ "
+              "bzw. „Groß-/Kleinschreibung tolerieren“ ausgeschaltet "
+              "ist. So ein Fehler zählt immer als Fehler der Runde und "
+              "kommt in die Fehlerrunde — hier steht, was dabei mit "
+              "der Leitner-Box passiert. Neue (graue) Wörter starten "
+              "bei so einem Fehler immer normal in Box 1."),
+        _sub("Akzentfehler"),
+        rg_accent_policy,
+        _sub("Schreibungsfehler (Groß-/Klein, nur Nomen)"),
+        rg_case_policy,
+        ft.Divider(),
+        _h("Beschränkung durch die Abfragemodi"),
+        _hint("Steuert, wie hoch eine Karte je nach Abfrageart steigen "
+              "kann. Alle aus = jede Abfrageart erreicht Box 5. Ist "
+              "„nur über das Beugungstraining“ an, rücken die übrigen "
+              "Obergrenzen eine Box nach unten: Griechisch → Deutsch "
+              "höchstens Box 2, Karteikarte Box 3, Schreiben Box 4 — "
+              "Box 5 erreicht nur das Nomen-/Adjektiv-/Verbtraining "
+              "mit Vorgabe Deutsch."),
+        _switch_row(sw_high,
+                    "Box 4 und 5 nur über Deutsch → Griechisch", page),
+        _switch_row(sw_top,
+                    "Box 5 nur über Deutsch → Griechisch mit Schreiben",
+                    page),
+        _switch_row(sw_infl,
+                    "Box 5 nur über das Beugungstraining "
+                    "(Nomen/Adjektiv/Verb, Vorgabe Deutsch)",
+                    page),
+        ft.Divider(),
+        _h("Statistik einschalten für"),
+        _hint("Bestimmt, welche Trainings den Lernstand bewegen "
+              "dürfen. Ist ein Training aus, fällt es komplett aus "
+              "der Statistik: keine Leitner-Boxen rauf oder runter, "
+              "keine Fehlerzähler, keine Punkte in der Ergebnisliste. "
+              "Welche Wörter gezogen werden, richtet sich weiterhin "
+              "nach den Boxen. (Nomen/Adjektive/Verben zählen ohnehin "
+              "nur bei Vorgabe „Deutsch“.)"),
+        *stats_rows,
+        ft.Divider(),
+        _h("Fehlerrunde"),
+        _hint("Ein Fehler setzt die Box sofort auf 1. Hier lässt sich "
+              "einstellen, wohin ein Wort wandert, das in der "
+              "Fehlerrunde richtig beantwortet wird — Leichtsinns"
+              "fehler werden so weniger hart bestraft. „Ursprüngliche "
+              "Box“ ist die Box vor dem Fehler; „eine Box zurück“ "
+              "bedeutet eine Box unter der ursprünglichen."),
+        rg_repeat,
+        ft.Divider(),
+        _h("Prüfen beim Schreiben"),
+        _hint("Aus = „Prüfen“-Button mittig unter dem Antwortfeld, "
+              "an = rundes Häkchen rechts daneben (spart Platz bei "
+              "eingeblendeter Tastatur)."),
+        _switch_row(sw_check,
+                    "Prüf-Häkchen rechts neben dem Antwortfeld (kompakt)",
+                    page),
+        ft.Divider(),
+        _h("Ergebnisliste"),
+        _hint("Zeigt nach jeder Runde vor jedem Wort einen "
+              "zweigeteilten Farbpunkt: linke Hälfte = Leitner-Box "
+              "vor der Runde, rechte Hälfte = Box danach (grau = "
+              "noch nicht trainiert). Gilt für alle Trainings "
+              "gleichermaßen."),
+        _switch_row(sw_result_dots,
+                    "Boxen vorher/nachher in der Ergebnisliste anzeigen",
+                    page),
+    ]
+
+
+# --- Beugungstraining: Adjektiv- und Verbtraining ---------------------------
+
+def _inflection_controls(nav, s: AppSettings, store, progress) -> list[ft.Control]:
+    page = nav.page
+
     def save_adjective(v):
         s.adjective_combos_mode = v or "whitelist"
         save_app_settings(s)
@@ -348,7 +531,6 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
         ],
         on_select=save_adjective, page=page)
 
-    # --- Verbtraining: Grundform nach der Lösung ---
     def save_verb_base(v):
         s.verb_base_form = v or "both"
         save_app_settings(s)
@@ -367,7 +549,32 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
         ],
         on_select=save_verb_base, page=page)
 
-    # --- Sprachausgabe: Doppeltipp-Zeit für langsames Abspielen ---
+    return [
+        _h("Adjektivtraining"),
+        _hint("Whitelisting fragt nur selbst festgelegte Adjektiv↔"
+              "Nomen-Verbindungen ab. Blacklisting kombiniert die "
+              "Adjektive der gewählten Liste mit ihren Nomen — außer "
+              "den festgelegten Ausnahmen; enthält die Liste keine "
+              "Nomen, werden alle Nomen der App verwendet."),
+        rg_adjective,
+        ft.Divider(),
+        _h("Verbtraining"),
+        _sub("Grundform nach der Lösung"),
+        _hint("Bestimmt, welche Grundform nach dem Aufdecken unter "
+              "der Lösung steht — nur bei Vorgabe „Deutsch“ (bei "
+              "griechischer Vorgabe ist die Präsensform schon die "
+              "Aufgabe). Die Auswahl wirkt bei Futur-Aufgaben"
+              + (" und Aorist-Aufgaben; bei Präsens- und "
+                 "Imperativ-Aufgaben" if aorist_level
+                 else "; bei Präsens-Aufgaben")
+              + " erscheint immer die Präsensform."),
+        rg_verb_base,
+    ]
+
+
+# --- Sprachausgabe ----------------------------------------------------------
+
+def _tts_controls(nav, s: AppSettings, store, progress) -> list[ft.Control]:
     dd_tap = ft.Dropdown(
         label="Doppeltipp-Zeitfenster (langsam abspielen)",
         value=f"{s.slow_double_tap_seconds:g}",
@@ -383,25 +590,24 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
 
     dd_tap.on_select = on_tap_time  # Flet 0.85: Dropdowns feuern on_select
 
-    # --- Sprachausgabe: Weg wählen ---
     rg_tts = ft.RadioGroup(
         value=(s.tts_engine if s.tts_engine in (TTS_SYSTEM, TTS_GOOGLE)
                else TTS_SYSTEM),
         content=ft.Column([
             ft.Radio(value=TTS_SYSTEM, label="Systemstimme (Standard)"),
-            ft.Text("Spricht offline über die Sprachausgabe des Geräts — "
-                    "es werden keine Daten übertragen. Braucht eine "
-                    "installierte griechische Stimme (Android: meist schon "
-                    "dabei; Windows: Sprachpaket „Ελληνικά“ hinzufügen). "
-                    "Nicht verfügbar in der Entwicklungs-Vorschau und "
-                    "unter Linux.", size=sz(13), italic=True),
+            _hint("Spricht offline über die Sprachausgabe des Geräts — "
+                  "es werden keine Daten übertragen. Braucht eine "
+                  "installierte griechische Stimme (Android: meist schon "
+                  "dabei; Windows: Sprachpaket „Ελληνικά“ hinzufügen). "
+                  "Nicht verfügbar in der Entwicklungs-Vorschau und "
+                  "unter Linux."),
             ft.Radio(value=TTS_GOOGLE, label="Google (online)"),
-            ft.Text("Holt das Audio von Google-Servern — dabei werden der "
-                    "gesprochene Text und die IP-Adresse an Google (USA) "
-                    "übertragen. Danach liegt das Audio im lokalen Cache "
-                    "und spielt offline. Für Geräte ohne griechische "
-                    "Systemstimme; „Audio vorbereiten“ im Listenmenü lädt "
-                    "ganze Listen vor.", size=sz(13), italic=True),
+            _hint("Holt das Audio von Google-Servern — dabei werden der "
+                  "gesprochene Text und die IP-Adresse an Google (USA) "
+                  "übertragen. Danach liegt das Audio im lokalen Cache "
+                  "und spielt offline. Für Geräte ohne griechische "
+                  "Systemstimme; „Audio vorbereiten“ im Listenmenü lädt "
+                  "ganze Listen vor."),
         ], spacing=4),
     )
 
@@ -411,20 +617,172 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
 
     rg_tts.on_change = on_tts
 
-    # --- Stufe: sichtbare Vokabellisten (A1/A2) ---
-    seg_level = ft.SegmentedButton(
-        selected=[s.level if s.level in LEVELS else LEVELS[0]],
-        segments=[ft.Segment(value=lv, label=ft.Text(lv)) for lv in LEVELS],
-    )
+    return [
+        _h("Sprachausgabe"),
+        rg_tts,
+        _hint("Doppeltipp auf einen Lautsprecher (oder langes "
+              "Drücken) schaltet die langsame Wiedergabe an/aus — "
+              "das Symbol wird dann zur Schildkröte 🐢."),
+        dd_tap,
+    ]
 
-    def on_level(e):
-        sel = seg_level.selected
-        s.level = next(iter(sel)) if isinstance(sel, (list, set, tuple)) else sel
-        save_app_settings(s)
 
-    seg_level.on_change = on_level
+# --- Backup: Export/Import der Nutzerdaten (kategorieweise) -----------------
 
-    # --- Erweiterte Funktionen: einzeln zuschaltbare Features ---
+def _backup_controls(nav, s: AppSettings, store, progress) -> list[ft.Control]:
+    page = nav.page
+    picker = ft.FilePicker()
+    if picker not in page.services:
+        page.services.append(picker)
+
+    def part_boxes(available: set[str] | None = None
+                   ) -> dict[str, ft.Checkbox]:
+        """Eine Checkbox je Kategorie; nicht verfügbare (beim Import:
+        nicht im Backup enthaltene) sind deaktiviert. Fortschritt
+        hängt an den Karten-IDs der Vokabeln — nur gemeinsam wählbar."""
+        boxes = {}
+        for key, label in backup.PARTS:
+            ok = available is None or key in available
+            boxes[key] = ft.Checkbox(
+                label=label if ok else f"{label} – nicht im Backup",
+                value=ok, disabled=not ok)
+        progress_ok = available is None or "progress" in available
+
+        def sync(e=None):
+            if not boxes["vocab"].value:
+                boxes["progress"].value = False
+            boxes["progress"].disabled = (not progress_ok
+                                          or not boxes["vocab"].value)
+            page.update()
+
+        boxes["vocab"].on_change = sync
+        return boxes
+
+    def create_dialog(e):
+        boxes = part_boxes()
+
+        async def do_export(e):
+            parts = [k for k, cb in boxes.items() if cb.value]
+            try:
+                data = backup.create_backup(progress, parts)
+            except ValueError as exc:
+                page.pop_dialog()
+                page.show_dialog(ft.SnackBar(ft.Text(str(exc))))
+                return
+            page.pop_dialog()
+            await picker.save_file(
+                dialog_title="Backup speichern",
+                file_name=backup.suggested_filename(),
+                allowed_extensions=["zip"], src_bytes=data)
+            page.show_dialog(ft.SnackBar(ft.Text(
+                f"Backup erstellt ({max(1, len(data) // 1024)} kB).")))
+
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text("Backup erstellen"),
+            content=ft.Column(
+                [_sub("Was soll in die Backup-Datei?"),
+                 *boxes.values(),
+                 _hint("Heruntergeladenes Audio ist nie enthalten — "
+                       "es wird bei Bedarf neu geladen.")],
+                tight=True, spacing=6, width=420,
+                scroll=ft.ScrollMode.AUTO),
+            actions=[ft.TextButton("Abbrechen",
+                                   on_click=lambda e: page.pop_dialog()),
+                     ft.FilledButton("Speichern", on_click=do_export)],
+        ))
+
+    async def pick_restore(e):
+        files = await picker.pick_files(
+            dialog_title="Backup wiederherstellen",
+            allowed_extensions=["zip"], with_data=True)
+        if not files:
+            return
+        f = files[0]
+        data = f.bytes_data if hasattr(f, "bytes_data") else None
+        if data is None and f.path:
+            data = Path(f.path).read_bytes()
+        if data is None:
+            return
+        try:
+            manifest = backup.read_manifest(data)
+        except ValueError as exc:
+            page.show_dialog(ft.SnackBar(ft.Text(str(exc))))
+            return
+        boxes = part_boxes(set(manifest["parts"]))
+        select_error = ft.Text("", color=ft.Colors.ERROR, size=sz(13))
+        chosen: list[str] = []
+
+        def do_restore(e):
+            labels = ", ".join(backup.part_label(p) for p in chosen)
+            try:
+                backup.restore_backup(data, store, progress, parts=chosen)
+            except ValueError as exc:
+                page.pop_dialog()
+                page.show_dialog(ft.SnackBar(ft.Text(str(exc))))
+                return
+            # Wiederhergestellte Einstellungen sofort wirksam machen
+            fresh = load_app_settings()
+            apply_app_theme(page, fresh)
+            set_tts_engine(fresh.tts_engine)
+            page.pop_dialog()
+            _reload(nav, "backup", store, progress)
+            page.show_dialog(ft.SnackBar(ft.Text(
+                f"Backup wiederhergestellt: {labels}.")))
+
+        def confirm(e):
+            chosen[:] = [k for k, cb in boxes.items() if cb.value]
+            if not chosen:
+                select_error.value = "Bitte mindestens eine Kategorie wählen."
+                page.update()
+                return
+            labels = ", ".join(backup.part_label(p) for p in chosen)
+            page.pop_dialog()
+            page.show_dialog(ft.AlertDialog(
+                title=ft.Text("Wirklich wiederherstellen?"),
+                content=ft.Text(
+                    f"Ersetzt auf diesem Gerät: {labels}. Das lässt "
+                    "sich nicht rückgängig machen — nicht gewählte "
+                    "Bereiche bleiben unverändert."),
+                actions=[ft.TextButton("Abbrechen",
+                                       on_click=lambda e: page.pop_dialog()),
+                         ft.FilledButton("Wiederherstellen",
+                                         on_click=do_restore)],
+            ))
+
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text("Backup wiederherstellen"),
+            content=ft.Column(
+                [_sub("Welche Bereiche sollen zurückgespielt werden?"),
+                 *boxes.values(),
+                 _hint("Gewählte Bereiche werden auf diesem Gerät "
+                       "komplett ersetzt."),
+                 select_error],
+                tight=True, spacing=6, width=420,
+                scroll=ft.ScrollMode.AUTO),
+            actions=[ft.TextButton("Abbrechen",
+                                   on_click=lambda e: page.pop_dialog()),
+                     ft.FilledButton("Weiter", on_click=confirm)],
+        ))
+
+    return [
+        _h("Backup"),
+        _hint("Sichert die gewählten Bereiche als eine ZIP-Datei — "
+              "für Sicherungskopien und den Umzug auf ein neues "
+              "Gerät. Beim Wiederherstellen wählst du, welche der "
+              "enthaltenen Bereiche ersetzt werden."),
+        ft.Row([
+            ft.FilledButton("Backup erstellen", icon=ft.Icons.ARCHIVE,
+                            on_click=create_dialog),
+            ft.OutlinedButton("Backup wiederherstellen",
+                              icon=ft.Icons.UNARCHIVE,
+                              on_click=pick_restore),
+        ], spacing=8, wrap=True),
+    ]
+
+
+# --- Erweiterte Funktionen: einzeln zuschaltbare Features -------------------
+
+def _features_controls(nav, s: AppSettings, store, progress) -> list[ft.Control]:
     def feature_switch(f) -> ft.Switch:
         sw = ft.Switch(label=f.title, value=f.key in s.enabled_features)
 
@@ -444,313 +802,99 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     feature_rows: list[ft.Control] = []
     for f in FEATURES:
         feature_rows.append(feature_switch(f))
-        feature_rows.append(ft.Text(f.subtitle, size=sz(13), italic=True))
+        feature_rows.append(_hint(f.subtitle))
     if not feature_rows:
-        feature_rows.append(ft.Text(
+        feature_rows.append(_hint(
             "Noch keine Zusatzfunktionen verfügbar — weitere folgen in "
-            "künftigen Versionen.", size=sz(13), italic=True))
+            "künftigen Versionen."))
+    return [
+        _h("Erweiterte Funktionen"),
+        _hint("Zusatzfunktionen für Fortgeschrittene. Eingeschaltete "
+              "Funktionen erscheinen als eigene Karte im Hauptmenü "
+              "und gelten für alle Stufen."),
+        *feature_rows,
+    ]
 
-    def _h(text: str) -> ft.Text:
-        return ft.Text(text, size=sz(16), weight=ft.FontWeight.BOLD)
 
-    # --- Backup: Export/Import der Nutzerdaten (kategorieweise) ---
-    backup_rows: list[ft.Control] = []
-    if store is not None and progress is not None:
-        picker = ft.FilePicker()
-        if picker not in page.services:
-            page.services.append(picker)
+# --- Übersicht: Kategorien --------------------------------------------------
 
-        def part_boxes(available: set[str] | None = None
-                       ) -> dict[str, ft.Checkbox]:
-            """Eine Checkbox je Kategorie; nicht verfügbare (beim Import:
-            nicht im Backup enthaltene) sind deaktiviert. Fortschritt
-            hängt an den Karten-IDs der Vokabeln — nur gemeinsam wählbar."""
-            boxes = {}
-            for key, label in backup.PARTS:
-                ok = available is None or key in available
-                boxes[key] = ft.Checkbox(
-                    label=label if ok else f"{label} – nicht im Backup",
-                    value=ok, disabled=not ok)
-            progress_ok = available is None or "progress" in available
+def _summary(key: str, s: AppSettings) -> str:
+    """Kurzfassung des aktuellen Stands für die Kategorie-Kachel."""
+    if key == "darstellung":
+        design = DESIGNS.get(s.design)
+        name = design.name if design else "Standard"
+        return f"Design {name} · Zoom {round(s.ui_scale * 100)} %"
+    if key == "stufe":
+        return f"Aktiv: {s.level}"
+    if key == "abfrage":
+        return "Akzent-/Schreibungsfehler, Boxen, Fehlerrunde, Statistik"
+    if key == "beugung":
+        return "Adjektivtraining, Verbtraining"
+    if key == "sprachausgabe":
+        return ("Google (online)" if s.tts_engine == TTS_GOOGLE
+                else "Systemstimme")
+    if key == "backup":
+        return "Sichern und wiederherstellen"
+    if key == "funktionen":
+        n = sum(1 for f in FEATURES if f.key in s.enabled_features)
+        return f"{n} von {len(FEATURES)} eingeschaltet"
+    return ""
 
-            def sync(e=None):
-                if not boxes["vocab"].value:
-                    boxes["progress"].value = False
-                boxes["progress"].disabled = (not progress_ok
-                                              or not boxes["vocab"].value)
-                page.update()
 
-            boxes["vocab"].on_change = sync
-            return boxes
+# (key, Titel, Icon, Builder, braucht Stores)
+CATEGORIES = [
+    ("darstellung", "Darstellung", ft.Icons.PALETTE_OUTLINED,
+     _display_controls, False),
+    ("stufe", "Stufe", ft.Icons.SCHOOL_OUTLINED, _level_controls, False),
+    ("abfrage", "Abfrage & Wertung", ft.Icons.RULE, _query_controls, False),
+    ("beugung", "Beugungstraining", ft.Icons.TABLE_CHART_OUTLINED,
+     _inflection_controls, False),
+    ("sprachausgabe", "Sprachausgabe", ft.Icons.VOLUME_UP, _tts_controls,
+     False),
+    ("backup", "Backup", ft.Icons.ARCHIVE_OUTLINED, _backup_controls, True),
+    ("funktionen", "Erweiterte Funktionen", ft.Icons.EXTENSION_OUTLINED,
+     _features_controls, False),
+]
 
-        def create_dialog(e):
-            boxes = part_boxes()
 
-            async def do_export(e):
-                parts = [k for k, cb in boxes.items() if cb.value]
-                try:
-                    data = backup.create_backup(progress, parts)
-                except ValueError as exc:
-                    page.pop_dialog()
-                    page.show_dialog(ft.SnackBar(ft.Text(str(exc))))
-                    return
-                page.pop_dialog()
-                await picker.save_file(
-                    dialog_title="Backup speichern",
-                    file_name=backup.suggested_filename(),
-                    allowed_extensions=["zip"], src_bytes=data)
-                page.show_dialog(ft.SnackBar(ft.Text(
-                    f"Backup erstellt ({max(1, len(data) // 1024)} kB).")))
+def settings_category_view(nav, key: str, store=None,
+                           progress=None) -> ft.Control:
+    """Die Unterseite einer Kategorie (alle Einstellungen des Bereichs)."""
+    s = load_app_settings()
+    for k, _title, _icon, builder, needs_stores in CATEGORIES:
+        if k == key:
+            if needs_stores and (store is None or progress is None):
+                return ft.Text("Backup ist hier nicht verfügbar.")
+            return ft.Column(builder(nav, s, store, progress), spacing=12,
+                             scroll=ft.ScrollMode.AUTO)
+    return ft.Text("Unbekannte Kategorie.")
 
-            page.show_dialog(ft.AlertDialog(
-                title=ft.Text("Backup erstellen"),
-                content=ft.Column(
-                    [ft.Text("Was soll in die Backup-Datei?", size=sz(13)),
-                     *boxes.values(),
-                     ft.Text("Heruntergeladenes Audio ist nie enthalten — "
-                             "es wird bei Bedarf neu geladen.",
-                             size=sz(13), italic=True)],
-                    tight=True, spacing=6, width=420,
-                    scroll=ft.ScrollMode.AUTO),
-                actions=[ft.TextButton("Abbrechen",
-                                       on_click=lambda e: page.pop_dialog()),
-                         ft.FilledButton("Speichern", on_click=do_export)],
-            ))
 
-        async def pick_restore(e):
-            files = await picker.pick_files(
-                dialog_title="Backup wiederherstellen",
-                allowed_extensions=["zip"], with_data=True)
-            if not files:
-                return
-            f = files[0]
-            data = f.bytes_data if hasattr(f, "bytes_data") else None
-            if data is None and f.path:
-                data = Path(f.path).read_bytes()
-            if data is None:
-                return
-            try:
-                manifest = backup.read_manifest(data)
-            except ValueError as exc:
-                page.show_dialog(ft.SnackBar(ft.Text(str(exc))))
-                return
-            boxes = part_boxes(set(manifest["parts"]))
-            select_error = ft.Text("", color=ft.Colors.ERROR, size=sz(13))
-            chosen: list[str] = []
+def settings_view(nav, store=None, progress=None) -> ft.Control:
+    """Übersicht: eine Kachel je Kategorie, öffnet die Unterseite."""
 
-            def do_restore(e):
-                labels = ", ".join(backup.part_label(p) for p in chosen)
-                try:
-                    backup.restore_backup(data, store, progress,
-                                          parts=chosen)
-                except ValueError as exc:
-                    page.pop_dialog()
-                    page.show_dialog(ft.SnackBar(ft.Text(str(exc))))
-                    return
-                # Wiederhergestellte Einstellungen sofort wirksam machen
-                fresh = load_app_settings()
-                apply_app_theme(page, fresh)
-                set_tts_engine(fresh.tts_engine)
-                page.pop_dialog()
-                title = nav.stack[-1][0]
-                nav.stack[-1] = (title,
-                                 settings_view(nav, store, progress))
-                nav._show()
-                page.show_dialog(ft.SnackBar(ft.Text(
-                    f"Backup wiederhergestellt: {labels}.")))
+    def tile(key: str, title: str, icon: str) -> ft.Control:
+        s = load_app_settings()
+        return ft.Card(content=ft.ListTile(
+            leading=ft.Icon(icon, color=ft.Colors.PRIMARY),
+            title=ft.Text(title, size=sz(15), weight=ft.FontWeight.BOLD),
+            subtitle=ft.Text(_summary(key, s), size=sz(13)),
+            trailing=ft.Icon(ft.Icons.CHEVRON_RIGHT),
+            on_click=lambda e: nav.go(
+                title, settings_category_view(nav, key, store, progress)),
+        ))
 
-            def confirm(e):
-                chosen[:] = [k for k, cb in boxes.items() if cb.value]
-                if not chosen:
-                    select_error.value = "Bitte mindestens eine Kategorie wählen."
-                    page.update()
-                    return
-                labels = ", ".join(backup.part_label(p) for p in chosen)
-                page.pop_dialog()
-                page.show_dialog(ft.AlertDialog(
-                    title=ft.Text("Wirklich wiederherstellen?"),
-                    content=ft.Text(
-                        f"Ersetzt auf diesem Gerät: {labels}. Das lässt "
-                        "sich nicht rückgängig machen — nicht gewählte "
-                        "Bereiche bleiben unverändert."),
-                    actions=[ft.TextButton("Abbrechen",
-                                           on_click=lambda e: page.pop_dialog()),
-                             ft.FilledButton("Wiederherstellen",
-                                             on_click=do_restore)],
-                ))
+    def build_tiles() -> list[ft.Control]:
+        return [tile(key, title, icon)
+                for key, title, icon, _b, needs_stores in CATEGORIES
+                if not needs_stores or (store is not None
+                                        and progress is not None)]
 
-            page.show_dialog(ft.AlertDialog(
-                title=ft.Text("Backup wiederherstellen"),
-                content=ft.Column(
-                    [ft.Text("Welche Bereiche sollen zurückgespielt werden?",
-                             size=sz(13)),
-                     *boxes.values(),
-                     ft.Text("Gewählte Bereiche werden auf diesem Gerät "
-                             "komplett ersetzt.", size=sz(13), italic=True),
-                     select_error],
-                    tight=True, spacing=6, width=420,
-                    scroll=ft.ScrollMode.AUTO),
-                actions=[ft.TextButton("Abbrechen",
-                                       on_click=lambda e: page.pop_dialog()),
-                         ft.FilledButton("Weiter", on_click=confirm)],
-            ))
+    root = ft.Column(build_tiles(), spacing=4, scroll=ft.ScrollMode.AUTO)
 
-        backup_rows = [
-            ft.Divider(),
-            _h("Backup"),
-            ft.Text("Sichert die gewählten Bereiche als eine ZIP-Datei — "
-                    "für Sicherungskopien und den Umzug auf ein neues "
-                    "Gerät. Beim Wiederherstellen wählst du, welche der "
-                    "enthaltenen Bereiche ersetzt werden.",
-                    size=sz(13), italic=True),
-            ft.Row([
-                ft.FilledButton("Backup erstellen", icon=ft.Icons.ARCHIVE,
-                                on_click=create_dialog),
-                ft.OutlinedButton("Backup wiederherstellen",
-                                  icon=ft.Icons.UNARCHIVE,
-                                  on_click=pick_restore),
-            ], spacing=8, wrap=True),
-        ]
+    def refresh():
+        # Kurzfassungen beim Zurückkehren aus einer Unterseite auffrischen
+        root.controls = build_tiles()
 
-    return ft.Column(
-        [
-            _h("Stufe"),
-            ft.Text("Filtert, welche Listen in Training, Verwaltung, Suche "
-                    "und Statistik erscheinen. Die Stufen sind strikt "
-                    "getrennt — jede zeigt nur ihre eigenen Listen; zum "
-                    "Üben von A1-Listen hierher zurückschalten. Listen und "
-                    "Auswahllisten ohne Stufe sind immer sichtbar; neue "
-                    "erhalten die gerade aktive Stufe.",
-                    size=sz(13), italic=True),
-            seg_level,
-            ft.Divider(),
-            _h("Ansicht"),
-            ft.Text("Design", size=sz(13)),
-            seg_theme,
-            dd_color,
-            ft.Text("Zoom", size=sz(13)),
-            ft.Text("Skaliert alle Schriften der App — kleiner, damit auf "
-                    "kleine Displays mehr passt, oder größer für bessere "
-                    "Lesbarkeit. Standard: 100 %.", size=sz(13), italic=True),
-            dd_zoom,
-            ft.Text("Hauptmenü-Reihenfolge", size=sz(13)),
-            ft.Text("Kacheln am ≡ ziehen — die Startseite übernimmt die "
-                    "neue Reihenfolge sofort.", size=sz(13), italic=True),
-            # Zeilenhöhe ist textgetrieben und skaliert mit dem Zoom;
-            # der 480er-Deckel ist Bildschirmplatz und bleibt fix
-            ft.Container(menu_list,
-                         height=min(480, sz(60) * max(1, len(menu_keys)))),
-            ft.Divider(),
-            _h("Abfrage"),
-            ft.Text("Akzent- und Schreibungsfehler (sonst richtige Antwort)",
-                    size=sz(13)),
-            ft.Text("Greift nur, wenn beim Training „Akzentfehler tolerieren“ "
-                    "bzw. „Groß-/Kleinschreibung tolerieren“ ausgeschaltet "
-                    "ist. So ein Fehler zählt immer als Fehler der Runde und "
-                    "kommt in die Fehlerrunde — hier steht, was dabei mit "
-                    "der Leitner-Box passiert. Neue (graue) Wörter starten "
-                    "bei so einem Fehler immer normal in Box 1.",
-                    size=sz(13), italic=True),
-            ft.Text("Akzentfehler", size=sz(13)),
-            rg_accent_policy,
-            ft.Text("Schreibungsfehler (Groß-/Klein, nur Nomen)", size=sz(13)),
-            rg_case_policy,
-            ft.Divider(),
-            ft.Text("Beschränkung durch die Abfragemodi", size=sz(13)),
-            ft.Text("Steuert, wie hoch eine Karte je nach Abfrageart steigen "
-                    "kann. Alle aus = jede Abfrageart erreicht Box 5. Ist "
-                    "„nur über das Beugungstraining“ an, rücken die übrigen "
-                    "Obergrenzen eine Box nach unten: Griechisch → Deutsch "
-                    "höchstens Box 2, Karteikarte Box 3, Schreiben Box 4 — "
-                    "Box 5 erreicht nur das Nomen-/Adjektiv-/Verbtraining "
-                    "mit Vorgabe Deutsch.",
-                    size=sz(13), italic=True),
-            _switch_row(sw_high,
-                        "Box 4 und 5 nur über Deutsch → Griechisch", page),
-            _switch_row(sw_top,
-                        "Box 5 nur über Deutsch → Griechisch mit Schreiben",
-                        page),
-            _switch_row(sw_infl,
-                        "Box 5 nur über das Beugungstraining "
-                        "(Nomen/Adjektiv/Verb, Vorgabe Deutsch)",
-                        page),
-            ft.Divider(),
-            ft.Text("Statistik einschalten für", size=sz(13)),
-            ft.Text("Bestimmt, welche Trainings den Lernstand bewegen "
-                    "dürfen. Ist ein Training aus, fällt es komplett aus "
-                    "der Statistik: keine Leitner-Boxen rauf oder runter, "
-                    "keine Fehlerzähler, keine Punkte in der Ergebnisliste. "
-                    "Welche Wörter gezogen werden, richtet sich weiterhin "
-                    "nach den Boxen. (Nomen/Adjektive/Verben zählen ohnehin "
-                    "nur bei Vorgabe „Deutsch“.)",
-                    size=sz(13), italic=True),
-            *stats_rows,
-            ft.Divider(),
-            ft.Text("Prüfen beim Schreiben", size=sz(13)),
-            ft.Text("Aus = „Prüfen“-Button mittig unter dem Antwortfeld, "
-                    "an = rundes Häkchen rechts daneben (spart Platz bei "
-                    "eingeblendeter Tastatur).", size=sz(13), italic=True),
-            _switch_row(sw_check,
-                        "Prüf-Häkchen rechts neben dem Antwortfeld (kompakt)",
-                        page),
-            ft.Divider(),
-            ft.Text("Fehlerrunde", size=sz(13)),
-            ft.Text("Ein Fehler setzt die Box sofort auf 1. Hier lässt sich "
-                    "einstellen, wohin ein Wort wandert, das in der "
-                    "Fehlerrunde richtig beantwortet wird — Leichtsinns"
-                    "fehler werden so weniger hart bestraft. „Ursprüngliche "
-                    "Box“ ist die Box vor dem Fehler; „eine Box zurück“ "
-                    "bedeutet eine Box unter der ursprünglichen.",
-                    size=sz(13), italic=True),
-            rg_repeat,
-            ft.Divider(),
-            ft.Text("Ergebnisliste", size=sz(13)),
-            ft.Text("Zeigt nach jeder Runde vor jedem Wort einen "
-                    "zweigeteilten Farbpunkt: linke Hälfte = Leitner-Box "
-                    "vor der Runde, rechte Hälfte = Box danach (grau = "
-                    "noch nicht trainiert). Gilt für alle Trainings "
-                    "gleichermaßen.", size=sz(13), italic=True),
-            _switch_row(sw_result_dots,
-                        "Boxen vorher/nachher in der Ergebnisliste anzeigen",
-                        page),
-            ft.Divider(),
-            _h("Adjektivtraining"),
-            ft.Text("Whitelisting fragt nur selbst festgelegte Adjektiv↔"
-                    "Nomen-Verbindungen ab. Blacklisting kombiniert die "
-                    "Adjektive der gewählten Liste mit ihren Nomen — außer "
-                    "den festgelegten Ausnahmen; enthält die Liste keine "
-                    "Nomen, werden alle Nomen der App verwendet.",
-                    size=sz(13), italic=True),
-            rg_adjective,
-            ft.Divider(),
-            _h("Verbtraining"),
-            ft.Text("Grundform nach der Lösung", size=sz(13)),
-            ft.Text("Bestimmt, welche Grundform nach dem Aufdecken unter "
-                    "der Lösung steht — nur bei Vorgabe „Deutsch“ (bei "
-                    "griechischer Vorgabe ist die Präsensform schon die "
-                    "Aufgabe). Die Auswahl wirkt bei Futur-Aufgaben"
-                    + (" und Aorist-Aufgaben; bei Präsens- und "
-                       "Imperativ-Aufgaben" if aorist_level
-                       else "; bei Präsens-Aufgaben")
-                    + " erscheint immer die Präsensform.",
-                    size=sz(13), italic=True),
-            rg_verb_base,
-            ft.Divider(),
-            _h("Sprachausgabe"),
-            rg_tts,
-            ft.Text("Doppeltipp auf einen Lautsprecher (oder langes "
-                    "Drücken) schaltet die langsame Wiedergabe an/aus — "
-                    "das Symbol wird dann zur Schildkröte 🐢.",
-                    size=sz(13), italic=True),
-            dd_tap,
-            *backup_rows,
-            ft.Divider(),
-            _h("Erweiterte Funktionen"),
-            ft.Text("Zusatzfunktionen für Fortgeschrittene. Eingeschaltete "
-                    "Funktionen erscheinen als eigene Karte im Hauptmenü "
-                    "und gelten für alle Stufen.", size=sz(13), italic=True),
-            *feature_rows,
-        ],
-        spacing=12,
-        scroll=ft.ScrollMode.AUTO,
-    )
+    root.on_reappear = refresh
+    return root

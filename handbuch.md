@@ -19,9 +19,31 @@ Dasselbe Wort-Symbol erscheint auch in Wortlisten, in der Wortsuche, in
 den Vorschauen der Trainings, in den Ergebnislisten und bei den
 Problemwörtern der Statistik.
 
+## Einstellungen
+
+Das Zahnrad auf der Startseite öffnet eine Übersicht mit sieben
+Kategorien, jede mit einer Kurzfassung des aktuellen Stands:
+**Darstellung** (Design, Zoom, Hauptmenü-Reihenfolge), **Stufe**,
+**Abfrage & Wertung** (Akzent-/Schreibungsfehler, Beschränkung durch die
+Abfragemodi, Statistik je Training, Fehlerrunde, Prüfen beim Schreiben,
+Ergebnisliste), **Beugungstraining** (Adjektiv- und Verbtraining),
+**Sprachausgabe**, **Backup** und **Erweiterte Funktionen**. Antippen
+öffnet die jeweilige Seite; Änderungen werden sofort gespeichert.
+
+## Design
+
+Unter **Darstellung → Design** stehen acht Farbpaletten zur Wahl — vier
+helle (Ägäis, Olive, Sand, Lavendel) und vier dunkle (Petrol, Nachtblau,
+Violett, Graphit). Ein Design färbt die ganze App: Hintergrund mit
+sanftem Verlauf, Karten, Dialoge, Akzentfarbe (der Punkt auf der
+Vorschau). Die Wahl legt zugleich den hellen bzw. dunklen Modus fest;
+Graphit ist echtes Schwarz ohne Verlauf (spart auf OLED-Displays Strom).
+Wer vorher „Dunkel“ eingestellt hatte, startet mit Nachtblau, alle
+anderen mit Ägäis.
+
 ## Zoom
 
-In den **Einstellungen** (Zahnrad → Ansicht → **Zoom**) lassen sich
+In den **Einstellungen** (Zahnrad → Darstellung → **Zoom**) lassen sich
 alle Schriften der App skalieren: **70–150 %, Standard 100 %**. Kleinere
 Werte bringen auf kleinen Displays mehr auf den Bildschirm, größere
 verbessern die Lesbarkeit. Es handelt sich um echte
@@ -167,7 +189,7 @@ A2-Stoff — auf -ύς, -ιά, -ύ (βαρύς, βαθύς, φαρδύς, μακ
 und δεξιός (Neutrum δεξί); andere (z.B. unveränderliche wie μπλε)
 überspringt das Training. Welche
 Kombinationen abgefragt werden, steuert die Einstellung
-**„Adjektivtraining“** im Zahnrad-Menü:
+**„Adjektivtraining“** im Zahnrad-Menü (Beugungstraining):
 
 - **Whitelisting (Standard):** Es werden nur **selbst aktivierte
   Verbindungen** abgefragt. Unter **„Verbindungen festlegen…“** wählt
@@ -230,7 +252,7 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
   Schluss-ς ergeben „Fast!“. Mit „Akzentfehler tolerieren“ zählt das als
   richtig. Ist die Toleranz **aus**, zählt der Akzentfehler in der Runde
   als Fehler (Fehlerrunde und Rundenergebnis). Was dabei mit der
-  Leitner-Box passiert, bestimmt die Einstellung **Zahnrad → Abfrage →
+  Leitner-Box passiert, bestimmt die Einstellung **Zahnrad → Abfrage & Wertung →
   „Akzent- und Schreibungsfehler“** (getrennt für Akzent- und
   Schreibungsfehler, siehe „Wie kommt die Statistik zustande?“). Im
   Standard **„Box bleibt unverändert“** rührt so ein Fehler die Box
@@ -268,7 +290,7 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
 - Nach dem Aufdecken zeigt das Beugungstraining bei Vorgabe Deutsch die
   **Grundform** mit an; gibt es mehrere richtige Formen, stehen alle in
   der Lösung („σηκώνεστε/σηκωνόσαστε“). Bei Futur- und (ab A2)
-  Aorist-Aufgaben lässt sich unter **Einstellungen → Verbtraining**
+  Aorist-Aufgaben lässt sich unter **Einstellungen → Beugungstraining → Verbtraining**
   wählen, welche Grundform erscheint: nur die Präsensform („γράφω“), nur
   die Grundform der Zeitform („θα γράψω“, „έγραψα“) oder beides — dann
   steht die Präsensform in Klammern dahinter („θα γράψω (γράφω)“,
@@ -507,7 +529,7 @@ höhere Box bleibt dabei stehen, wird aber nicht zurückgestuft. Bei der
 Einstellung „Gemischt“ zählt die Richtung, in der die Karte tatsächlich
 abgefragt wurde.
 
-Diese Obergrenzen sind einstellbar (Zahnrad → Abfrage → „Beschränkung
+Diese Obergrenzen sind einstellbar (Zahnrad → Abfrage & Wertung → „Beschränkung
 durch die Abfragemodi“) — drei Schalter: „Box 4 und 5 nur über
 Deutsch → Griechisch“, „Box 5 nur über Deutsch → Griechisch mit
 Schreiben“ und **„Box 5 nur über das Beugungstraining“**. Ist der
@@ -517,7 +539,7 @@ als Karteikarte **Box 3**, Deutsch → Griechisch getippt **Box 4** —
 **Box 5** erreicht nur noch das Nomen-/Adjektiv-/Verbtraining mit
 Vorgabe Deutsch.
 
-**Akzent- und Schreibungsfehler:** Unter Zahnrad → Abfrage →
+**Akzent- und Schreibungsfehler:** Unter Zahnrad → Abfrage & Wertung →
 **„Akzent- und Schreibungsfehler“** lässt sich — getrennt für
 Akzentfehler und Schreibungsfehler (Groß-/Klein, nur Nomen) —
 einstellen, was mit der Box passiert, wenn eine sonst richtige Antwort
@@ -613,7 +635,7 @@ Deklinations- und Konjugationsrunden zeigen am Ende zusätzlich ihr eigenes
 Rundenergebnis (x von y richtig); das ist unabhängig von der dauerhaften
 Vokabelstatistik.
 
-**Statistik je Training abschalten:** Unter Zahnrad → Abfrage →
+**Statistik je Training abschalten:** Unter Zahnrad → Abfrage & Wertung →
 **„Statistik einschalten für“** lässt sich für jedes Training einzeln
 (Vokabel-, Nomen-, Adjektiv-, Verbtraining) festlegen, ob es den
 Lernstand überhaupt bewegen darf. Ist ein Training aus, fällt es
