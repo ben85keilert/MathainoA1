@@ -110,6 +110,7 @@ jobs:
           --flutter-build-args=--target-platform
           --flutter-build-args=android-arm64
           --build-version "${{ steps.ver.outputs.version }}"
+          --build-number "${{ steps.ver.outputs.build_number }}"
 
       # Genau eine APK erwartet; fester Dateiname für Release und
       # In-App-Update (storage/updates.py nimmt das erste .apk-Asset)
@@ -126,7 +127,6 @@ jobs:
           echo "Native Bibliotheken je ABI:"
           unzip -l build/apk/mathainoa1.apk | awk '{print $4}' | grep '^lib/' \
             | cut -d/ -f2 | sort | uniq -c
-          --build-number "${{ steps.ver.outputs.build_number }}"
 
       - name: Artefakte hochladen
         uses: actions/upload-artifact@v4
