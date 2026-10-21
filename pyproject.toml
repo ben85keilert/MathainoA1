@@ -73,6 +73,9 @@ exclude = [
     ".pytest_cache",
     "tests",
     "temp",
+    # Entwicklungswerkzeuge (Release, Icon, Lexikon) und Claude-Code-Skills
+    "tools",
+    ".claude",
     "*.pdf",
     # Extension-Quelle wird als Abhängigkeit installiert (dev_packages) —
     # nicht zusätzlich als App-Asset mitschleppen
