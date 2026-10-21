@@ -82,6 +82,8 @@ src/mathainoa1/
   ui/         # Flet-Oberfläche (App-Shell und Views)
 data/vocab/   # Vokabellisten je Kapitel (JSON)
 tests/        # pytest-Tests
+tools/        # Release-, Icon- und Lexikon-Werkzeuge
+.claude/skills/lexikon/  # Claude-Code-Skill für Lexikonpakete
 ```
 
 ## Release bauen (APK)
@@ -149,6 +151,21 @@ Die App wird **ohne Vokabellisten ausgeliefert** — eigene Listen kommen
 per Import (CSV/JSON-Datei oder „Als Text importieren") in die App; die
 passenden Chatbot-Prompts stehen in der App-Hilfe. Lokale Listen liegen
 im gitignorierten Ordner `private/` und kommen nie ins Repository.
+
+## Lexikonpakete (Claude-Code-Skill)
+
+Lexikonpakete (Etymologie-Pakete nach Arbeitsanweisung IV) zu
+Vokabellisten erzeugt und prüft das Claude-Code-Skill **`/lexikon`**
+([`.claude/skills/lexikon/`](.claude/skills/lexikon/SKILL.md)), z.B.
+`/lexikon erstellen private/pame-a2/lexikon kap05` oder
+`/lexikon prüfen private/pame-a2/lexikon kap01`. Es kennt drei Modi
+(erstellen, prüfen, nachbessern) und hält den KI-Aufwand klein: Alles
+Mechanische prüft [`tools/lexikon.py`](tools/lexikon.py) (Schema,
+Vollständigkeit, Schreibweise, von der App gebildete Formen, Importtest),
+Agenten schreiben Inhalte und prüfen gezielte Auszüge, Korrekturen laufen
+als Patches. Die Inhaltsregeln stehen in
+[`regeln.md`](.claude/skills/lexikon/regeln.md). Arbeitsordner und Pakete
+liegen wie die Listen unter `private/`.
 
 ## Datenschutz
 
