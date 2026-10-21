@@ -100,21 +100,56 @@ passt; zum Wiederbeleben genügt ein `flet build aab`-Schritt im
 Workflow (im Kopfkommentar der Datei beschrieben).
 Am einfachsten übernimmt das Release-Skript alles auf einmal
 (Version in `pyproject.toml` + `__init__.py` setzen, committen, taggen,
-pushen):
+pushen). Es läuft nur auf `main` mit sauberem Arbeitsverzeichnis — auch
+eine nicht versionierte Datei lässt es abbrechen (`git status`):
 
 ```bash
-python tools/release.py 0.8.2
+python tools/release.py 0.9.5
 ```
 
-**Immer über das Skript releasen — nicht den Tag von Hand setzen und
-kein Release über die GitHub-Oberfläche anlegen.** Ein Tag ohne den
-passenden „Version x.y.z“-Commit lässt den Workflow sofort mit
-„Tag vX passt nicht zu pyproject-Version Y“ abbrechen; ein von Hand
-angelegtes Release steht dann leer (ohne APK) in der Liste. Ist das
-doch einmal passiert: Version nachziehen und den Tag auf den neuen
-Commit umsetzen (`git push origin :refs/tags/vX` — dann neu taggen
-und pushen), der Workflow hängt die Dateien anschließend an das
-bestehende Release.
+### Von Hand releasen
+
+Dieselben Schritte ohne Skript (Beispiel 0.9.4 → 0.9.5). Die
+Reihenfolge ist wichtig: erst die Version committen, dann genau diesen
+Commit taggen — erst der Tag-Push startet den Release-Build.
+
+```bash
+# 1. Version an beiden Stellen setzen (im Editor oder per sed):
+#    pyproject.toml              version = "0.9.5"
+#    src/mathainoa1/__init__.py  __version__ = "0.9.5"
+sed -i 's/^version = ".*"/version = "0.9.5"/' pyproject.toml
+sed -i 's/^__version__ = ".*"/__version__ = "0.9.5"/' src/mathainoa1/__init__.py
+git diff                       # nur die beiden Versionszeilen geändert?
+
+# 2. Version committen und pushen (startet nur die Tests)
+git add pyproject.toml src/mathainoa1/__init__.py
+git commit -m "Version 0.9.5"
+git push origin main
+
+# 3. Diesen Commit taggen und den Tag pushen — startet den Release-Build
+git tag -a v0.9.5 -m "Version 0.9.5"
+git push origin v0.9.5
+
+# 4. Build verfolgen (dauert einige Minuten)
+gh run list --workflow release.yml --limit 3
+gh run watch <run-id>
+gh run view <run-id> --json conclusion   # das verlässliche Ergebnis
+```
+
+Ein Testbuild ohne Release (APK nur als Workflow-Artefakt) geht ohne
+Tag: `gh workflow run release.yml --ref main`. Ändert ein Push Dateien
+unter `.github/workflows/`, braucht der HTTPS-Push ein Token mit
+`workflow`-Scope — sonst per SSH pushen:
+`git push git@github.com:ben85keilert/MathainoA1.git main v0.9.5`.
+
+**Kein Release über die GitHub-Oberfläche anlegen und keinen Tag ohne
+passenden „Version x.y.z“-Commit setzen.** Ein solcher Tag lässt den
+Workflow sofort mit „Tag vX passt nicht zu pyproject-Version Y“
+abbrechen; ein von Hand angelegtes Release steht dann leer (ohne APK)
+in der Liste. Ist das doch einmal passiert: Version nachziehen und den
+Tag auf den neuen Commit umsetzen (`git push origin :refs/tags/vX` —
+dann neu taggen und pushen), der Workflow hängt die Dateien
+anschließend an das bestehende Release.
 
 ### In-App-Update-Check (Sideload-Provisorium)
 
