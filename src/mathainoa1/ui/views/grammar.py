@@ -55,6 +55,7 @@ from mathainoa1.ui.views.trainer import (
     almost_feedback,
     edit_notes_dialog,
     hide_empty_texts,
+    own_answer_spans,
     result_heading,
     typing_controls,
 )
@@ -1381,9 +1382,9 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
                         text_align=ft.TextAlign.CENTER)
     feedback = ft.Text("", size=sz(16), weight=ft.FontWeight.BOLD)
     # Bei falscher Antwort: rotes Kreuz + Label + Augensymbol; Klick blendet
-    # die eigene Antwort darunter ein, das Label wird „Meine Antwort:" und
-    # das Auge verschwindet
-    own_answer = ft.Text("", size=sz(14), italic=True, color=ft.Colors.ERROR,
+    # die eigene Antwort darunter ein (nur die Fehler markiert), das Label
+    # wird „Meine Antwort:" und das Auge verschwindet
+    own_answer = ft.Text("", size=sz(14), italic=True,
                          text_align=ft.TextAlign.CENTER, visible=False)
     wrong_label = ft.Text("Meine Antwort anzeigen", color=ft.Colors.ERROR)
     wrong_eye = ft.Icon(ft.Icons.VISIBILITY_OUTLINED, color=ft.Colors.ERROR,
@@ -1457,7 +1458,7 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         wrong_label.value = "Meine Antwort anzeigen"
         wrong_eye.visible = True
         own_answer.visible = False
-        own_answer.value = ""
+        own_answer.spans = []
         # Futur: das "θα" ist offensichtlich und steht schon vor dem
         # Antwortfeld — getippt wird nur die Verbform (zählt auch so,
         # die Varianten ohne θα sind ohnehin gültig)
@@ -1605,10 +1606,13 @@ def run_view(nav, store: ContentStore, session: DeclensionSession,
         weiter = ft.FilledButton("Weiter", icon=ft.Icons.ARROW_FORWARD,
                                  on_click=lambda e: show_task(), autofocus=True)
 
-        def show_own(e, g=given):
+        def show_own(e, g=given, t=task):
             wrong_label.value = "Meine Antwort:"
             wrong_eye.visible = False
-            own_answer.value = g if g.strip() else "(leer)"
+            # Erst beim Aufdecken markieren — die Prüfung kostet das nichts
+            own_answer.spans = own_answer_spans(
+                session.answer_marks(t, g) if g.strip()
+                else [("(leer)", "wrong")])
             own_answer.visible = True
             nav.page.update()
 

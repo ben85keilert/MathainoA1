@@ -106,6 +106,22 @@ def almost_feedback(kind: str, tolerant: bool) -> str:
         kind, "Fast — Akzent und Schluss-ς stimmen nicht")
 
 
+# „Meine Antwort“: echte Fehler rot, „fast richtig“ (Akzent, Schluss-ς,
+# Groß-/Kleinschreibung) orange wie die Fast-Meldung
+_MARK_COLORS = {"wrong": ft.Colors.ERROR, "missing": ft.Colors.ERROR,
+                "accent": ft.Colors.ORANGE, "case": ft.Colors.ORANGE}
+
+
+def own_answer_spans(segments: list[tuple[str, str]]) -> list[ft.TextSpan]:
+    """Die eigene Antwort als Spans: Richtiges in normaler Schrift, nur die
+    markierten Stellen farbig und fett (siehe answer_check.mark_answer).
+    Wird von Vokabel-, Nomen- und Verbtrainer gemeinsam genutzt."""
+    return [ft.TextSpan(text) if kind not in _MARK_COLORS
+            else ft.TextSpan(text, ft.TextStyle(color=_MARK_COLORS[kind],
+                                                weight=ft.FontWeight.BOLD))
+            for text, kind in segments]
+
+
 def notes_text(card: VocabCard, sides: str = "gr,de") -> str:
     """Alle Hinweise/Notizen der genannten Seiten, für Listenansichten."""
     parts = []
@@ -459,9 +475,9 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
     answer = ft.Text("", size=sz(22), text_align=ft.TextAlign.CENTER)
     feedback = ft.Text("", size=sz(16), weight=ft.FontWeight.BOLD)
     # Bei falscher Antwort: rotes Kreuz + Label + Augensymbol; Klick blendet
-    # die eigene Antwort darunter ein, das Label wird „Meine Antwort:" und
-    # das Auge verschwindet
-    own_answer = ft.Text("", size=sz(14), italic=True, color=ft.Colors.ERROR,
+    # die eigene Antwort darunter ein (nur die Fehler markiert), das Label
+    # wird „Meine Antwort:" und das Auge verschwindet
+    own_answer = ft.Text("", size=sz(14), italic=True,
                          text_align=ft.TextAlign.CENTER, visible=False)
     wrong_label = ft.Text("Meine Antwort anzeigen", color=ft.Colors.ERROR)
     wrong_eye = ft.Icon(ft.Icons.VISIBILITY_OUTLINED, color=ft.Colors.ERROR,
@@ -624,7 +640,7 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         wrong_label.value = "Meine Antwort anzeigen"
         wrong_eye.visible = True
         own_answer.visible = False
-        own_answer.value = ""
+        own_answer.spans = []
         if session.settings.mode == "flashcard":
             action_area.controls = [ft.FilledButton("Zeigen", icon=ft.Icons.VISIBILITY,
                                                     on_click=reveal)]
@@ -684,10 +700,13 @@ def run_view(nav, store: ContentStore, progress: ProgressStore,
         weiter = ft.FilledButton("Weiter", icon=ft.Icons.ARROW_FORWARD,
                                  on_click=lambda e: show_card(), autofocus=True)
 
-        def show_own(e, g=given):
+        def show_own(e, g=given, c=card):
             wrong_label.value = "Meine Antwort:"
             wrong_eye.visible = False
-            own_answer.value = g if g.strip() else "(leer)"
+            # Erst beim Aufdecken markieren — die Prüfung kostet das nichts
+            own_answer.spans = own_answer_spans(
+                session.answer_marks(c, g) if g.strip()
+                else [("(leer)", "wrong")])
             own_answer.visible = True
             nav.page.update()
 

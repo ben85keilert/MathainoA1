@@ -235,14 +235,25 @@ class TrainingSession:
         else:
             expected, german = card.back, True
             result = answer_check.check_german(expected, given)
-        # Groß-/Kleinschreibung nur bei Nomen prüfen (nicht bei Phrasen):
         # eine sonst richtige Antwort mit falscher Schreibung wird CASE
-        if (not self.settings.case_tolerant and card.word_type == "Nomen"
-                and self.counts_correct(result)
+        if (self._case_checked(card) and self.counts_correct(result)
                 and not answer_check.case_ok(expected, given, german=german)):
             result = Result.CASE
         self._record(card, result, given)
         return result
+
+    def _case_checked(self, card: VocabCard) -> bool:
+        """Groß-/Kleinschreibung zählt nur ohne Toleranz und nur bei Nomen
+        (nicht bei Phrasen)."""
+        return not self.settings.case_tolerant and card.word_type == "Nomen"
+
+    def answer_marks(self, card: VocabCard, given: str) -> list[tuple[str, str]]:
+        """Die eigene Antwort mit markierten Fehlern für „Meine Antwort“
+        (siehe answer_check.mark_answer)."""
+        return answer_check.mark_answer(
+            [self.expected_for(card)], given,
+            german=self.direction_for(card) != "de_gr",
+            check_case=self._case_checked(card))
 
     def mark(self, correct: bool) -> None:
         """Karteikarten-Modus: Selbstbewertung."""

@@ -22,6 +22,10 @@ Rückseite trennen Kommas und Satzenden weiterhin Alternativen. Ebenso
 egal sind Auslassungspunkte ("δεν ... άλλο"), Anführungszeichen,
 Apostrophe ("geht's", "από 'δω") und ein Bindestrich am Wortrand
 ("Kinder-", "ξανα-").
+
+mark_answer zeigt für „Meine Antwort“, WO eine Antwort abweicht: nach
+denselben Regeln, aber Buchstabe für Buchstabe gegen die passendste
+Variante.
 """
 
 from __future__ import annotations
@@ -29,7 +33,9 @@ from __future__ import annotations
 import itertools
 import re
 import unicodedata
+from difflib import SequenceMatcher
 from enum import Enum
+from typing import NamedTuple
 
 
 class Result(Enum):
@@ -309,3 +315,265 @@ def case_ok(expected: str, given: str, german: bool) -> bool:
                 if part for v in greek_variants(part)]
     return any(strip_accents(_drop_commas(_strip_punct(_norm_keep_case(a))))
                == giv for a in alts)
+
+
+# --- Markierung der eigenen Antwort („Meine Antwort“) ---
+
+# Griechische Artikel wie declension.ARTICLES + ARTICLE_ALTS (von dort nicht
+# importierbar: declension importiert dieses Modul). Ein falscher Artikel
+# wird als Ganzes markiert, nicht Buchstabe für Buchstabe.
+_ARTICLES = frozenset("ο η το οι τα τον την τη του της των τους τις".split())
+
+# Platzhalter für eine fehlende Stelle bzw. ein überzähliges Leerzeichen
+_GAP = "_"
+_EXTRA_SPACE = "␣"
+
+# Ähnlichkeit (difflib-ratio), ab der ein Wort Buchstabe für Buchstabe
+# markiert wird — ein ganz anderes Wort wird als Ganzes rot, statt zufällig
+# passende Einzelbuchstaben stehen zu lassen
+_SIMILAR = 0.5
+
+
+class _Unit(NamedTuple):
+    """Ein vergleichbares Zeichen (samt folgenden Combining-Zeichen)."""
+
+    start: int  # Position im angezeigten Text
+    end: int
+    orig: str  # wie getippt — für die Groß-/Kleinschreibung
+    low: str  # kleingeschrieben, mit Akzenten
+    base: str  # ohne Akzente, ς→σ — Grundlage der Zuordnung
+
+
+def _is_sep(u: _Unit) -> bool:
+    """Trenner zwischen zwei Wörtern (nur in verbundenen Wortgruppen)."""
+    return u.base == " "
+
+
+def _words(text: str) -> list[list[_Unit]]:
+    """Zerlegt einen NFC-Text in Wörter aus vergleichbaren Zeichen — nach
+    denselben Regeln wie normalize/_strip_punct/_drop_commas: Satzzeichen
+    trennen wie Leerzeichen, Apostrophe und ein Bindestrich am Rand fallen
+    weg."""
+    t = text.translate(_APOSTROPHES)
+    # lower() über den ganzen Text: Schluss-Sigma kontextrichtig wie in
+    # normalize — außer exotische Zeichen ("İ") werden dabei länger
+    low = t.lower()
+    if len(low) != len(t):
+        low = "".join(c.lower() if len(c.lower()) == 1 else c for c in t)
+    # Bindestrich nur am Rand des ganzen Textes ignorieren ("Kinder-")
+    edge: set[int] = set()
+    for positions in (range(len(t)), range(len(t) - 1, -1, -1)):
+        for i in positions:
+            if t[i] not in _PUNCT and not t[i].isspace():
+                break
+            edge.add(i)
+    words: list[list[_Unit]] = []
+    word: list[_Unit] = []
+    for i, c in enumerate(t):
+        if unicodedata.combining(c):
+            if word and word[-1].end == i:
+                u = word[-1]
+                word[-1] = u._replace(end=i + 1, orig=u.orig + c,
+                                      low=u.low + low[i])
+            continue
+        if c == "'" or (c == "-" and i in edge):
+            continue
+        if c.isspace() or _IGNORED.match(c):
+            if word:
+                words.append(word)
+                word = []
+            continue
+        word.append(_Unit(i, i + 1, c, low[i], strip_accents(low[i])))
+    if word:
+        words.append(word)
+    return words
+
+
+def _joined(words: list[list[_Unit]]) -> list[_Unit]:
+    """Wörter mit Trenner-Einheiten verbunden — ein Trenner zeigt auf den
+    Text zwischen seinen Wörtern ("καλη μέρα" gegen "καλημέρα")."""
+    units: list[_Unit] = []
+    for k, w in enumerate(words):
+        if k:
+            units.append(_Unit(words[k - 1][-1].end, w[0].start, " ", " ", " "))
+        units += w
+    return units
+
+
+def _greek_forms(expected: str) -> list[tuple[str, bool]]:
+    """Alle Formen, die check_greek akzeptiert — je mit der Angabe, ob
+    Akzente zählen: reduzierte Klammervarianten (αγαπ(ά)ω -> αγαπω) wertet
+    check_greek akzent-unabhängig."""
+    forms: list[tuple[str, bool]] = []
+    for bv in bracket_variants(expected):
+        alts = ([a for a in (p.strip() for p in bv.split("/")) if a]
+                if "/" in bv else [bv])
+        if len(alts) > 1:
+            alts.append(bv)  # die Gesamtform bleibt gültig
+        for alt in alts:
+            forms += [(v, i < 2) for i, v in enumerate(greek_variants(alt))]
+    return forms
+
+
+class _Marker:
+    """Markiert die Eingabe gegen EINE Variante der Vorgabe. cost bewertet,
+    wie gut die Variante passt: falsche und fehlende Zeichen zählen voll,
+    Akzent- und Schreibungsfehler nur minimal."""
+
+    def __init__(self, accents: bool, german: bool, check_case: bool):
+        self.accents = accents
+        self.german = german
+        self.check_case = check_case
+        self.kinds: dict[int, str] = {}  # Textposition -> Art (nur Markiertes)
+        self.gaps: list[tuple[int, str]] = []  # (Textposition, Platzhalter)
+        self.spaces: dict[int, int] = {}  # überzählige Trenner: Start -> Ende
+        self.cost = 0.0
+
+    def _set(self, u: _Unit, kind: str) -> None:
+        for i in range(u.start, u.end):
+            self.kinds[i] = kind
+
+    def wrong(self, units: list[_Unit], at_least: int = 0) -> None:
+        """Rot markieren — kostet je Zeichen, mindestens at_least (so viele
+        Zeichen hätte die Vorgabe an dieser Stelle). Trenner einer ganz
+        falschen Gruppe bleiben normale Leerzeichen."""
+        letters = [u for u in units if not _is_sep(u)]
+        for u in letters:
+            self._set(u, "wrong")
+        self.cost += max(len(letters), at_least)
+
+    def gap(self, pos: int, mark: str, missing: int) -> None:
+        self.gaps.append((pos, mark))
+        self.cost += missing
+
+    def letter(self, g: _Unit, e: _Unit) -> None:
+        """Derselbe Buchstabe — höchstens Akzent, Schluss-ς oder Schreibung
+        weichen ab."""
+        if g.low == e.low:
+            if self.check_case and g.orig != e.orig:
+                self._set(g, "case")
+                self.cost += 0.01
+        elif self.german:
+            # Umlaut ("Madchen"): die deutsche Prüfung verzeiht ihn nicht
+            self._set(g, "wrong")
+            self.cost += 1
+        elif self.accents:
+            self._set(g, "accent")
+            self.cost += 0.01
+
+    def chars(self, g: list[_Unit], e: list[_Unit]) -> None:
+        """Buchstabenweise Zuordnung eines Wortes oder einer Wortgruppe."""
+        sm = SequenceMatcher(None, [u.base for u in g], [u.base for u in e],
+                             autojunk=False)
+        if sm.ratio() < _SIMILAR:
+            self.wrong(g, at_least=len(e))
+            return
+        for tag, i1, i2, j1, j2 in sm.get_opcodes():
+            if tag == "equal":
+                for gu, eu in zip(g[i1:i2], e[j1:j2]):
+                    self.letter(gu, eu)
+            elif tag == "insert":
+                pos = g[i1].start if i1 < len(g) else g[-1].end
+                self.gap(pos, _GAP, j2 - j1)
+            elif all(_is_sep(u) for u in g[i1:i2]):
+                # nur ein Leerzeichen zu viel ("καλη μέρα"): sichtbar machen
+                self.spaces[g[i1].start] = g[i2 - 1].end
+                self.cost += max(i2 - i1, j2 - j1)
+            else:
+                self.wrong(g[i1:i2], at_least=j2 - j1)
+
+    def words(self, g: list[list[_Unit]], e: list[list[_Unit]]) -> None:
+        """Erst die Wörter zuordnen, dann die Buchstaben je Wort."""
+        g_keys = ["".join(u.base for u in w) for w in g]
+        e_keys = ["".join(u.base for u in w) for w in e]
+        sm = SequenceMatcher(None, g_keys, e_keys, autojunk=False)
+        for tag, i1, i2, j1, j2 in sm.get_opcodes():
+            if tag == "equal":
+                for gw, ew in zip(g[i1:i2], e[j1:j2]):
+                    for gu, eu in zip(gw, ew):
+                        self.letter(gu, eu)
+            elif tag == "delete":
+                for gw in g[i1:i2]:
+                    self.wrong(gw)
+            elif tag == "insert":
+                missing = sum(len(w) for w in e[j1:j2])
+                if i1 < len(g):
+                    self.gap(g[i1][0].start, _GAP + " ", missing)
+                elif g:
+                    self.gap(g[-1][-1].end, " " + _GAP, missing)
+                else:
+                    self.gap(0, _GAP, missing)
+            elif i2 - i1 == j2 - j1:
+                for k in range(i2 - i1):
+                    gw, ew = g[i1 + k], e[j1 + k]
+                    if (e_keys[j1 + k] in _ARTICLES
+                            and g_keys[i1 + k] != e_keys[j1 + k]):
+                        self.wrong(gw, at_least=len(ew))  # Artikel als Ganzes
+                    else:
+                        self.chars(gw, ew)
+            else:
+                self.chars(_joined(g[i1:i2]), _joined(e[j1:j2]))
+
+    @property
+    def found(self) -> bool:
+        return bool(self.kinds or self.gaps or self.spaces)
+
+    def segments(self, text: str) -> list[tuple[str, str]]:
+        """Der Text in Abschnitte gleicher Art, Platzhalter eingefügt."""
+        gaps: dict[int, str] = {}
+        for pos, mark in self.gaps:
+            gaps[pos] = gaps.get(pos, "") + mark
+        out: list[tuple[str, str]] = []
+
+        def add(s: str, kind: str) -> None:
+            if out and out[-1][1] == kind:
+                out[-1] = (out[-1][0] + s, kind)
+            else:
+                out.append((s, kind))
+
+        i = 0
+        while True:
+            if i in gaps:
+                add(gaps[i], "missing")
+            if i >= len(text):
+                return out
+            if i in self.spaces:
+                add(_EXTRA_SPACE, "wrong")
+                i = self.spaces[i]
+                continue
+            add(text[i], self.kinds.get(i, "ok"))
+            i += 1
+
+
+def mark_answer(expected: list[str], given: str, *, german: bool = False,
+                check_case: bool = False) -> list[tuple[str, str]]:
+    """Die eigene Antwort für „Meine Antwort“ in Abschnitte (Text, Art).
+
+    Verglichen wird mit der passendsten Variante der Vorgaben (Notation wie
+    bei check_greek/check_german): erst Wörter, dann Buchstaben je Wort.
+    Arten: "ok"; "wrong" — falscher oder überzähliger Buchstabe, ganz
+    anderes Wort, falscher Artikel (als Ganzes), überzähliges Leerzeichen
+    (als „␣“); "missing" — Platzhalter „_“ für Fehlendes; "accent" — nur
+    Akzent/Schluss-ς falsch; "case" — nur die Groß-/Kleinschreibung (nur
+    mit check_case). Was die Prüfung ignoriert (Satzzeichen, Apostrophe
+    …), bleibt "ok".
+
+    Findet sich kein Unterschied (Prüfung und Markierung uneins), kommt die
+    ganze Antwort als "wrong" zurück — wie früher alles rot.
+    """
+    text = unicodedata.normalize("NFC", given).strip()
+    g_words = _words(text)
+    if german:
+        forms = [(alt, True) for back in expected
+                 for alt in german_alternatives(back)]
+    else:
+        forms = [f for exp in expected for f in _greek_forms(exp)]
+    best: _Marker | None = None
+    for form, accents in forms:
+        marker = _Marker(accents, german, check_case)
+        marker.words(g_words, _words(unicodedata.normalize("NFC", form)))
+        if best is None or marker.cost < best.cost:
+            best = marker
+    if best is None or not best.found:
+        return [(text, "wrong")]
+    return best.segments(text)

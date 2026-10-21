@@ -474,6 +474,20 @@ def test_declension_case_check_proper_noun():
     assert session.stats()["wrong"] == 1
 
 
+
+def test_declension_answer_marks():
+    """„Meine Antwort“: Schreibung nur bei strenger Prüfung, Artikel als
+    Ganzes (gilt mit derselben Session auch für Konjugation)."""
+    cards = [noun("η Αθήνα", "η", "-", back="Athen")]
+    settings = DeclensionSettings(cases=["acc"], numbers=["sg"],
+                                  case_tolerant=False, word_count=5)
+    session = DeclensionSession(generate_tasks(cards, settings), settings)
+    task = session.current  # "την Αθήνα" (auch "τη Αθήνα")
+    assert session.answer_marks(task, "την αθήνα") == [
+        ("την ", "ok"), ("α", "case"), ("θήνα", "ok")]
+    assert session.answer_marks(task, "το Αθήνα") == [
+        ("το", "wrong"), (" Αθήνα", "ok")]
+
 def test_declension_case_tolerant_default():
     cards = [noun("η Αθήνα", "η", "-", back="Athen")]
     settings = DeclensionSettings(cases=["acc"], numbers=["sg"], word_count=5)

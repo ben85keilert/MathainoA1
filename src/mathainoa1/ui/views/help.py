@@ -423,6 +423,11 @@ def help_view(nav, store=None) -> ft.Control:
             "durch Komma, „/“ oder als eigene Sätze), genügt eine davon. "
             "Text in Klammern ist Zusatzinfo und muss nicht mitgetippt "
             "werden.",
+            "„Meine Antwort anzeigen“ markiert die Fehler in der eigenen "
+            "Eingabe: falsche oder überzählige Buchstaben und Wörter rot, "
+            "ein rotes „_“ zeigt, wo etwas fehlt. Ein falscher Artikel "
+            "wird als Ganzes rot. Orange sind Akzent, Schluss-ς und (bei "
+            "strenger Prüfung) Groß-/Kleinschreibung.",
             "Karteikarten-Modus: Die Selbstbewertung „Gewusst“/„Nicht "
             "gewusst“ zählt wie eine getippte Antwort.",
             "Die Fehlerrunde am Ende zählt nie in die Statistik — sie "

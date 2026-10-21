@@ -778,3 +778,110 @@ def test_check_ignores_punctuation_anywhere():
     assert check_german("Freunde(skreis), «Gesellschaft»", "Freundeskreis") == Result.CORRECT
     # Buchstaben bleiben Pflicht
     assert check_greek("Γεια σου! Τι κάνεις;", "γεια σου κάνεις") == Result.WRONG
+
+
+# --- Markierung der eigenen Antwort („Meine Antwort“) ---
+
+def _marked(expected: list[str], given: str, **kw) -> str:
+    """Kompakt: [..] = rot, <..> = orange, Platzhalter („_“) wie sie sind."""
+    styles = {"ok": "{}", "missing": "{}", "wrong": "[{}]",
+              "accent": "<{}>", "case": "<{}>"}
+    return "".join(styles[kind].format(text)
+                   for text, kind in ac.mark_answer(expected, given, **kw))
+
+
+def test_mark_answer_each_letter():
+    # Jeder Fehler einzeln — Richtiges davor und danach bleibt normal
+    assert _marked(["το τηλέφωνο"], "το τιλέφωνο") == "το τ[ι]λέφωνο"
+    assert _marked(["το τηλέφωνο"], "το τιλέφονο") == "το τ[ι]λέφ[ο]νο"
+    assert _marked(["το τηλέφωνο"], "το τηλέφνο") == "το τηλέφ_νο"
+    assert _marked(["καλημέρα"], "καλημμέρα") == "καλημ[μ]έρα"
+    assert _marked(["καλημέρα"], "καλημέρ!") == "καλημέρ_!"
+
+
+def test_mark_answer_accent_sigma_case():
+    assert _marked(["το τηλέφωνο"], "το τηλεφωνο") == "το τηλ<ε>φωνο"
+    assert _marked(["ο καφές"], "ο καφεσ") == "ο καφ<εσ>"
+    # Großbuchstaben: das Schluss-Σ zählt kontextrichtig als ς
+    assert _marked(["ο δρόμος"], "Ο ΔΡΟΜΟΣ") == "Ο ΔΡ<Ο>ΜΟΣ"
+    # Groß-/Kleinschreibung nur, wenn die Prüfung sie wertet
+    assert _marked(["η Αθήνα"], "η αθήνα", check_case=True) == "η <α>θήνα"
+    assert _marked(["η Αθήνα"], "η αθηνα") == "η αθ<η>να"
+    # Deutsch: der Umlaut ist ein echter Fehler — aber nur dieses Zeichen
+    assert _marked(["Mädchen"], "Madchen", german=True) == "M[a]dchen"
+
+
+def test_mark_answer_articles_and_words():
+    assert _marked(["το τηλέφωνο"], "ο τηλέφωνο") == "[ο] τηλέφωνο"
+    assert _marked(["το τηλέφωνο"], "τηλέφωνο") == "_ τηλέφωνο"
+    assert _marked(["σπίτι"], "το σπίτι") == "[το] σπίτι"
+    # Artikel als Ganzes, auch wenn nur ein Buchstabe fehlt (τον/το)
+    assert _marked(["τον μικρό δρόμο"], "το μικρό δρόμο") == "[το] μικρό δρόμο"
+    de = "Ich spreche nicht Chinesisch."
+    assert (_marked([de], "Ich spreche kein Chinesisch", german=True)
+            == "Ich spreche [kein] Chinesisch")
+    assert (_marked([de], "Ich spreche Chinesisch", german=True)
+            == "Ich spreche _ Chinesisch")
+    assert _marked([de], "Ich spreche", german=True) == "Ich spreche _"
+    # Ganz anderes Wort: komplett rot statt zufälliger Einzeltreffer
+    assert _marked(["καλημέρα"], "σπίτια") == "[σπίτια]"
+
+
+def test_mark_answer_spaces():
+    assert _marked(["καλημέρα"], "καλη μέρα") == "καλη[␣]μέρα"
+    assert _marked(["μίνι μάρκετ"], "μινιμάρκετ") == "μ<ι>νι_μάρκετ"
+    # Pflicht-Bindestriche: die Leerzeichen sind die Fehler
+    assert (_marked(["Ein-Zimmer-Appartement"], "Ein Zimmer Appartement",
+                    german=True) == "Ein[␣]Zimmer[␣]Appartement")
+
+
+def test_mark_answer_ignores_what_the_check_ignores():
+    assert (_marked(["Γεια σου! Τι κάνεις;"], "Γεια σου, τι κανεις?")
+            == "Γεια σου, τι κ<α>νεις?")
+    assert _marked(["μένω"], "μενω-") == "μ<ε>νω-"
+    assert _marked(["Wie geht's weiter?"], "Wie gehts weitr", german=True) \
+        == "Wie gehts weit_r"
+
+
+def test_mark_answer_picks_closest_variant():
+    assert (_marked(["σηκώνεστε", "σηκωνόσαστε"], "σηκωνόσαστα")
+            == "σηκωνόσαστ[α]")
+    assert _marked(["Πώς [είσαι/είστε];"], "Πως ειστε") == "Π<ω>ς ε<ι>στε"
+    assert _marked(["και / κι"], "κε") == "κ[ε]"
+    assert _marked(["αγαπ(ά)ω"], "αγαπαω") == "αγαπ<α>ω"
+    # Reduzierte Klammervariante: Akzente zählen dort nicht (wie check_greek)
+    assert _marked(["αγαπ(ά)ω"], "αγαπώς") == "αγαπώ[ς]"
+    assert _marked(["Gyros, Kreis, Runde"], "Kreiss", german=True) == "Kreis[s]"
+
+
+def test_mark_answer_falls_back_to_all_wrong():
+    # Kein Unterschied gefunden (hier zählt die Schreibung nicht) -> wie
+    # früher alles rot statt einer scheinbar richtigen Antwort
+    assert ac.mark_answer(["η Αθήνα"], " η αθήνα ") == [("η αθήνα", "wrong")]
+
+
+def test_mark_answer_articles_match_declension():
+    from mathainoa1.logic.declension import ARTICLE_ALTS, ARTICLES
+    used = {a for genders in ARTICLES.values() for a in genders.values()}
+    used |= {a for genders in ARTICLE_ALTS.values()
+             for alts in genders.values() for a in alts}
+    assert used <= ac._ARTICLES
+
+
+def test_session_answer_marks():
+    card = VocabCard(front="το βιβλίο", article="το", back="das Buch",
+                     word_type="Nomen")
+    de_gr = TrainingSession([card], TrainingSettings(
+        mode="typing", direction="de_gr", word_count=1))
+    assert de_gr.answer_marks(card, "ο βιβλιο") == [
+        ("ο", "wrong"), (" βιβλ", "ok"), ("ι", "accent"), ("ο", "ok")]
+    # Ohne Artikel-Einstellung ist ein getippter Artikel überzählig
+    no_article = TrainingSession([card], TrainingSettings(
+        mode="typing", direction="de_gr", with_article=False, word_count=1))
+    assert no_article.answer_marks(card, "το βιβλίο") == [
+        ("το", "wrong"), (" βιβλίο", "ok")]
+    # GR->DE: deutsche Regeln, Schreibung nur bei strenger Prüfung
+    gr_de = TrainingSession([card], TrainingSettings(
+        mode="typing", direction="gr_de", case_tolerant=False, word_count=1))
+    assert gr_de.answer_marks(card, "das buch") == [
+        ("das ", "ok"), ("b", "case"), ("uch", "ok")]

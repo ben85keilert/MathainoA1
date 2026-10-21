@@ -595,6 +595,39 @@ def test_hide_empty_texts():
     assert not empty.visible and filled.visible
 
 
+def test_trainer_own_answer_marks_only_errors(store_with_edge_cases, tmp_path,
+                                              monkeypatch):
+    """„Meine Antwort anzeigen“: Richtiges ungefärbt, nur der falsche
+    Buchstabe rot (statt der ganzen Antwort)."""
+    import flet as ft
+    from mathainoa1.logic.session import TrainingSession, TrainingSettings
+    monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
+    monkeypatch.setattr(trainer, "maybe_autoplay", lambda page, text: None)
+
+    store, _vlist = store_with_edge_cases
+    card = VocabCard(front="το τηλέφωνο", back="Telefon", article="το",
+                     word_type="Nomen")
+    session = TrainingSession([card], TrainingSettings(
+        mode="typing", direction="de_gr", word_count=1, repeat_errors=False))
+    progress = ProgressStore(tmp_path / "own.db")
+    try:
+        view = trainer.run_view(_fake_nav(), store, progress, session)
+        tf = _find_all(view, ft.TextField)[0]
+        tf.value = "το τιλέφωνο"
+        tf.on_submit(None)
+        btn = next(b for b in _find_all(view, ft.TextButton)
+                   if any(t.value == "Meine Antwort anzeigen"
+                          for t in _find_all(b, ft.Text)))
+        btn.on_click(None)
+        own = next(t for t in _find_all(view, ft.Text) if t.spans)
+        assert own.visible and own.color is None
+        assert [(s.text, s.style.color if s.style else None)
+                for s in own.spans] == [
+            ("το τ", None), ("ι", ft.Colors.ERROR), ("λέφωνο", None)]
+    finally:
+        progress.close()
+
+
 def test_settings_view_builds(store_with_edge_cases, tmp_path, monkeypatch):
     monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path))
     from mathainoa1.ui.views import settings as settings_mod

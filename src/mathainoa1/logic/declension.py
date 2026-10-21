@@ -920,15 +920,25 @@ class DeclensionSession:
         task = self.current
         assert task is not None
         result = task.check(given)
-        # Groß-/Kleinschreibung nur bei Nomen prüfen (Konjugation nutzt
-        # dieselbe Session, hat aber kein case_tolerant -> immer tolerant)
-        if (not getattr(self.settings, "case_tolerant", True)
-                and task.card.word_type == "Nomen"
-                and self.counts_correct(result)
+        if (self._case_checked(task) and self.counts_correct(result)
                 and not task.case_ok(given)):
             result = Result.CASE
         self._record(task, result, given)
         return result
+
+    def _case_checked(self, task: DeclensionTask) -> bool:
+        # Groß-/Kleinschreibung nur bei Nomen prüfen (Konjugation nutzt
+        # dieselbe Session, hat aber kein case_tolerant -> immer tolerant)
+        return (not getattr(self.settings, "case_tolerant", True)
+                and task.card.word_type == "Nomen")
+
+    def answer_marks(self, task: DeclensionTask,
+                     given: str) -> list[tuple[str, str]]:
+        """Die eigene Antwort mit markierten Fehlern für „Meine Antwort“
+        (siehe answer_check.mark_answer)."""
+        return answer_check.mark_answer(
+            [task.expected] + task.variants, given,
+            check_case=self._case_checked(task))
 
     def mark(self, correct: bool) -> None:
         task = self.current

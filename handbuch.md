@@ -263,6 +263,13 @@ das Nomentraining dekliniert jetzt nur noch Nomen.
 - **Deutsch**: Enthält die Rückseite mehrere Bedeutungen (getrennt durch
   Komma, „/“ oder als eigene Sätze), genügt eine davon. Text in Klammern
   ist Zusatzinfo und muss nicht mitgetippt werden.
+- **„Meine Antwort anzeigen“** zeigt die eigene Eingabe mit markierten
+  Fehlern — verglichen mit der passendsten richtigen Variante. Richtiges
+  bleibt normal; falsche oder überzählige Buchstaben und Wörter sind
+  **rot**, ein rotes „_“ zeigt, wo etwas fehlt, ein rotes „␣“ ein
+  überzähliges Leerzeichen. Ein falscher Artikel und ein ganz anderes
+  Wort werden als Ganzes rot. **Orange** sind die „Fast“-Fehler: Akzent,
+  Schluss-ς und (bei strenger Prüfung) Groß-/Kleinschreibung.
 - Die **Fehlerrunde** am Ende wiederholt alle falschen Karten in der
   Reihenfolge der Fehler und zählt nicht in die Statistik („Fehler am
   Ende wiederholen“). Mit **„Fehler in nächster Runde wiederholen“**
