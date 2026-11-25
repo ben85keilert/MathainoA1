@@ -104,3 +104,25 @@ def test_web_abhaengigkeiten_stehen_in_pyproject():
     # Was die Seite beim Start lädt, muss neben Pyodide liegen — sonst käme
     # es von einem fremden Server oder gar nicht
     assert set(deps) <= set(wb.PYODIDE_PACKAGES)
+
+
+def test_ersatzschriften_werden_eingelegt_und_vermisst(tmp_path):
+    """Ohne die Schrift fragt Flutter sie in Dauerschleife an (Zeichen „→“)."""
+    import hashlib
+    assert len(wb.font_findings(tmp_path)) == len(wb.FONTS) >= 1
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    fake = []
+    for path, source, _sha in wb.FONTS:
+        data = path.encode()
+        sha = hashlib.sha256(data).hexdigest()
+        (cache / sha).write_bytes(data)
+        fake.append((path, source, sha))
+    old, wb.FONTS = wb.FONTS, tuple(fake)
+    try:
+        assert wb.add_fonts(tmp_path, cache) == len(fake)
+        assert wb.font_findings(tmp_path) == []
+    finally:
+        wb.FONTS = old
+    for _path, source, sha in wb.FONTS:
+        assert source.startswith("https://") and len(sha) == 64

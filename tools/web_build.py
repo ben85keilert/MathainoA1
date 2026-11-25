@@ -35,6 +35,8 @@ der Probe vom 25.11.2026 gefehlt oder stammt aus der trainingsapp
    fürs Inhaltspaket) erst bei Bedarf. Die Dateien kommen beim
    BAUEN von jsdelivr, mit der Prüfsumme aus Pyodides pyodide-lock.json,
    und liegen dann auf dem eigenen Server.
+   Ebenso die Ersatzschriften (FONTS): Ohne sie fragt Flutter eine
+   fehlende Schrift in Dauerschleife an.
 5. Inline-Skripte der index.html nach start-<n>.js: Eine strenge
    Content-Security-Policy (script-src 'self') blockiert sie sonst.
 6. Das App-Archiv gegen das Repository prüfen: Außerhalb der Pakete darf
@@ -92,6 +94,23 @@ WEB_CLEANUP = ["temp*", "**.pdf"]
 PYODIDE_PACKAGES: tuple[str, ...] = ("sqlite3", "cryptography")
 PYODIDE_SOURCE = "https://cdn.jsdelivr.net/pyodide/v{version}/full/{file}"
 PYODIDE_CACHE = ROOT / "build" / "web-pyodide"
+
+# Ersatzschriften, die die App im Browser braucht: Pfad unter assets/fonts/
+# (so fragt Flutter sie an), Quelle, SHA-256. Fehlt Flutter ein Zeichen —
+# der Pfeil „→“ steht nicht in der mitgelieferten Roboto, die App benutzt
+# ihn an über 100 Stellen —, fragt es eine Noto-Schrift an; mit --no-cdn
+# unter assets/fonts/, wo flet sie nicht ablegt. Die Anfrage scheitert und
+# wiederholt sich (trainingsapp, gemessen: über 1400 Anfragen je Minute und
+# Tab). Geladen beim BAUEN, nicht beim Besuch. SIL Open Font License.
+# Braucht die App ein Zeichen aus einer weiteren Schrift, nennt die Konsole
+# des Browsers die Datei (404 unter assets/fonts/…) — hier eintragen.
+FONTS: tuple[tuple[str, str, str], ...] = (
+    ("notosanssymbols/v43/"
+     "rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+     "https://fonts.gstatic.com/s/notosanssymbols/v43/"
+     "rP2up3q65FkAtHfwd-eIS2brbDN6gxP34F9jRRCe4W3gfQ8gb_VFRkzrbQ.woff2",
+     "08202e258ea583254c036cff46a7077bb5af4f82c41a6c0a6775f6e44d99f1aa"),
+)
 
 APP_ARCHIVE = Path("assets") / "app" / "app.zip"
 # Was im Archiv außerhalb der Pakete unversioniert sein darf
@@ -156,6 +175,21 @@ def fetch(source: str, sha256: str, cache: Path = PYODIDE_CACHE) -> Path:
     elif hashlib.sha256(file.read_bytes()).hexdigest() != sha256:
         raise ValueError(f"Prüfsumme der abgelegten Datei stimmt nicht: {file}")
     return file
+
+
+def add_fonts(folder: Path, cache: Path = PYODIDE_CACHE) -> int:
+    """Die Ersatzschriften dorthin, wo Flutter sie sucht; liefert ihre Zahl."""
+    for path, source, sha256 in FONTS:
+        target = folder / "assets" / "fonts" / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(fetch(source, sha256, cache), target)
+    return len(FONTS)
+
+
+def font_findings(folder: Path) -> list[str]:
+    return [f"Ersatzschrift fehlt: assets/fonts/{path}"
+            for path, _source, _sha in FONTS
+            if not (folder / "assets" / "fonts" / path).is_file()]
 
 
 def pyodide_files(folder: Path,
@@ -294,6 +328,7 @@ def findings(folder: Path) -> list[str]:
         found.append("Die App baut ihre Adressen nicht mit „#“ "
                      "(--route-url-strategy hash)")
     found += pyodide_findings(folder)
+    found += font_findings(folder)
     found += archive_findings(folder / APP_ARCHIVE, tracked_files())
     return found
 
@@ -330,12 +365,13 @@ def finish(folder: Path, base: str) -> dict[str, object]:
     """Punkte 4–6 aus dem Kopf, dann stand.json — und die Prüfung."""
     n = move_inline_scripts(folder)
     k = add_pyodide_packages(folder)
+    m = add_fonts(folder)
     values = state(base, folder)
     (folder / "stand.json").write_text(
         json.dumps(values, ensure_ascii=False, indent=1) + "\n",
         encoding="utf-8")
     print(f"Nachbearbeitet: {n} Inline-Skripte ausgelagert, "
-          f"{k} Pyodide-Paket(e) eingelegt")
+          f"{k} Pyodide-Paket(e) und {m} Ersatzschrift(en) eingelegt")
     if found := findings(folder):
         sys.exit("Der Web-Ordner ist nicht in Ordnung:\n  - "
                  + "\n  - ".join(found))
