@@ -82,9 +82,35 @@ src/mathainoa1/
   ui/         # Flet-Oberfläche (App-Shell und Views)
 data/vocab/   # Vokabellisten je Kapitel (JSON)
 tests/        # pytest-Tests
-tools/        # Release-, Icon- und Lexikon-Werkzeuge
+tools/        # Release-, Icon-, Lexikon- und Web-Build-Werkzeuge
 .claude/skills/lexikon/  # Claude-Code-Skill für Lexikonpakete
 ```
+
+## Web-Fassung
+
+Dieselbe App läuft als statische Seite im Browser (Flutter zeichnet,
+Python über Pyodide) — ohne Server-Code, Lernstand und Listen bleiben im
+Browser des Geräts (IndexedDB).
+
+```bash
+pip install flet-cli            # gleiche Version wie flet
+python tools/web_build.py --basis /
+flet serve dist/web             # lokal ansehen
+```
+
+Immer über das Skript bauen, nicht mit `flet build web` direkt: Es baut
+ohne fremde Server (`--no-cdn`), legt `sqlite3` und `cryptography` neben
+Pyodide, lagert Inline-Skripte aus (strenge Content-Security-Policy) und
+prüft, dass im App-Archiv nur Versioniertes liegt. Einzelheiten im Kopf
+von [`tools/web_build.py`](tools/web_build.py).
+
+Was im Browser anders ist, steht an einer Stelle:
+[`src/mathainoa1/web.py`](src/mathainoa1/web.py) (kein Update-Check,
+Sprachausgabe nur über die Stimme des Geräts). Listen bringt der Build
+nicht mit; liegt neben der Seite ein Inhaltspaket (`inhalt/stand.json`,
+`inhalt/paket.bin`, verschlüsselt mit einem Code), fragt die Seite nach
+dem Code und hält die Inhalte danach von selbst aktuell
+([`storage/content_package.py`](src/mathainoa1/storage/content_package.py)).
 
 ## Release bauen (APK)
 
