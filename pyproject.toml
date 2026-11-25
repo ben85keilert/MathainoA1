@@ -82,6 +82,13 @@ exclude = [
     "packages",
 ]
 
+# --- Web-Fassung (tools/web_build.py) ---
+[tool.flet.web]
+# Im Browser (Pyodide) sind sqlite3 und hashlib (OpenSSL, für scrypt) eigene
+# Pakete: Flets Python-Worker lädt sie beim Start. tools/web_build.py legt
+# die Dateien neben Pyodide, damit sie vom eigenen Server kommen.
+dependencies = ["sqlite3", "hashlib"]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

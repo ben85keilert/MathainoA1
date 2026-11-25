@@ -17,6 +17,7 @@ from pathlib import Path
 
 import flet as ft
 
+from mathainoa1 import web
 from mathainoa1.logic.conjugation import tenses_for_level
 from mathainoa1.storage import backup
 from mathainoa1.storage.content import LEVELS
@@ -617,6 +618,18 @@ def _tts_controls(nav, s: AppSettings, store, progress) -> list[ft.Control]:
 
     rg_tts.on_change = on_tts
 
+    if not web.active("tts_google"):
+        # Web-Fassung: keine Wahl — der Google-Weg wäre eine Anfrage an
+        # fremde Server und geht im Browser-Python nicht
+        return [
+            _h("Sprachausgabe"),
+            _hint("Im Browser spricht die Stimme des Geräts — es werden "
+                  "keine Daten übertragen. Braucht eine griechische Stimme "
+                  "im Browser oder Betriebssystem; fehlt sie, bleibt der "
+                  "Lautsprecher stumm."),
+            dd_tap,
+        ]
+
     return [
         _h("Sprachausgabe"),
         rg_tts,
@@ -831,14 +844,76 @@ def _summary(key: str, s: AppSettings) -> str:
     if key == "beugung":
         return "Adjektivtraining, Verbtraining"
     if key == "sprachausgabe":
-        return ("Google (online)" if s.tts_engine == TTS_GOOGLE
+        return ("Google (online)"
+                if s.tts_engine == TTS_GOOGLE and web.active("tts_google")
                 else "Systemstimme")
+    if key == "browser":
+        return "Was auf diesem Gerät gespeichert ist"
     if key == "backup":
         return "Sichern und wiederherstellen"
     if key == "funktionen":
         n = sum(1 for f in FEATURES if f.key in s.enabled_features)
         return f"{n} von {len(FEATURES)} eingeschaltet"
     return ""
+
+
+# --- Web-Fassung: Speicher im Browser ---------------------------------------
+
+def _browser_controls(nav, s: AppSettings, store, progress) -> list[ft.Control]:
+    """Zustand des Speichers im Browser und „Alles löschen“ (für fremde
+    Geräte). Nur in der Web-Fassung erreichbar."""
+    storage = getattr(nav, "browser_storage", None)
+    if storage is None:
+        return [_hint("Nur in der Web-Fassung.")]
+    page = nav.page
+    status = ft.Text(storage.text, size=sz(14))
+
+    async def erase(e=None):
+        page.pop_dialog()
+        try:
+            await storage.erase()
+        except Exception as reason:  # noqa: BLE001
+            status.value = f"Löschen ging nicht: {reason}"
+        else:
+            status.value = storage.text
+            button.disabled = True
+        page.update()
+
+    def ask(e):
+        page.show_dialog(ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Alles löschen?"),
+            content=ft.Text(
+                "Lernstand, Listen, Notizen und Einstellungen werden aus "
+                "diesem Browser entfernt. Das lässt sich nicht rückgängig "
+                "machen. Nach dem Neuladen fragt die Seite wieder nach dem "
+                "Code."),
+            actions=[ft.TextButton("Abbrechen",
+                                   on_click=lambda e: page.pop_dialog()),
+                     ft.FilledButton("Alles löschen", on_click=erase)],
+        ))
+
+    button = ft.OutlinedButton("Alles löschen", icon=ft.Icons.DELETE_OUTLINE,
+                               on_click=ask, disabled=not storage.active)
+    web_content = getattr(nav, "web_content", None)
+
+    async def reload_content(e=None):
+        await web_content.check(announce=True)
+
+    return [
+        _h("Inhalte"),
+        _hint("Vokabellisten und Lexikon kommen von dieser Seite und werden "
+              "mit deinem Code geöffnet. Beim Start sieht die Seite selbst "
+              "nach, ob es Neues gibt."),
+        ft.OutlinedButton("Nach neuen Inhalten sehen", icon=ft.Icons.SYNC,
+                          on_click=reload_content,
+                          disabled=web_content is None),
+        _h("Speicher im Browser"),
+        status,
+        _hint("Für fremde oder geteilte Geräte: „Alles löschen“ entfernt, "
+              "was die Seite hier abgelegt hat."),
+        button,
+    ]
 
 
 # (key, Titel, Icon, Builder, braucht Stores)
@@ -854,6 +929,9 @@ CATEGORIES = [
     ("backup", "Backup", ft.Icons.ARCHIVE_OUTLINED, _backup_controls, True),
     ("funktionen", "Erweiterte Funktionen", ft.Icons.EXTENSION_OUTLINED,
      _features_controls, False),
+    # nur in der Web-Fassung sichtbar (settings_view filtert)
+    ("browser", "Speicher im Browser", ft.Icons.SAVE_OUTLINED,
+     _browser_controls, False),
 ]
 
 
@@ -887,8 +965,10 @@ def settings_view(nav, store=None, progress=None) -> ft.Control:
     def build_tiles() -> list[ft.Control]:
         return [tile(key, title, icon)
                 for key, title, icon, _b, needs_stores in CATEGORIES
-                if not needs_stores or (store is not None
-                                        and progress is not None)]
+                if (not needs_stores or (store is not None
+                                         and progress is not None))
+                and (key != "browser"
+                     or getattr(nav, "browser_storage", None) is not None)]
 
     root = ft.Column(build_tiles(), spacing=4, scroll=ft.ScrollMode.AUTO)
 

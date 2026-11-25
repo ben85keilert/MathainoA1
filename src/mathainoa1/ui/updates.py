@@ -10,7 +10,7 @@ import asyncio
 
 import flet as ft
 
-from mathainoa1 import __version__
+from mathainoa1 import __version__, web
 from mathainoa1.storage import updates
 from mathainoa1.ui.scale import sz
 
@@ -51,7 +51,10 @@ def startup_checks(page: ft.Page) -> None:
 
     Der Update-Check läuft im Hintergrund (max. 1×/Tag) und meldet sich
     nur, wenn es wirklich ein Update gibt — sonst passiert nichts.
+    In der Web-Fassung entfällt beides (web.WEB_OFF).
     """
+    if not web.active("update_check"):
+        return
     notice = updates.downgrade_notice()
     if notice:
         page.show_dialog(ft.AlertDialog(

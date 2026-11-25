@@ -18,6 +18,7 @@ import time
 
 import flet as ft
 
+from mathainoa1 import web
 from mathainoa1.storage.settings import (
     TTS_GOOGLE,
     TTS_SYSTEM,
@@ -305,6 +306,8 @@ def set_autoplay(value: bool) -> None:
 
 def tts_engine() -> str:
     global _engine
+    if not web.active("tts_google"):
+        return TTS_SYSTEM  # Web-Fassung: nur die Stimme des Geräts
     if _engine is None:
         _engine = load_app_settings().tts_engine
     return _engine

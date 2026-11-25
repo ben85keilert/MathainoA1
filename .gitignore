@@ -13,6 +13,8 @@ dist/
 # Screenshots und Kram
 /temp/
 
-# Lokale Inhalte (Urheberrecht): bleiben lokal, kommen nie ins Repo
-/private/
+# Inhalte (Urheberrecht): kommen nie in dieses Repo. `private` ist ein
+# Verweis (Symlink) auf das private Nachbar-Repo ../mathaino-inhalte —
+# ohne Schrägstrich am Ende, sonst gälte die Regel nur für einen Ordner.
+/private
 *.pdf

@@ -24,8 +24,18 @@ laut CLAUDE.md erst nach der Antwort loslegen.
 
 ## Arbeitsordner
 
-Liegt unter `private/` (gitignored, Buchinhalte bleiben lokal), z.B.
-`private/pame-a2/lexikon/`. Neues Projekt anlegen: `projekt.json` nach dem
+Liegt unter `private/` (gitignored, Buchinhalte kommen nie in dieses
+öffentliche Repo), z.B. `private/pame-a2/lexikon/`. `private` ist seit
+25.11.2026 ein Verweis auf das private Nachbar-Repo `../mathaino-inhalte`
+— dort sind Listen, Teildateien und Patches git-versioniert.
+
+**Aufruf aus einem Inhalte-Repo** (Sitzung in `../mathaino-inhalte`
+gestartet, das Skill ist dort verlinkt): Das Werkzeug liegt weiter hier —
+überall, wo unten `tools/lexikon.py` steht, `../MathainoA1/tools/lexikon.py`
+aufrufen, der Arbeitsordner heißt dann `pame-a2/lexikon`; `<REPO>` in den
+Agenten-Aufträgen ist der absolute Pfad von MathainoA1. Änderungen an
+Werkzeug, Tests und Regeln werden in MathainoA1 committet, Inhalte im
+Inhalte-Repo. Neues Projekt anlegen: `projekt.json` nach dem
 Muster im Kopf von `tools/lexikon.py` (Stufe, Listen in Buchreihenfolge,
 Paketpfad, ggf. `bekannt` = schon vorhandene Lexikonpakete, deren Wörter
 nicht neu geschrieben werden). Die Teildateien `<id>/teilNN.json` sind die

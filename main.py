@@ -7,6 +7,6 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 import flet as ft
 
-from mathainoa1.ui.app import main
+from mathainoa1.ui.app import entry
 
-ft.run(main)
+ft.run(entry())

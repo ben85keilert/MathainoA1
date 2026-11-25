@@ -6,9 +6,13 @@ dessen Inhalt beim Navigieren ausgetauscht wird.
 
 from __future__ import annotations
 
+import logging
+import sys
+
 import flet as ft
 
 from mathainoa1 import APP_NAME
+from mathainoa1.storage.browser_storage import BrowserStorage, PyodideAccess
 from mathainoa1.storage.content import ContentStore
 from mathainoa1.storage.progress import ProgressStore
 from mathainoa1.storage.settings import (
@@ -30,6 +34,11 @@ class Navigator:
     def __init__(self, page: ft.Page):
         self.page = page
         self.store: ContentStore | None = None  # in main() gesetzt (für Hilfe)
+        # Web-Fassung: der Speicher im Browser (sonst None) — die
+        # Einstellungen zeigen seinen Zustand und bieten „Alles löschen“
+        self.browser_storage: BrowserStorage | None = None
+        # Web-Fassung: Inhaltspaket vom Server (ui/web_content.py)
+        self.web_content = None
         self.stack: list[tuple[str, ft.Control]] = []
         from mathainoa1.ui.views.reference import reference_menu_button
         self.appbar = ft.AppBar(
@@ -226,7 +235,8 @@ def home_view(nav: Navigator, store: ContentStore, progress: ProgressStore) -> f
     return root
 
 
-def main(page: ft.Page) -> None:
+def main(page: ft.Page,
+         browser_storage: BrowserStorage | None = None) -> None:
     page.title = APP_NAME
     page.window.width = 420
     page.window.height = 780
@@ -236,5 +246,103 @@ def main(page: ft.Page) -> None:
     progress = ProgressStore(app_data_dir() / "progress.db")
     nav = Navigator(page)
     nav.store = store
+    nav.browser_storage = browser_storage
     nav.go(APP_NAME, home_view(nav, store, progress))
     startup_checks(page)
+    if browser_storage is not None:
+        _keep_saving(page, browser_storage, progress)
+        # Web-Fassung: Listen und Lexikon liegen verschlüsselt auf dem
+        # Server — nachsehen, ob es (neue) gibt, und nach dem Code fragen
+        from mathainoa1.ui.web_content import WebContent
+        nav.web_content = WebContent(nav, store)
+        page.run_task(nav.web_content.check)
+
+
+def _keep_saving(page: ft.Page, storage: BrowserStorage,
+                 progress: ProgressStore) -> None:
+    """Web-Fassung: geholt ist das Datenverzeichnis schon (entry), hier
+    beginnt das Schreiben — im Takt und sofort, wenn der Tab nach hinten
+    geht (vielleicht wird er gleich geschlossen)."""
+
+    def quiet() -> bool:
+        return not progress.conn.in_transaction
+
+    page.run_task(storage.tick, quiet)
+
+    def lifecycle(e: ft.AppLifecycleStateChangeEvent) -> None:
+        if e.state in (ft.AppLifecycleState.HIDE, ft.AppLifecycleState.PAUSE,
+                       ft.AppLifecycleState.DETACH) and quiet():
+            page.run_task(storage.save)
+
+    page.on_app_lifecycle_state_change = lifecycle
+    # Wird hier nicht gespeichert (zweiter Tab, Browser lässt es nicht zu),
+    # muss die Person es gleich wissen
+    if not storage.active:
+        page.show_dialog(ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Hier wird nicht gespeichert"),
+            content=ft.Text(storage.text),
+            actions=[ft.TextButton("Verstanden",
+                                   on_click=lambda e: page.pop_dialog())],
+        ))
+
+
+def entry():
+    """Was ft.run bekommt: main — in der Web-Fassung davor das Holen der
+    Daten aus dem Browser (storage/browser_storage.py), denn darauf muss
+    das erste Lesen des Datenverzeichnisses warten.
+
+    Erkannt an Pyodide selbst (nicht an MATHAINO_WEB): In der Vorschau am
+    Rechner liegen die Daten in einem echten Ordner.
+    """
+    if sys.platform != "emscripten":
+        return main
+
+    async def in_browser(page: ft.Page) -> None:
+        storage = BrowserStorage(app_data_dir(), PyodideAccess())
+        await storage.start()
+        try:
+            main(page, storage)
+        except Exception as exc:
+            # Nur wenn Gespeichertes da war: Dann liegt es wohl an ihm, und
+            # ohne Ausweg käme die Person nie wieder in die App.
+            if not storage.existing:
+                raise
+            logging.getLogger(__name__).exception(
+                "Start mit gespeicherten Daten")
+            emergency_exit(page, storage, exc)
+
+    return in_browser
+
+
+def emergency_exit(page: ft.Page, storage: BrowserStorage,
+                   exc: Exception) -> None:
+    """Die App startet mit den im Browser gespeicherten Daten nicht: sagen,
+    was los ist, und das Löschen anbieten — sonst bliebe die Seite auf
+    diesem Gerät für immer kaputt."""
+    hint = ft.Text("")
+
+    async def erase(e=None) -> None:
+        try:
+            await storage.erase()
+        except Exception as reason:  # noqa: BLE001
+            hint.value = f"Löschen ging nicht: {reason}"
+        else:
+            hint.value = "Gelöscht. Lade die Seite jetzt neu."
+            button.disabled = True
+        page.update()
+
+    button = ft.FilledButton("Gespeichertes löschen",
+                             icon=ft.Icons.DELETE_OUTLINE, on_click=erase)
+    page.views.clear()
+    page.views.append(ft.View(route="/", padding=24, controls=[
+        ft.Text("Die gespeicherten Daten lassen sich nicht öffnen", size=20),
+        ft.Text("Μαθαίνω hat in diesem Browser Daten von einem früheren "
+                "Besuch gefunden und kann damit nicht starten. Du kannst "
+                "sie löschen und neu beginnen. Dein Lernstand von früher "
+                "ist dann weg."),
+        ft.Text(f"Meldung: {exc}", size=12, selectable=True),
+        button,
+        hint,
+    ]))
+    page.update()

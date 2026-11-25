@@ -6,5 +6,5 @@
 
 ## Lexikon (Worthintergrund)
 
-- Lexikonpakete (Arbeitsanweisung IV) für Buchlisten erzeugen, prüfen oder nachbessern: Skill `/lexikon` (`.claude/skills/lexikon/`, Inhaltsregeln in `regeln.md`) mit dem Werkzeug `tools/lexikon.py`. Arbeitsordner und Pakete liegen unter `private/` (Urheberrecht).
+- Lexikonpakete (Arbeitsanweisung IV) für Buchlisten erzeugen, prüfen oder nachbessern: Skill `/lexikon` (`.claude/skills/lexikon/`, Inhaltsregeln in `regeln.md`) mit dem Werkzeug `tools/lexikon.py`. Arbeitsordner und Pakete liegen unter `private/` (Urheberrecht) — ein Verweis auf das private Nachbar-Repo `../mathaino-inhalte`, in dem Listen und Lexikon versioniert sind (dort auch der Plan der Web-Fassung, `docs/plan_web.md`).
 - Neue Fehlerarten im Lexikon als Prüfung in `tools/lexikon.py` (+ Test) und als Regel in `regeln.md` festhalten, nicht nur einmalig korrigieren.

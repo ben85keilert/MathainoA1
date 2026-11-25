@@ -13,6 +13,7 @@ from importlib import metadata
 import flet as ft
 
 from mathainoa1 import APP_NAME, __version__
+from mathainoa1 import web
 from mathainoa1.ui.updates import manual_check
 from mathainoa1.storage import content
 from mathainoa1.storage.content import csv_fields_for, verb_fields_for
@@ -835,11 +836,13 @@ def help_view(nav, store=None) -> ft.Control:
         ))
 
     about_row = ft.Row(
-        [ft.TextButton("Nach Updates suchen",
-                       icon=ft.Icons.SYSTEM_UPDATE_ALT,
-                       on_click=lambda e: manual_check(nav.page)),
-         ft.TextButton("Über diese App", icon=ft.Icons.INFO_OUTLINE,
-                       on_click=show_about)],
+        # Web-Fassung: kein Update-Knopf — eine Seite ist immer aktuell
+        ([ft.TextButton("Nach Updates suchen",
+                        icon=ft.Icons.SYSTEM_UPDATE_ALT,
+                        on_click=lambda e: manual_check(nav.page))]
+         if web.active("update_check") else [])
+        + [ft.TextButton("Über diese App", icon=ft.Icons.INFO_OUTLINE,
+                         on_click=show_about)],
         alignment=ft.MainAxisAlignment.END, wrap=True,
     )
 

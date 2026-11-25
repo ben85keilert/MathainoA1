@@ -1642,7 +1642,10 @@ def test_settings_categories_build(store_with_edge_cases, tmp_path, monkeypatch)
     progress = ProgressStore(tmp_path / "cat.db")
     try:
         overview = settings_mod.settings_view(nav, store, progress)
-        assert len(overview.controls) == len(settings_mod.CATEGORIES) == 7
+        # „Speicher im Browser“ gibt es nur in der Web-Fassung (eigener
+        # Test: tests/test_web.py) — in der App 7 von 8 Kategorien
+        assert len(settings_mod.CATEGORIES) == 8
+        assert len(overview.controls) == 7
         assert len(settings_mod.settings_view(nav).controls) == 6
         for key, _t, _i, _b, _n in settings_mod.CATEGORIES:
             view = settings_mod.settings_category_view(nav, key, store, progress)
