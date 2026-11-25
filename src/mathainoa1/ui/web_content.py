@@ -30,6 +30,20 @@ async def browser_fetch(path: str) -> tuple[int, bytes]:
     return response.status, await response.bytes()
 
 
+async def load_scrypt() -> None:
+    """Dem Python im Browser fehlt hashlib.scrypt: cryptography nachladen —
+    vom eigenen Server (tools/web_build.py legt es neben Pyodide), und erst,
+    wenn wirklich ein Paket zu öffnen ist. Scheitert das, meldet es der
+    nächste Schritt als NotPossible."""
+    if cp.scrypt_available():
+        return
+    try:
+        import pyodide_js
+        await pyodide_js.loadPackage("cryptography")
+    except Exception:  # noqa: BLE001 — nicht im Browser, Paket fehlt
+        pass
+
+
 class WebContent:
     """Beim Start und auf Knopfdruck: nachsehen, laden, nach dem Code
     fragen, übernehmen."""
@@ -37,7 +51,7 @@ class WebContent:
     def __init__(self, nav, store, fetch=browser_fetch):
         self.nav = nav
         self.page = nav.page
-        self.updater = cp.Updater(fetch, store)
+        self.updater = cp.Updater(fetch, store, prepare=load_scrypt)
 
     async def check(self, announce: bool = False) -> str:
         """announce: auch „nichts Neues“ melden (Knopf in den
@@ -77,6 +91,7 @@ class WebContent:
             button.disabled = True
             page.update()
             try:
+                await load_scrypt()
                 self.updater.open(code)
             except cp.NotPossible:
                 error.value = "Dieser Browser kann das Paket nicht öffnen."
@@ -88,6 +103,7 @@ class WebContent:
                 return
             button.disabled = False
             page.update()
+            await field.focus()  # gleich neu tippen können
 
         field.on_submit = submit
         button = ft.FilledButton("Öffnen", on_click=submit)

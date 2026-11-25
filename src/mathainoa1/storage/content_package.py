@@ -86,6 +86,14 @@ def code_text(code: str) -> str:
     return "-".join(code[i:i + 4] for i in range(0, len(code), 4))
 
 
+def scrypt_available() -> bool:
+    """Kann dieses Python Pakete öffnen? Im Browser fehlt hashlib.scrypt;
+    dort lädt die Seite cryptography nach (ui/web_content.py)."""
+    import importlib.util
+    return (hasattr(hashlib, "scrypt")
+            or importlib.util.find_spec("cryptography") is not None)
+
+
 def _scrypt(code: bytes, salt: bytes, n: int, r: int, p: int) -> bytes:
     if hasattr(hashlib, "scrypt"):
         return hashlib.scrypt(code, salt=salt, n=n, r=r, p=p, dklen=64,
@@ -254,9 +262,12 @@ class Updater:
     andere Version nennt als die, die dieser Browser schon hat.
     """
 
-    def __init__(self, fetch, store):
+    def __init__(self, fetch, store, prepare=None):
         self.fetch = fetch
         self.store = store
+        # async, vor dem ersten Entschlüsseln: im Browser lädt das scrypt
+        # nach (ui/web_content.py) — erst dann, nicht bei jedem Start
+        self.prepare = prepare
         self.pending: bytes | None = None  # geladen, wartet auf den Code
         self.pending_version = ""
         self.stats: dict = {}
@@ -285,6 +296,8 @@ class Updater:
         self.pending, self.pending_version = data, version
         if state.get("code"):
             try:
+                if self.prepare is not None:
+                    await self.prepare()
                 return self.open(state["code"])
             except WrongCode:
                 pass  # Code gesperrt — neu fragen

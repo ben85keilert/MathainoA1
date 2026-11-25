@@ -190,3 +190,28 @@ def test_netzfehler_laesst_die_app_laufen(store):
         raise OSError("kein Netz")
 
     assert asyncio.run(cp.Updater(kaputt, store).check()) == cp.NOTHING
+
+
+def test_vor_dem_oeffnen_wird_scrypt_bereitgestellt(store):
+    """Im Browser lädt die Seite scrypt erst nach, wenn ein Paket zu öffnen
+    ist — nicht, wenn der Stand schon aktuell ist."""
+    calls = []
+
+    async def prepare():
+        calls.append("prepare")
+
+    files = server()
+    up = cp.Updater(fetcher(files), store, prepare=prepare)
+    assert asyncio.run(up.check()) == cp.NEED_CODE and calls == []
+    up.open(CODE)
+    assert asyncio.run(cp.Updater(fetcher(files), store,
+                                  prepare=prepare).check()) == cp.CURRENT
+    assert calls == []
+    neu = json.loads(json.dumps(LISTE))
+    neu["name"] = "Test – Kapitel 1 (neu)"
+    up3 = cp.Updater(fetcher(server(lists=[neu])), store, prepare=prepare)
+    assert asyncio.run(up3.check()) == cp.UPDATED and calls == ["prepare"]
+
+
+def test_scrypt_ist_hier_verfuegbar():
+    assert cp.scrypt_available()

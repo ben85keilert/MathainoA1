@@ -31,7 +31,8 @@ der Probe vom 25.11.2026 gefehlt oder stammt aus der trainingsapp
 4. Pyodide-Pakete einlegen (PYODIDE_PACKAGES): sqlite3 ist in Pyodide ein
    eigenes Paket und liegt mit --no-cdn nicht im Build — ohne es scheitert
    `import sqlite3` (storage/progress.py). Geladen wird es beim Start über
-   [tool.flet.web] dependencies in pyproject.toml. Die Dateien kommen beim
+   [tool.flet.web] dependencies in pyproject.toml; cryptography (scrypt
+   fürs Inhaltspaket) erst bei Bedarf. Die Dateien kommen beim
    BAUEN von jsdelivr, mit der Prüfsumme aus Pyodides pyodide-lock.json,
    und liegen dann auf dem eigenen Server.
 5. Inline-Skripte der index.html nach start-<n>.js: Eine strenge
@@ -83,9 +84,12 @@ WEB_EXCLUDE = [
 WEB_CLEANUP = ["temp*", "**.pdf"]
 
 # Pyodide-Pakete, die neben Pyodide liegen müssen (pyodide/), samt allem,
-# was sie selbst brauchen. hashlib bringt OpenSSL und damit scrypt — das
-# braucht das verschlüsselte Inhaltspaket (storage/content_package.py).
-PYODIDE_PACKAGES: tuple[str, ...] = ("sqlite3", "hashlib")
+# was sie selbst brauchen. sqlite3 lädt die Seite beim Start
+# ([tool.flet.web] dependencies). cryptography lädt sie erst, wenn jemand
+# das verschlüsselte Inhaltspaket öffnet (ui/web_content.py): Dem Python
+# im Browser fehlt hashlib.scrypt — auch mit Pyodides hashlib-Paket,
+# gemessen am 25.11.2026 —, cryptography rechnet dasselbe.
+PYODIDE_PACKAGES: tuple[str, ...] = ("sqlite3", "cryptography")
 PYODIDE_SOURCE = "https://cdn.jsdelivr.net/pyodide/v{version}/full/{file}"
 PYODIDE_CACHE = ROOT / "build" / "web-pyodide"
 

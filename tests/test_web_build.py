@@ -83,12 +83,12 @@ def test_pyodide_pakete_samt_abhaengigkeiten(tmp_path):
     (tmp_path / "pyodide" / "pyodide-lock.json").write_text(json.dumps(
         {"packages": {
             "sqlite3": {"file_name": "sqlite3.whl", "sha256": "a", "depends": []},
-            "hashlib": {"file_name": "hashlib.whl", "sha256": "b",
+            "cryptography": {"file_name": "cryptography.whl", "sha256": "b",
                         "depends": ["openssl"]},
             "openssl": {"file_name": "openssl.zip", "sha256": "c", "depends": []},
         }}), encoding="utf-8")
     assert wb.pyodide_files(tmp_path) == [("sqlite3.whl", "a"),
-                                          ("hashlib.whl", "b"),
+                                          ("cryptography.whl", "b"),
                                           ("openssl.zip", "c")]
     assert len(wb.pyodide_findings(tmp_path)) == 3  # noch nicht eingelegt
     with pytest.raises(ValueError):
@@ -100,4 +100,7 @@ def test_web_abhaengigkeiten_stehen_in_pyproject():
     import tomllib
     with (wb.ROOT / "pyproject.toml").open("rb") as f:
         deps = tomllib.load(f)["tool"]["flet"]["web"]["dependencies"]
-    assert set(wb.PYODIDE_PACKAGES) <= set(deps)
+    assert "sqlite3" in deps
+    # Was die Seite beim Start lädt, muss neben Pyodide liegen — sonst käme
+    # es von einem fremden Server oder gar nicht
+    assert set(deps) <= set(wb.PYODIDE_PACKAGES)
