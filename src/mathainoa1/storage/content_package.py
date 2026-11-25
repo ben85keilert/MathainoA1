@@ -247,7 +247,8 @@ PACKAGE_URL = "inhalt/paket.bin"
 # Obergrenze fürs Paket — alles geht im Browser durch den Arbeitsspeicher
 MAX_BYTES = 32 * 1024 * 1024
 
-NOTHING = "nothing"      # der Server hat kein Inhaltspaket (oder kein Netz)
+NOTHING = "nothing"      # der Server hat kein Inhaltspaket (404)
+UNREACHABLE = "unreachable"  # kein Netz, Server antwortet nicht wie erwartet
 CURRENT = "current"      # dieser Browser hat den Stand des Servers
 UPDATED = "updated"      # neues Paket geöffnet und übernommen
 NEED_CODE = "need_code"  # Paket da, aber kein (passender) Code
@@ -274,25 +275,48 @@ class Updater:
         # Hatte dieser Browser schon einen Code? (Dann ist „passt nicht“
         # ein gesperrter Code, kein Tippfehler.)
         self.had_code = False
+        # Infotext des Betreibers aus der Standdatei ("hinweis") — steht
+        # auf der Sperrseite, bevor jemand den Code eingibt
+        self.notice = ""
+        self.result = ""
+
+    @property
+    def locked(self) -> bool:
+        """Bleibt die App zu? Ja, wenn der Server ein Paket hat, das dieser
+        Browser nicht öffnen kann (noch kein Code, oder der Code wurde
+        gesperrt) — und wenn sich das mangels Netz nicht klären lässt und
+        hier noch nie ein Code gepasst hat. Wer schon geöffnet hat, kann
+        ohne Netz weiterüben. Ohne Paket auf dem Server (404) ist die
+        Seite eine gewöhnliche, leere App."""
+        return self.result == NEED_CODE or (
+            self.result == UNREACHABLE and not self.had_code)
 
     async def check(self) -> str:
+        self.result = await self._check()
+        return self.result
+
+    async def _check(self) -> str:
         state = load_state()
         self.had_code = bool(state.get("code"))
         try:
             status, raw = await self.fetch(STAND_URL)
-            if status != 200:
+            if status == 404:
                 return NOTHING
-            version = str(json.loads(raw)["version"])
-        except Exception:  # noqa: BLE001 — kein Netz, kein Paket: App läuft
-            return NOTHING
+            if status != 200:
+                return UNREACHABLE
+            stand = json.loads(raw)
+            version = str(stand["version"])
+            self.notice = str(stand.get("hinweis") or "")
+        except Exception:  # noqa: BLE001 — kein Netz, Unlesbares
+            return UNREACHABLE
         if version == state.get("version"):
             return CURRENT
         try:
             status, data = await self.fetch(PACKAGE_URL)
         except Exception:  # noqa: BLE001
-            return NOTHING
+            return UNREACHABLE
         if status != 200 or len(data) > MAX_BYTES:
-            return NOTHING
+            return UNREACHABLE
         self.pending, self.pending_version = data, version
         if state.get("code"):
             try:
@@ -300,7 +324,7 @@ class Updater:
                     await self.prepare()
                 return self.open(state["code"])
             except WrongCode:
-                pass  # Code gesperrt — neu fragen
+                pass  # Code gesperrt — neu fragen, die App bleibt zu
         return NEED_CODE
 
     def open(self, code: str) -> str:
@@ -313,4 +337,6 @@ class Updater:
         self.stats = apply(payload, self.store)
         save_state(code, str(payload.get("version") or self.pending_version))
         self.pending = None
+        self.had_code = True
+        self.result = UPDATED
         return UPDATED

@@ -79,3 +79,119 @@ def test_einstellungen_zeigen_speicher_nur_mit_browserspeicher(browser):
 def test_einstieg_ist_ausserhalb_von_pyodide_main():
     from mathainoa1.ui import app
     assert app.entry() is app.main
+
+
+# --- Sperrseite (ui/web_content.py) ---
+
+def _web_nav():
+    page = SimpleNamespace(update=lambda: None, show_dialog=lambda d: None,
+                           pop_dialog=lambda: None, services=[])
+    shown = []
+    nav = SimpleNamespace(page=page, stack=[], appbar=SimpleNamespace(visible=True),
+                          go=lambda title, view: shown.append(view))
+    return nav, shown
+
+
+def _texts(control):
+    import flet as ft
+    found = []
+    stack = [control]
+    while stack:
+        c = stack.pop()
+        if isinstance(c, ft.Text):
+            found.append(c.value)
+        stack += list(getattr(c, "controls", None) or [])
+        if getattr(c, "content", None) is not None:
+            stack.append(c.content)
+    return found
+
+
+def _server(hinweis=""):
+    import json
+
+    from mathainoa1.storage import content_package as cp
+    liste = {"id": "t1", "name": "T", "book": "A2", "editable": True,
+             "cards": [{"id": "t1-1", "front": "γράφω", "back": "schreiben"}]}
+    stand = {"version": cp.content_version([liste], []), "hinweis": hinweis}
+    files = {cp.STAND_URL: json.dumps(stand).encode(),
+             cp.PACKAGE_URL: cp.pack([liste], [], "K7QM9XA2")}
+
+    async def fetch(path):
+        return (200, files[path]) if path in files else (404, b"")
+
+    return fetch
+
+
+def test_ohne_code_zeigt_die_seite_nur_die_sperre(browser, tmp_path):
+    import asyncio
+
+    import flet as ft
+
+    from mathainoa1.storage.content import ContentStore
+    from mathainoa1.ui.web_content import WebContent
+
+    store = ContentStore(tmp_path / "book", tmp_path / "vocab")
+    store.load_all()
+    nav, shown = _web_nav()
+    opened = []
+    wc = WebContent(nav, store, lambda: opened.append(True),
+                    fetch=_server("Private Seite, kleiner Kreis."))
+    asyncio.run(wc.start())
+    assert opened == [] and nav.appbar.visible is False
+    gate = shown[-1]
+    texts = _texts(gate)
+    assert "Private Seite, kleiner Kreis." in texts  # Infotext des Betreibers
+
+    def controls(c):
+        out, stack = [], [c]
+        while stack:
+            x = stack.pop()
+            out.append(x)
+            stack += list(getattr(x, "controls", None) or [])
+            if getattr(x, "content", None) is not None:
+                stack.append(x.content)
+        return out
+
+    # ein Feld für den Code, ein Knopf — kein „Später“, kein Weg vorbei
+    assert sum(isinstance(c, ft.TextField) for c in controls(gate)) == 1
+    buttons = [c for c in controls(gate)
+               if isinstance(c, (ft.TextButton, ft.FilledButton,
+                                 ft.OutlinedButton))]
+    assert len(buttons) == 1
+
+
+def test_ohne_inhaltspaket_oeffnet_sich_die_app(browser, tmp_path):
+    import asyncio
+
+    from mathainoa1.storage.content import ContentStore
+    from mathainoa1.ui.web_content import WebContent
+
+    async def leer(path):
+        return 404, b""
+
+    store = ContentStore(tmp_path / "book", tmp_path / "vocab")
+    store.load_all()
+    nav, shown = _web_nav()
+    opened = []
+    asyncio.run(WebContent(nav, store, lambda: opened.append(True),
+                           fetch=leer).start())
+    assert opened == [True]
+
+
+def test_ohne_netz_und_ohne_code_bleibt_die_seite_zu(browser, tmp_path):
+    import asyncio
+
+    from mathainoa1.storage.content import ContentStore
+    from mathainoa1.ui.web_content import WebContent
+
+    async def kaputt(path):
+        raise OSError("kein Netz")
+
+    store = ContentStore(tmp_path / "book", tmp_path / "vocab")
+    store.load_all()
+    nav, shown = _web_nav()
+    opened = []
+    asyncio.run(WebContent(nav, store, lambda: opened.append(True),
+                           fetch=kaputt).start())
+    assert opened == []
+    assert any("nicht erreichbar" in (t or "") for t in _texts(shown[-1]))

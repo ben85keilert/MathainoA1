@@ -247,15 +247,25 @@ def main(page: ft.Page,
     nav = Navigator(page)
     nav.store = store
     nav.browser_storage = browser_storage
-    nav.go(APP_NAME, home_view(nav, store, progress))
-    startup_checks(page)
-    if browser_storage is not None:
-        _keep_saving(page, browser_storage, progress)
-        # Web-Fassung: Listen und Lexikon liegen verschlüsselt auf dem
-        # Server — nachsehen, ob es (neue) gibt, und nach dem Code fragen
-        from mathainoa1.ui.web_content import WebContent
-        nav.web_content = WebContent(nav, store)
-        page.run_task(nav.web_content.check)
+    if browser_storage is None:
+        nav.go(APP_NAME, home_view(nav, store, progress))
+        startup_checks(page)
+        return
+    # Web-Fassung: Listen und Lexikon liegen verschlüsselt auf dem Server.
+    # Erst nachsehen — die App öffnet sich nur mit passendem Code
+    # (ui/web_content.py); bis dahin gibt es weder Menü noch Kopfleiste.
+    from mathainoa1.ui.web_content import WebContent
+
+    def open_app() -> None:
+        nav.appbar.visible = True
+        nav.stack.clear()
+        nav.go(APP_NAME, home_view(nav, store, progress))
+
+    nav.web_content = WebContent(nav, store, open_app)
+    nav.appbar.visible = False
+    nav.go(APP_NAME, nav.web_content.loading_view())
+    _keep_saving(page, browser_storage, progress)
+    page.run_task(nav.web_content.start)
 
 
 def _keep_saving(page: ft.Page, storage: BrowserStorage,

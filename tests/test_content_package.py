@@ -185,11 +185,70 @@ def test_gesperrter_code_fragt_neu_und_laesst_alles_stehen(store):
     assert store.lists["t-kap01"].cards[0].back == "nur mit neuem Code"
 
 
-def test_netzfehler_laesst_die_app_laufen(store):
+def test_netzfehler_sperrt_nur_wer_noch_nie_geoeffnet_hat(store):
     async def kaputt(path):
         raise OSError("kein Netz")
 
-    assert asyncio.run(cp.Updater(kaputt, store).check()) == cp.NOTHING
+    up = cp.Updater(kaputt, store)
+    assert asyncio.run(up.check()) == cp.UNREACHABLE
+    assert up.locked  # nie geöffnet, nicht zu klären: bleibt zu
+    cp.save_state(CODE, "alt")
+    up = cp.Updater(kaputt, store)
+    assert asyncio.run(up.check()) == cp.UNREACHABLE
+    assert not up.locked  # hat schon geöffnet: übt ohne Netz weiter
+
+
+# --- Sperre: ohne Code bleibt die App zu ---
+
+def test_ohne_paket_ist_die_seite_eine_gewoehnliche_app(store):
+    up = cp.Updater(fetcher({}), store)
+    asyncio.run(up.check())
+    assert up.result == cp.NOTHING and not up.locked
+
+
+def test_gesperrt_bis_der_code_passt(store):
+    up = cp.Updater(fetcher(server()), store)
+    asyncio.run(up.check())
+    assert up.locked
+    with pytest.raises(cp.WrongCode):
+        up.open("AAAAAAAA")
+    assert up.locked
+    up.open(CODE)
+    assert not up.locked
+    again = cp.Updater(fetcher(server()), store)
+    asyncio.run(again.check())
+    assert again.result == cp.CURRENT and not again.locked
+
+
+def test_gesperrter_code_schliesst_die_app(store):
+    up = cp.Updater(fetcher(server()), store)
+    asyncio.run(up.check())
+    up.open(CODE)
+    neu = json.loads(json.dumps(LISTE))
+    neu["name"] = "neu"
+    up2 = cp.Updater(fetcher(server(lists=[neu], code="NEUERC2D")), store)
+    asyncio.run(up2.check())
+    assert up2.locked and up2.had_code
+    up2.open("NEUERC2D")
+    assert not up2.locked
+
+
+def test_infotext_kommt_aus_der_standdatei(store):
+    files = server()
+    stand = json.loads(files[cp.STAND_URL])
+    stand["hinweis"] = "Private Seite für einen kleinen Kreis."
+    files[cp.STAND_URL] = json.dumps(stand).encode()
+    up = cp.Updater(fetcher(files), store)
+    asyncio.run(up.check())
+    assert up.notice == "Private Seite für einen kleinen Kreis."
+
+
+def test_fehler_des_servers_ist_kein_fehlendes_paket(store):
+    async def fetch(path):
+        return 503, b""
+
+    up = cp.Updater(fetch, store)
+    assert asyncio.run(up.check()) == cp.UNREACHABLE and up.locked
 
 
 def test_vor_dem_oeffnen_wird_scrypt_bereitgestellt(store):

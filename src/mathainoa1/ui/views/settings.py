@@ -900,7 +900,9 @@ def _browser_controls(nav, s: AppSettings, store, progress) -> list[ft.Control]:
     async def reload_content(e=None):
         await web_content.check(announce=True)
 
-    return [
+    notice = getattr(getattr(web_content, "updater", None), "notice", "")
+    return ([_h("Über diese Seite"), ft.Text(notice, size=sz(14))]
+            if notice else []) + [
         _h("Inhalte"),
         _hint("Vokabellisten und Lexikon kommen von dieser Seite und werden "
               "mit deinem Code geöffnet. Beim Start sieht die Seite selbst "
