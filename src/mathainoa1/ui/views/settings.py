@@ -624,9 +624,13 @@ def _tts_controls(nav, s: AppSettings, store, progress) -> list[ft.Control]:
         return [
             _h("Sprachausgabe"),
             _hint("Im Browser spricht die Stimme des Geräts — es werden "
-                  "keine Daten übertragen. Braucht eine griechische Stimme "
-                  "im Browser oder Betriebssystem; fehlt sie, bleibt der "
-                  "Lautsprecher stumm."),
+                  "keine Daten übertragen. Braucht eine griechische Stimme, "
+                  "die der Browser vom Gerät bekommt; fehlt sie, zeigt das "
+                  "Antippen einen Hinweis. Android: meist schon dabei "
+                  "(Einstellungen des Geräts → Sprachausgabe). Windows: "
+                  "Sprachpaket „Ελληνικά“ hinzufügen. Linux: Firefox mit "
+                  "speech-dispatcher und espeak-ng — Chrome findet unter "
+                  "Linux keine griechische Stimme."),
             dd_tap,
         ]
 

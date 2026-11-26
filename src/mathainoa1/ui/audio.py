@@ -2,6 +2,8 @@
 
 - Systemstimme (Standard, TTS_SYSTEM): die flet-system-tts-Erweiterung
   spricht über die Stimme des Geräts — offline, keine Datenübertragung.
+  In der Web-Fassung ist es die Stimme des Browsers (Web Speech API,
+  packages/flet-system-tts: web_speech_web.dart).
   Im vorgebauten Dev-Client (flet run / flet run --android) ist die
   Erweiterung nicht enthalten; dann erscheint ein Hinweis mit dem Tipp,
   auf den Google-Weg umzuschalten.
@@ -44,6 +46,19 @@ NO_SYSTEM_TTS_HINT = (
     "oder in den Einstellungen auf „Google (online)“ umschalten."
 )
 
+# Web-Fassung: Den Google-Weg gibt es dort nicht, die Stimme kommt vom
+# Browser (Web Speech API) — und der nimmt sie vom Betriebssystem.
+NO_BROWSER_VOICE_HINT = (
+    "Dieser Browser hat keine griechische Stimme — Griechisch in der "
+    "Sprachausgabe des Geräts installieren oder einen anderen Browser "
+    "nehmen (mehr dazu in den Einstellungen)."
+)
+
+
+def no_voice_hint() -> str:
+    return NO_BROWSER_VOICE_HINT if web.in_browser() else NO_SYSTEM_TTS_HINT
+
+
 _cache: TtsCache | None = None
 # Texte, deren gTTS-Abruf gerade läuft — schützt vor Doppel-Taps
 _fetching: set[str] = set()
@@ -77,14 +92,14 @@ async def _speak_system(page: ft.Page, text: str, slow: bool,
     svc = _system_service(page)
     if svc is None:
         if notify_errors:
-            page.show_dialog(ft.SnackBar(ft.Text(NO_SYSTEM_TTS_HINT)))
+            page.show_dialog(ft.SnackBar(ft.Text(no_voice_hint())))
         return
     try:
         await svc.speak(text, rate=SLOW_FACTOR if slow else 1.0)
     except Exception:
         # Sprachpaket fehlt oder Engine-Fehler — gleicher Ausweg
         if notify_errors:
-            page.show_dialog(ft.SnackBar(ft.Text(NO_SYSTEM_TTS_HINT)))
+            page.show_dialog(ft.SnackBar(ft.Text(no_voice_hint())))
 
 
 # --- Weg 2: Google (gTTS-Cache + flet-audio) -------------------------------

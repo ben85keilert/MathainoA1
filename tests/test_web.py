@@ -54,6 +54,16 @@ def test_sprachausgabe_im_browser_nur_systemstimme(browser, monkeypatch):
     assert audio.tts_engine() == TTS_GOOGLE
 
 
+def test_hinweis_ohne_stimme_nennt_im_browser_nicht_google(browser, monkeypatch):
+    # Den Google-Weg gibt es im Browser nicht — der Hinweis darf nicht
+    # dorthin schicken
+    from mathainoa1.ui import audio
+    assert "Google" not in audio.no_voice_hint()
+    assert "Browser" in audio.no_voice_hint()
+    monkeypatch.delenv("MATHAINO_WEB")
+    assert audio.no_voice_hint() == audio.NO_SYSTEM_TTS_HINT
+
+
 def test_einstellungen_zeigen_speicher_nur_mit_browserspeicher(browser):
     import flet as ft
 
