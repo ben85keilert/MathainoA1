@@ -42,6 +42,12 @@ der Probe vom 25.11.2026 gefehlt oder stammt aus der trainingsapp
 6. Das App-Archiv gegen das Repository prüfen: Außerhalb der Pakete darf
    nur liegen, was versioniert ist — sonst wandern Notizen und Daten
    dieses Rechners auf den Server (so in der Probe: temp.md).
+7. Eigener Name fürs Ablegen als App (WEB_NAME): Chrome auf Android und
+   am Rechner bietet die Seite zur Installation an, auf iPhone und Mac
+   geht „Zum Home-Bildschirm“ / „Zum Dock hinzufügen“. Das ist NICHT die
+   APK, sondern die Seite in einer App-Hülle, mit eigenem Lernstand —
+   unter dem Namen der APK (pyproject: product) sähe sie wie ein zweites
+   Exemplar derselben App aus.
 """
 
 from __future__ import annotations
@@ -112,6 +118,13 @@ FONTS: tuple[tuple[str, str, str], ...] = (
      "08202e258ea583254c036cff46a7077bb5af4f82c41a6c0a6775f6e44d99f1aa"),
 )
 
+# Name der abgelegten Web-App (manifest.json; iOS: apple-mobile-web-app-title).
+# Kurz genug für die Beschriftung unter dem Symbol (rund 12 Zeichen).
+WEB_NAME = "Μαθαίνω Web"
+WEB_DESCRIPTION = "Griechisch lernen — Web-Fassung"
+_APPLE_TITLE = re.compile(
+    r'(<meta\s+name="apple-mobile-web-app-title"\s+content=")[^"]*(")')
+
 APP_ARCHIVE = Path("assets") / "app" / "app.zip"
 # Was im Archiv außerhalb der Pakete unversioniert sein darf
 ARCHIVE_ALLOWED = (".gitkeep",)
@@ -157,6 +170,40 @@ def move_inline_scripts(folder: Path) -> int:
     index.write_text(_SCRIPT.sub(replace, index.read_text(encoding="utf-8")),
                      encoding="utf-8")
     return n
+
+
+def set_web_name(folder: Path) -> None:
+    """Punkt 7 im Kopf: der Name, unter dem Browser die Seite als App ablegen."""
+    manifest = folder / "manifest.json"
+    values = json.loads(manifest.read_text(encoding="utf-8"))
+    values.update(name=WEB_NAME, short_name=WEB_NAME,
+                  description=WEB_DESCRIPTION)
+    manifest.write_text(json.dumps(values, ensure_ascii=False, indent=4) + "\n",
+                        encoding="utf-8")
+    index = folder / "index.html"
+    index.write_text(_APPLE_TITLE.sub(rf"\g<1>{WEB_NAME}\g<2>",
+                                      index.read_text(encoding="utf-8")),
+                     encoding="utf-8")
+
+
+def name_findings(folder: Path) -> list[str]:
+    found = []
+    try:
+        values = json.loads((folder / "manifest.json")
+                            .read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ["manifest.json fehlt oder ist unlesbar"]
+    if values.get("name") != WEB_NAME or values.get("short_name") != WEB_NAME:
+        found.append("manifest.json trägt nicht den Namen der Web-Fassung "
+                     f"(„{WEB_NAME}“)")
+    if values.get("display") != "standalone":
+        found.append("manifest.json: display ist nicht „standalone“ — die "
+                     "Seite ließe sich nicht als App ablegen")
+    m = _APPLE_TITLE.search((folder / "index.html").read_text(encoding="utf-8"))
+    if not m or f'content="{WEB_NAME}"' not in m.group(0):
+        found.append("index.html: apple-mobile-web-app-title fehlt oder "
+                     "trägt nicht den Namen der Web-Fassung")
+    return found
 
 
 def fetch(source: str, sha256: str, cache: Path = PYODIDE_CACHE) -> Path:
@@ -329,6 +376,7 @@ def findings(folder: Path) -> list[str]:
                      "(--route-url-strategy hash)")
     found += pyodide_findings(folder)
     found += font_findings(folder)
+    found += name_findings(folder)
     found += archive_findings(folder / APP_ARCHIVE, tracked_files())
     return found
 
@@ -366,6 +414,7 @@ def finish(folder: Path, base: str) -> dict[str, object]:
     n = move_inline_scripts(folder)
     k = add_pyodide_packages(folder)
     m = add_fonts(folder)
+    set_web_name(folder)
     values = state(base, folder)
     (folder / "stand.json").write_text(
         json.dumps(values, ensure_ascii=False, indent=1) + "\n",

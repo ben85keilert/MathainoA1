@@ -126,3 +126,23 @@ def test_ersatzschriften_werden_eingelegt_und_vermisst(tmp_path):
         wb.FONTS = old
     for _path, source, sha in wb.FONTS:
         assert source.startswith("https://") and len(sha) == 64
+
+
+def test_web_fassung_bekommt_eigenen_namen(tmp_path):
+    # Abgelegt als App darf die Seite nicht wie die APK heißen
+    (tmp_path / "manifest.json").write_text(json.dumps(
+        {"name": "Mathaino - Griechisch A1", "short_name": "mathainoa1",
+         "display": "standalone", "icons": [{"src": "icons/Icon-192.png"}]}),
+        encoding="utf-8")
+    (tmp_path / "index.html").write_text(
+        '<meta name="apple-mobile-web-app-title" '
+        'content="Mathaino - Griechisch A1">\n<title>x</title>',
+        encoding="utf-8")
+    assert len(wb.name_findings(tmp_path)) == 2
+    wb.set_web_name(tmp_path)
+    assert wb.name_findings(tmp_path) == []
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["name"] == manifest["short_name"] == wb.WEB_NAME
+    assert manifest["icons"] == [{"src": "icons/Icon-192.png"}]   # Rest bleibt
+    assert f'content="{wb.WEB_NAME}"' in (tmp_path / "index.html").read_text(
+        encoding="utf-8")
